@@ -1,5 +1,8 @@
 extends Node
 
+const LILY_PAD: PackedScene = preload("res://assets/3DModel/generated/lily_pad.glb")
+const KOI: PackedScene = preload("res://assets/3DModel/generated/koi.glb")
+
 const HORIZONTAL_DIRS: Array[Vector3i] = [
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
 	Vector3i(0, 0, 1), Vector3i(0, 0, -1),
@@ -57,82 +60,49 @@ func _spawn_pond(cell: Vector3i) -> void:
 	add_child(root)
 	_ponds[cell] = root
 
-	for i in 2:
+	# Sparse, scattered decor: each pond CELL has only a CHANCE of one lily pad
+	# (never a guaranteed two-per-cell clump), so a big pond gets pads spread
+	# nicely across it instead of a pile. Koi are rarer still.
+	if randf() < 0.45:
 		_add_lily_pad(root)
-	for i in randi_range(1, 2):
+	if randf() < 0.55:
 		_add_koi(root)
 
+## The lily pad is now the styled art model (notch + wabi-sabi flower already
+## modelled in). A Node3D wrapper carries the bob animation; the model sits
+## inside it, fitted to a small pad size and flattened to the matte look.
 func _add_lily_pad(root: Node3D) -> void:
-	var pad := MeshInstance3D.new()
-	var disc := CylinderMesh.new()
-	disc.top_radius = randf_range(0.16, 0.24)
-	disc.bottom_radius = disc.top_radius
-	disc.height = 0.03
-	pad.mesh = disc
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.2, 0.5, 0.22)
-	pad.material_override = material
-	var base_pos := Vector3(randf_range(-0.25, 0.25), 0.52, randf_range(-0.25, 0.25))
+	var pad := Node3D.new()
+	var model: Node3D = LILY_PAD.instantiate()
+	pad.add_child(model)
+	MeshFit.fit_centered(model, randf_range(0.42, 0.58))
+	MeshFit.matte(model)
+	# Sit ON the (now opaque, slightly inflated) water top, not sunk into it.
+	var base_pos := Vector3(randf_range(-0.25, 0.25), 0.62, randf_range(-0.25, 0.25))
 	pad.position = base_pos
 	pad.rotation.y = randf_range(0.0, TAU)
 	root.add_child(pad)
-
-	# A notch wedge cut from one side reads as the classic lily-pad slit.
-	var notch := MeshInstance3D.new()
-	var wedge := PrismMesh.new()
-	wedge.size = Vector3(disc.top_radius * 0.9, 0.04, disc.top_radius * 1.1)
-	notch.mesh = wedge
-	var notch_mat := StandardMaterial3D.new()
-	notch_mat.albedo_color = Color(0.28, 0.42, 0.24)
-	notch.material_override = notch_mat
-	notch.position = Vector3(0.0, 0.0, disc.top_radius * 0.5)
-	pad.add_child(notch)
-
-	# Some pads carry a small pink water-lily flower — the wabi-sabi bloom.
-	if randf() < 0.5:
-		var flower := MeshInstance3D.new()
-		var petals := SphereMesh.new()
-		petals.radius = disc.top_radius * 0.4
-		petals.height = disc.top_radius * 0.5
-		petals.radial_segments = 8
-		petals.rings = 4
-		flower.mesh = petals
-		var flower_mat := StandardMaterial3D.new()
-		flower_mat.albedo_color = Color(0.95, 0.72, 0.82)
-		flower.material_override = flower_mat
-		flower.position = Vector3(0.0, 0.05, 0.0)
-		pad.add_child(flower)
 
 	_pad_data.append({
 		"node": pad,
 		"base_pos": base_pos,
 		"bob_speed": randf_range(0.7, 1.3),
 		"bob_phase": randf_range(0.0, TAU),
-		"bob_amount": randf_range(0.015, 0.03),
+		"bob_amount": randf_range(0.035, 0.06),
 	})
 
+## Koi is now the modelled fish (Blockbench: torpedo body, Kohaku red patches,
+## caudal/dorsal/pectoral fins, dark eyes). A Node3D wrapper carries the swim
+## transform; the model sits inside, fitted so its LENGTH (local +X = head) ≈
+## one koi and flattened to the matte look. `_process` aims +X along the swim
+## tangent so it always faces where it's going.
 func _add_koi(root: Node3D) -> void:
-	var fish := MeshInstance3D.new()
-	var body := CapsuleMesh.new()
-	body.radius = 0.06
-	body.height = 0.22
-	fish.mesh = body
-	fish.rotation.x = PI * 0.5
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 0.45, 0.15) if randf() > 0.3 else Color(0.95, 0.95, 0.9)
-	fish.material_override = material
+	var fish := Node3D.new()
+	var model: Node3D = KOI.instantiate()
+	fish.add_child(model)
+	MeshFit.fit_centered(model, randf_range(0.52, 0.7))
+	MeshFit.matte(model)
 	root.add_child(fish)
-
-	# Flat triangular tail fin at the back of the body (body's local -Y is
-	# "behind" because the capsule was rotated to lie flat).
-	var tail := MeshInstance3D.new()
-	var fin := PrismMesh.new()
-	fin.size = Vector3(0.14, 0.01, 0.12)
-	tail.mesh = fin
-	tail.material_override = material
-	tail.rotation = Vector3(PI * 0.5, 0.0, 0.0)
-	tail.position = Vector3(0.0, -0.16, 0.0)
-	fish.add_child(tail)
 
 	_fish_data.append({
 		"node": fish,
@@ -155,8 +125,14 @@ func _process(_delta: float) -> void:
 		if not is_instance_valid(fish["node"]):
 			continue
 		var angle: float = t * fish["speed"] + fish["phase"]
-		fish["node"].position = Vector3(cos(angle) * fish["radius"], 0.42, sin(angle) * fish["radius"])
-		fish["node"].rotation.y = -angle + PI * 0.5
+		# Swim right at the (now opaque) surface — backs breaking the water — plus
+		# a gentle bob, so the koi are actually visible.
+		var swim_y: float = 0.5 + sin(t * 1.6 + fish["phase"]) * 0.03
+		fish["node"].position = Vector3(cos(angle) * fish["radius"], swim_y, sin(angle) * fish["radius"])
+		# Aim the model's head (+X) along the velocity tangent (-sin, 0, cos).
+		fish["node"].rotation.y = atan2(-cos(angle), -sin(angle))
+		# Gentle tail-sway roll so it reads as a live swimming fish.
+		fish["node"].rotation.z = sin(t * 3.0 + fish["phase"]) * 0.12
 
 	for pad in _pad_data:
 		if not is_instance_valid(pad["node"]):

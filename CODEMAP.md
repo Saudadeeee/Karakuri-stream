@@ -19,28 +19,35 @@ scenes/
   main.tscn             Scene chính (duy nhất) — camera, ground, PlacementController, UI
   pause_menu.tscn       Instance con trong main.tscn/UI — pause, xoá build, âm lượng
   blocks/
-    wood_block.tscn      StaticBody3D + BoxMesh (bị BlockMergeManager build lại mesh runtime)
-    water_block.tscn     StaticBody3D + BoxMesh + ShaderMaterial (water.gdshader) — mesh cũng bị build lại
-    gear_block.tscn      StaticBody3D + CylinderMesh 8 cạnh — KHÔNG bị merge system đụng vào
-    bell_block.tscn      StaticBody3D + CylinderMesh hình nón cụt — KHÔNG bị merge system đụng vào
+    wood_block.tscn      StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — gỗ là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
+    water_block.tscn     StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — nước là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
+    gear_block.tscn      StaticBody3D + con "MeshInstance3D" (pivot rỗng, GearManager xoay) + collision. `gear_block.gd` nạp `generated/gear.glb` vào pivot, `MeshFit.fit_centered` (đường kính ~1.15 → răng tip ~0.57 lồng gear kề). `apply_axis(Vector3i)` orient ROOT theo trục đặt. Driven khi STREAM rơi trúng (xem StreamManager)
+    bell_block.tscn      StaticBody3D + collision. `bell_block.gd` nạp `generated/bell.glb`, `fit_bottom`. Visual — kêu khi stream rơi trúng (StreamManager) hoặc gear kề gõ
+    source_block.tscn    StaticBody3D + collision. `source_block.gd` nạp `generated/source.glb` (ống tre ĐỨNG CĂN TÂM, miệng đáy-tâm, lá đối xứng ±Z → thẳng hàng ống dưới + stream tâm ô). Model đối xứng nên `face_adjacent_water()` chỉ còn trang trí. StreamManager phun dòng thẳng xuống từ tâm ô
+    pipe_block.tscn      Ống tre TỰ NỐI (kín/hở variant, `pipe_block.gd`). `build_visual(dirs,open)`: run THẲNG (2 hướng đối) → 1 tube liền `_add_tube_through` (KHÔNG hub); rẽ/T/thập/xuống/lẻ → hub + 1 stub/hướng (**KÍN=SphereMesh tròn**, **HỞ=box phẳng** lấp góc máng, không dùng cầu tròn). Hở → máng U `_add_trough` (đáy+2 vách). `PipeRouting.connections(cell)`; nghe grid đổi → `refresh_shape()`. `static build_visual` dùng chung ghost. `grid_cell` do Placement/Save set
+    pipe_bend_block.tscn (CŨ, không dùng)
 
 scripts/
-  autoload/              11 singleton, load theo đúng thứ tự khai báo trong project.godot
+  autoload/              12 singleton, load theo đúng thứ tự khai báo trong project.godot
   data/                  class_name thuần data/utility, KHÔNG phải autoload, KHÔNG có scene tree riêng
   player/                Script gắn trực tiếp vào node trong main.tscn (camera, đặt/gỡ khối)
   ui/                    Script UI
   blocks/                Script gắn vào .tscn khối cụ thể (vd gear_block.gd dựng răng bánh răng)
 
 shaders/
-  water.gdshader         Spatial shader dùng chung cho MỌI mặt nước (khối đặt tay lẫn ô flow BFS)
-  wood.gdshader          Vân gỗ procedural (world-pos noise) + rim-light, cho wood_block
-  metal.gdshader         Kim loại toy (rim sheen + emissive nhẹ cho bloom) cho gear/bell
+  water.gdshader         Spatial shader cho mặt nước occupancy-isosurface gộp (world-space, alpha vừa để thấy đáy, depth_draw_always chống xuyên)
+  wood.gdshader          Vân gỗ procedural (world-pos noise) + rim-light — chạy trên occupancy-isosurface gỗ (world-pos nên không cần UV)
+  metal.gdshader         Kim loại toy (rim sheen + emissive) — CŨ, gear/bell giờ dùng material của model glb; giữ lại phòng khi cần
+
+  (scripts/data/iso_surface.gd — `class_name IsoSurface`, thuật toán Surface Nets dựng mesh isosurface cho CẢ gỗ + nước)
 
 assets/
   sounds/                4 file audio đang dùng thật (xem Audio bên dưới)
+  3DModel/               Model art (.glb/.obj). zen-garden.glb = moodboard. `generated/` = bộ asset TỰ SINH bằng Blender theo artstyle.md (xem dưới)
+  3DModel/generated/     Bộ asset Blender sinh (`stylekit.py` + `gen_assets.py` + `gen_fix.py`, chạy `blender --background --python`). Theo artstyle.md: chunky+bevel, matte flat, palette hex. **LƯU Ý Z-up**: Blender Z-up → Godot Y-up (glTF đổi (x,y,z)→(x,z,-y)); author "cao" theo Blender Z, wheel phẳng trong Blender X-Y. DÙNG in-game: gear (Gear), bell (Bell), source/pipe_straight/pipe_elbow (Source/Pipe/Pipe_bend), grass_tuft (Decor), lily_pad (Pond), pine_tree/bush/reeds/rock_cluster/lantern/bonsai (SceneryManager)
   unused/                Asset đã tải về nhưng không dùng (rain ambience, giữ lại phòng khi cần, không xoá)
 
-default_bus_layout.tres  Audio bus Master + Reverb, đăng ký trong project.godot [audio]
+default_bus_layout.tres  3 bus: Master (Reverb) ← Music (-10dB) + SFX. Đăng ký trong project.godot [audio]
 export_presets.cfg       Cấu hình export Windows Desktop + Web (xem mục Export bên dưới)
 builds/                  Output export — KHÔNG commit (.gitignore), tự tạo lại bằng lệnh export
 ```
@@ -75,7 +82,7 @@ var node: Node3D         # root StaticBody3D thật trong scene tree
 
 Mọi autoload connect vào `block_placed`/`block_removed`, nhưng phạm vi tính lại chia 2 nhóm rõ ràng (đã đo hiệu năng thật, xem PHẦN 12 trong `plan.md`):
 
-**(a) Incremental — chỉ tính lại ô đổi + hàng xóm** (`BlockMergeManager`, `DecorManager`, `PondDecorManager`):
+**(a) Incremental — chỉ tính lại ô đổi + hàng xóm** (`DecorManager`, `PondDecorManager`):
 ```gdscript
 func _on_grid_changed(cell: Vector3i) -> void:
     _check_cell(cell)
@@ -99,37 +106,42 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 
 ### 5. Tạo node của 1 khối — CHỈ qua `BlockFactory`, đừng gọi `.instantiate()` trực tiếp nơi khác
 
-`scripts/data/block_factory.gd` (`class_name BlockFactory`, static) là nơi DUY NHẤT biết cách map `BlockData.Type -> PackedScene` và xử lý phần việc riêng của từng loại (khối Nước cần `_make_material_unique()` để `edge_mask` không dính chung giữa các khối — xem mục Shader). `PlacementController` (đặt tay) và `SaveManager` (tải file) đều gọi `BlockFactory.instantiate(type)` — thêm loại khối mới chỉ cần sửa `BlockFactory.SCENES_BY_TYPE`, không phải sửa 2 nơi.
+`scripts/data/block_factory.gd` (`class_name BlockFactory`, static) là nơi DUY NHẤT map `BlockData.Type -> PackedScene`. `PlacementController` (đặt tay) và `SaveManager` (tải file) đều gọi `BlockFactory.instantiate(type)` — thêm loại khối mới chỉ sửa `BlockFactory.SCENES_BY_TYPE`, không sửa 2 nơi. (Trước đây có `_make_material_unique` cho Nước; bỏ rồi vì Nước không còn material per-block — nó là isosurface gộp.)
 
 ## Autoload (thứ tự load = thứ tự khai báo trong `project.godot`)
 
 | # | Tên | File | Vai trò |
 |---|-----|------|---------|
 | 1 | `GridManager` | `autoload/grid_manager.gd` | Nguồn sự thật duy nhất của lưới. `set_block`/`remove_block`/`get_block`/`has_block`/`get_neighbors`/`get_all_cells_of_type`. Bắn signal `block_placed(cell)`/`block_removed(cell)`/`grid_cleared` (khi gọi `clear_all()` — xoá 1 lần, KHÔNG lặp `remove_block()` per-cell vì sẽ trigger rescan dây chuyền ở mọi autoload bên dưới). |
-| 2 | `BlockMergeManager` | `autoload/block_merge_manager.gd` | Khi lưới đổi: rebuild mesh của ô đổi + 6 hàng xóm bằng `BlockMeshBuilder`, ẩn mặt giáp khối CÙNG LOẠI (Townscaper-style). Chỉ áp dụng `MERGEABLE_TYPES = [WOOD, WATER]` — Gear/Bell giữ mesh riêng. Nếu là Nước, còn set `edge_mask` shader param (xem phần Shader). |
-| 3 | `AudioManager` | `autoload/audio_manager.gd` | Pool 20 `AudioStreamPlayer3D`. `play_wood_hit(pos)`, `play_chime(pos, note_index=-1)` (5 nốt ngũ cung, xem `PENTATONIC_RATIOS`), `make_water_loop_player()` (trả player chưa `.play()`, gọi nơi khác tự play). |
-| 4 | `WaterFlowManager` | `autoload/water_flow_manager.gd` | BFS thật từ mọi khối Nước "đỉnh chuỗi + y>0" qua ô rỗng — ưu tiên rơi thẳng, bị chặn thì tràn MỌI hướng ngang còn mở (không phải 1 hướng — xem plan.md PHẦN 8 lý do). BFS tính 1 lần nhưng các ô KHÔNG hiện cùng lúc: đẩy vào `_reveal_queue` rồi `_process` tiết lộ từng ô mỗi `REVEAL_INTERVAL` (~0.09s) theo thứ tự BFS → nước chảy dần từng tí, không pop hết 1 frame. Mỗi ô = 1 `MeshInstance3D` (`water.gdshader`, `flow_amount=1`) + tween scale-in "giọt rơi"; ô rơi chạm khối/đất → `_spawn_splash` (hạt cầu trắng scale-to-0). `_active_flows: Dictionary[Vector3i, MeshInstance3D]` — **các autoload khác đọc trực tiếp dict này** (xem `GearManager._is_wet`). |
-| 5 | `DecorManager` | `autoload/decor_manager.gd` | 2 rule độc lập trên Gỗ: (a) cạnh Nước liên tục 10s → mọc rêu; (b) `cell.y > 5` → gắn cờ đung đưa. |
-| 6 | `PondDecorManager` | `autoload/pond_decor_manager.gd` | Nước có đủ 4 hàng xóm ngang bị chiếm → hoa súng (bob lên xuống) + cá Koi (bơi vòng tròn). |
-| 7 | `FireflyManager` | `autoload/firefly_manager.gd` | `burst_at(pos)` — chớp hạt sáng 1 lần, gọi từ `GearManager` mỗi khi Chuông kêu. |
-| 8 | `GearManager` | `autoload/gear_manager.gd` | `_process` mỗi frame: Gear cạnh Nước (đặt tay HOẶC đang là `WaterFlowManager._active_flows`) → quay + bụi lấp lánh. Đếm góc quay, đủ 2π → gõ Chuông kề bên (`AudioManager.play_chime` + `FireflyManager.burst_at`). |
-| 9 | `SaveManager` | `autoload/save_manager.gd` | `save_game()`/`load_game()`/`has_save()`. KHÔNG có `_ready()` nghe signal gì — chỉ 3 hàm gọi trực tiếp từ `pause_menu.gd`. Xem mục Save/Load riêng bên dưới. |
-| 10 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — spawn 1 `GPUParticles3D` lá phong cam rơi lơ lửng trên đảo lúc khởi động, KHÔNG nghe signal/gắn gameplay. Điểm nhấn cam của bảng màu wabi-sabi. |
+| 2 | `AudioManager` | `autoload/audio_manager.gd` | Pool 24 player trên bus **SFX**. `play_wood_hit`/`play_chime` (ngũ cung `PENTATONIC_RATIOS` + humanization pitch/vol ngẫu nhiên), `make_water_loop_player` (tiếng suối, loop), `make_gear_loop_player` (rattle gỗ "kẽo kẹt", loop), `play_ambient_note` (nốt ngũ cung mềm, bus **Music**, cho AmbientMusic). Files thật trong `assets/sounds/`. |
+| 2b | `AmbientMusic` | `autoload/ambient_music.gd` | Nhạc nền GENERATIVE: rải nốt ngũ cung mềm mỗi 2.2–5.5s (bus Music). Luôn hoà âm (ngũ cung) + ngẫu nhiên → soundscape zen vô tận, không loop nghe được. |
+| 3 | `WaterFlowManager` | `autoload/water_flow_manager.gd` | Flow CỤC BỘ (PHẦN 26): khối WATER lan sang ô lân cận + tiếng nước loop + waterfall ở rìa, caps NHỎ (`MAX_FALL=40, MAX_POOL=18`) → KHÔNG flood cả đảo. Spill source = mọi ô nước hở đỉnh (kể cả y=0 → lan ngang tới hàng xóm). Dòng đường-xa CHỦ ĐÍCH = StreamManager. `_active_flows` cấp cho VoxelSurface render. |
+| 4 | `StreamManager` | `autoload/stream_manager.gd` | **CƠ CHẾ CHÍNH (karakuri)**: mỗi khối SOURCE phun dòng thẳng xuống; trace ô-theo-ô: qua PIPE/PIPE_BEND thì vào 1 port ra port kia (đọc `state["ports"]`), else rơi theo trọng lực tới khi trúng khối. `_trace()` gom `_segments` (dựng cylinder nước cyan) + `_impacts` (ô đích) + `_driven_gears`. Ô đích phát âm theo loại (gỗ/pipe→wood_hit, bell→chime+firefly, gear→clack+quay) mỗi `IMPACT_INTERVAL=0.55s` + splash. Rebuild throttled khi lưới đổi. |
+| 5 | `VoxelSurfaceManager` | `autoload/voxel_surface_manager.gd` | Dựng CẢ Gỗ + Nước thành isosurface gộp mịn — 2 `MeshInstance3D` riêng (wood/water), mỗi loại 1 material. Trường mật độ là **"union of rounded boxes" (KHÔNG phải metaball điểm)**: mỗi ô LẤP ĐẦY cube của nó, bo góc bán kính `ROUND_R`, các ô CỘNG lại (`d += min(ax,ay,az)`) nên ô kề fuse thành 1 khối liền (mặt phẳng chỗ dày, bo ở cạnh lộ) — đổ đầy ô như vật liệu thật, KHÔNG phình "bong bóng" như metaball. Gộp: Gỗ = ô WOOD; Nước = ô WATER + `WaterFlowManager._active_flows`. Rebuild throttled (`REBUILD_INTERVAL` 0.05s), chỉ loại bị đổi. `SAMPLES_PER_CELL=3`, `ISO=0.5`. Dùng `IsoSurface.build` (Surface Nets). |
+| 6 | `DecorManager` | `autoload/decor_manager.gd` | 2 rule độc lập trên Gỗ: (a) cạnh Nước liên tục 10s → mọc **cụm cỏ** (model `grass_tuft.glb` + blob rêu gốc, grow tween, **đung đưa gió** qua `_grass_data` trong `_process`); (b) `cell.y > 5` → gắn cờ đung đưa. |
+| 7 | `PondDecorManager` | `autoload/pond_decor_manager.gd` | Nước có đủ 4 hàng xóm ngang bị chiếm → **lá sen** (model `lily_pad.glb`, bob `y=0.62` trên mặt opaque) + cá Koi (bơi vòng `swim_y=0.56` mặt nước, lưng nhô, có đuôi). Spawn thưa (lily 0.45 / koi 0.55 mỗi ô). |
+| 8 | `FireflyManager` | `autoload/firefly_manager.gd` | `burst_at(pos)` — chớp hạt sáng 1 lần, gọi từ `GearManager`/`StreamManager` mỗi khi Chuông kêu. |
+| 9 | `GearManager` | `autoload/gear_manager.gd` | **Hệ truyền động**: mỗi frame dựng đồ thị liên thông Gear (6 hướng); 1 component quay nếu CÓ gear là driver. `_is_driver` = gear bị **STREAM rơi trúng** (`StreamManager._driven_gears`) HOẶC kề khối Nước tĩnh. Chiều quay = parity `(x+y+z)` → gear kề nhau tự quay NGƯỢC chiều (lưới bipartite). Răng ĂN KHỚP: gear parity lẻ lệch pha `HALF_TOOTH=TAU/20` (răng khớp vào khe, không đụng răng-răng), set 1 lần qua `_phased`. Xoay bằng `mesh_instance.rotate_y` — vì gear_block đã orient ROOT theo trục đặt (xem dưới), trục local-Y của mesh = trục đặt, nên quay quanh đúng trục. Bụi lấp lánh + gõ Chuông kề bên mỗi vòng. |
+| 10 | `SaveManager` | `autoload/save_manager.gd` | `save_game()`/`load_game()`/`has_save()`. KHÔNG `_ready()` nghe signal — 3 hàm gọi từ `pause_menu.gd`. Lưu thêm `axis` cho Gear + `ports` cho Pipe/Pipe_bend (`{x,y,z,type,axis?,ports?}`; save cũ thiếu → mặc định). Xem mục Save/Load. |
+| 11 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — lá phong cam rơi lơ lửng lúc khởi động, cast_shadow OFF. |
+| 12 | `SceneryManager` | `autoload/scenery_manager.gd` | Rải ~9 prop trang trí (thông/bụi/lau/đá/đèn/bonsai model) quanh rìa đảo lúc khởi động (`call_deferred`), vị trí cố định. Thuần backdrop, không phải khối lưới. |
 
-**Quan trọng khi thêm autoload mới**: đăng ký trong `project.godot` [autoload] — nếu autoload mới cần đọc `GridManager`/`AudioManager`/`WaterFlowManager` trong `_ready()`, đặt SAU chúng trong danh sách (autoload load tuần tự theo thứ tự khai báo).
+**Quan trọng khi thêm autoload mới**: đăng ký trong `project.godot` [autoload] — nếu autoload mới cần đọc `GridManager`/`AudioManager`/`WaterFlowManager` trong `_ready()`, đặt SAU chúng trong danh sách (autoload load tuần tự theo thứ tự khai báo). `VoxelSurfaceManager` đặt SAU `WaterFlowManager` vì đọc `_active_flows` của nó.
 
 **Quan trọng khi autoload mới tự giữ Dictionary theo cell** (như `_active_flows`, `_ponds`, `_sparkles`): PHẢI connect thêm `GridManager.grid_cleared` để dọn dict + free node khi user bấm "Xoá toàn bộ" (`PauseMenu`). Nếu node được tạo là con của CHÍNH autoload đó (không phải con của `block.node`) thì `GridManager.clear_all()` không tự free được — phải tự `queue_free()` trong handler `grid_cleared` của autoload đó (xem `WaterFlowManager`/`PondDecorManager`). Nếu chỉ giữ dict tham chiếu tới node vốn đã là con của `block.node` (như moss/flag trong `DecorManager`, sparkle trong `GearManager`) thì node tự bị free theo khối, chỉ cần `.clear()` dict cho sạch — không leak node thật, chỉ leak entry dict nếu bỏ qua bước này. `GearManager` còn cần connect cả `block_removed` (không chỉ `grid_cleared`) vì nó gỡ từng khối lẻ thường xuyên hơn xoá toàn bộ.
 
 ## `scripts/data/` — utility thuần, không phải autoload
 
-- **`block_data.gd`** — struct, xem trên.
-- **`block_mesh_builder.gd`** (`class_name BlockMeshBuilder`) — `static func build(hidden_dirs: Dictionary) -> ArrayMesh`. Dựng cube bằng `SurfaceTool`, bỏ qua mặt nào có trong `hidden_dirs`. **Cạm bẫy đã từng dính**: thứ tự index tam giác `[0,2,1, 0,3,2]` — ĐỪNG đổi lại thành `[0,1,2, 0,2,3]` trông "tự nhiên" hơn, đã verify bằng ảnh thật là sai chiều winding (mesh lộn ngược, nhìn xuyên vào trong). Nếu thêm mặt/hình dạng mới trong file này, luôn chụp ảnh cận cảnh 1 khối đơn lẻ để verify (xem phần Cách test).
-- **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi" ở trên. Dùng chung bởi `PlacementController` và `SaveManager`.
+- **`block_data.gd`** — struct, xem trên. `state: Dictionary` chứa dữ liệu per-khối (vd `state["axis"]` cho Gear = trục đặt Vector3i).
+- **`pipe_routing.gd`** (`class_name PipeRouting`) — `static ports_for(cell)`: 2 đầu mở của ống từ hàng xóm (PIPE/SOURCE) theo 6 hướng, kiểu ray Minecraft (0 hàng xóm→dọc; 1→nối nó + đầu kia xuống; 2+→ưu tiên feed từ trên + đầu ra kế). Nguồn logic CHUNG cho `pipe_block` (visual) + `StreamManager` (routing).
+- **`mesh_fit.gd`** (`class_name MeshFit`) — `fit_centered(model, target)` / `fit_bottom(model, height, floor_y)` + `local_aabb(root)` + `matte(root)`. Scale/đặt lại model art nhập cho vừa ô; `matte()` duplicate mọi StandardMaterial của model → ép `metallic=0, metallic_specular=0, roughness=1` (glTF import mặc định specular 0.5 làm bề mặt mượt bị chói/cháy trắng — vd chuông đá thành trắng). Gear/Bell/lily/grass đều route qua fit + matte.
+- **`iso_surface.gd`** (`class_name IsoSurface`) — `static func build(samples, dims, cell_size, iso) -> ArrayMesh`. Thuật toán Surface Nets (chọn thay Marching Cubes để khỏi bảng 256-entry, cho mặt blob mượt). Thuần toán, không phụ thuộc scene. Dùng bởi `VoxelSurfaceManager` để gộp CẢ gỗ + nước thành mặt liền. Density convention: "inside" khi value > iso. Sau khi dựng tam giác → `_smooth()` chạy **Taubin** (`SMOOTH_PASSES=2` × 2 bước: co +λ0.5 rồi phồng -μ0.53) dẹp scallop mà KHÔNG co thể tích — Laplacian thuần trước đây co mesh làm hở/xuyên mối nối. `VoxelSurfaceManager` dùng `ROUND_R=0.26`, `ISO=0.42` (<0.5 để phồng nhẹ, bắc cầu ô kề CHÉO → bậc thang merge liền, không hở).
+- **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi". Dùng chung bởi `PlacementController` và `SaveManager`.
 
 ## `scripts/player/` — input & tương tác
 
 - **`orbit_camera.gd`** (gắn `OrbitRig` trong main.tscn) — xoay bằng kéo chuột giữa, zoom bằng lăn chuột, điều khiển qua `SpringArm3D` con. `SpringArm3D.collision_mask = 0` (tắt tự né vật cản — nếu bật lại sẽ bị bug "camera dính zoom" khi khối cản tia dò của spring arm, đã từng gặp).
-- **`placement_controller.gd`** (gắn `PlacementController` trong main.tscn) — raycast chuột → `GridManager.world_to_cell`/`cell_to_world` → ghost block preview → đặt/gỡ khối. Tạo node khối qua `BlockFactory.instantiate(type)` (KHÔNG tự map scene nữa, xem mục 5 "Quy ước cốt lõi"). Phím `1`/`2`/`3`/`4` chọn Gỗ/Nước/Bánh răng/Chuông (`select_material`, bắn signal `material_changed` cho UI đồng bộ).
+- **`placement_controller.gd`** (gắn `PlacementController` trong main.tscn) — raycast chuột → `GridManager.world_to_cell`/`cell_to_world` → ghost block preview → đặt/gỡ khối. Tạo node khối qua `BlockFactory.instantiate(type)`. Khi khối CHẠM đất (tween callback) spawn `_spawn_place_effect(type)`: Gỗ→bụi đất, Nước→tia bắn, Gear/Bell→tia kim loại — CHỈ ở đặt-tay, KHÔNG ở `SaveManager.load` (tránh nổ particle hàng loạt). Phím `1`/`2`/`3`/`4` chọn vật liệu (signal `material_changed`).
 
 ## `scripts/ui/`
 
@@ -140,15 +152,15 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 
 ## Shader — `shaders/water.gdshader`
 
-Dùng CHUNG cho: (a) `water_block.tscn` (khối Nước đặt tay), (b) mọi `MeshInstance3D` do `WaterFlowManager` tạo động cho ô flow BFS.
+Áp cho 1 mesh DUY NHẤT: isosurface nước gộp do `VoxelSurfaceManager` dựng. **Hoàn toàn world-space** — isosurface không có UV/mặt-ô đáng tin, nên foam/sóng/caustic/sparkle/fresnel đều key theo world position + surface normal. `edge_mask`/`v_is_top`/`flow_dir` của bản per-block cũ ĐÃ BỎ (mặt isosurface vốn liền, không có seam nội bộ). Alpha để VỪA (water_color ~0.6, deep_color ~0.8) để thấy đáy/đất qua 1 vách nước; `depth_draw_always` để vách gần ghi depth che vách xa (không nhìn xuyên sang mặt bên kia của vũng vòng).
 
-Uniform quan trọng:
-- `flow_amount` (0.0 mặc định = nước tĩnh, sóng ĐA HƯỚNG đứng yên nhẹ; 1.0 = ô flow, sóng LAN theo `flow_dir` + vệt bọt cuộn chạy)
-- `flow_dir: Vector2` — hướng dòng chảy (chỉ set khi `flow_amount>0`, do `WaterFlowManager` set theo hướng BFS thực tế đi qua ô đó)
-- `edge_mask: Vector4` (+X,-X,+Z,-Z) — do `BlockMergeManager` set cho khối Nước đặt tay: 1.0 = biên thật (hiện foam), 0.0 = giáp ô Nước khác (tắt foam) — chỉ áp dụng mặt TRÊN (`v_is_top`, tính từ `VERTEX.y` trước khi bị sóng làm lệch)
-- `deep_color`/`caustic_strength`/`sparkle_strength` — nâng cấp visual: gradient độ-sâu-giả theo fresnel (nhìn thẳng = jade đậm, nhìn nghiêng = sáng), caustic shimmer bò trên mặt (chỉ mặt TRÊN), tia sáng trên đỉnh sóng (emissive → bloom bắt sáng). CHỈ mặt trên (`v_is_top`) đội sóng, mặt bên phẳng để cột nước không rách seam dọc.
+- Sóng: đội đỉnh theo `layered_waves(world.xz)` chỉ phần mặt hướng lên (`world_normal.y>0`) để cạnh bên không rung.
+- Foam: gom theo fresnel rim + đỉnh sóng (giữ nhẹ `foam_amount`~0.28 để thân vẫn teal, không trắng đục trên mặt mỏng).
+- `deep_color`: gradient độ-sâu-giả theo fresnel. Caustic/sparkle world-space (emissive → bloom bắt).
 
-**Ràng buộc cứng**: KHÔNG được dùng `SCREEN_TEXTURE`/`DEPTH_TEXTURE` trong shader này — renderer `gl_compatibility` không hỗ trợ đọc screen/depth texture trong spatial shader. Mọi hiệu ứng foam/edge đều phải dựa trên UV cục bộ hoặc uniform truyền vào, không dựa depth buffer.
+- **`depth_draw_always` trong render_mode** (BẮT BUỘC giữ): nước trong suốt vẫn ghi depth → vũng dạng vòng, vách gần che vách xa, KHÔNG nhìn xuyên (X-ray). Bỏ đi là bug "nhìn xuyên nước" quay lại. Opacity cao (water_color.a ~0.9) để vách đủ đục.
+
+**Ràng buộc cứng**: KHÔNG dùng `SCREEN_TEXTURE`/`DEPTH_TEXTURE` — `gl_compatibility` không hỗ trợ đọc screen/depth texture trong spatial shader. Mọi hiệu ứng dựa world-pos/normal/uniform, không depth buffer.
 
 ## Art direction — "Floating Diorama" (Wabi-sabi)
 
@@ -156,8 +168,8 @@ Hướng nghệ thuật: đảo nổi trong không gian vô cực kiểu Townsca
 
 - **Bầu trời**: `main.tscn` WorldEnvironment dùng `ProceduralSkyMaterial` (built-in), gradient xanh ngọc (đỉnh) → hồng pastel (chân trời/hoàng hôn). Ambient dùng màu CỐ ĐỊNH (`ambient_light_source = COLOR`, energy ~0.45), **KHÔNG** dùng `ambient_light_source = SKY` — đã thử, bầu trời hồng quá sáng làm cháy trắng toàn cảnh (over-expose). Đừng đổi lại SKY hay bật tonemap Filmic mà không kiểm tra lại phơi sáng bằng ảnh thật.
 - **Đảo**: node `Ground` = 2 `CylinderMesh` (đĩa mặt trên mỏng + côn cụt thân dưới thu nhỏ) cho cảm giác đảo lơ lửng. Mặt trên vẫn đúng world y=0 (collision box giữ nguyên cho raycast đặt khối) — chỉ đổi visual, không đụng quy ước lưới.
-- **Bảng màu + bề mặt chi tiết**: Gỗ dùng `wood.gdshader` (vân procedural theo world-pos → cột gỗ xếp chồng có vân liền mạch, + rim-light cạnh). Nước ngọc bích — đổi màu ở CẢ `water.gdshader` uniform default LẪN override trong `water_block.tscn` (2 nơi, quên 1 là lệch màu giữa khối đặt tay và ô flow). Gear/Bell dùng `metal.gdshader` (đồng/bạc + rim sheen + emissive nhẹ). Lá phong cam (`AmbientLeaves`).
-- **Mesh chi tiết (không phải primitive trơn)**: Gear = hub cylinder + 10 răng box dựng bằng `scripts/blocks/gear_block.gd` (răng là con của MeshInstance3D nên quay cùng khi GearManager xoay). Bell = nón cụt + quai (torus) + đỉnh (sphere) + quả lắc, author trong `bell_block.tscn`. Koi có đuôi (prism), lá sen có khía + đôi khi hoa súng hồng, rêu là cụm 4-6 blob nhiều sắc xanh — tất cả trong `pond_decor_manager.gd`/`decor_manager.gd`.
+- **Bảng màu + bề mặt chi tiết**: Gỗ dùng `wood.gdshader` (vân procedural world-pos + rim-light) trên occupancy-isosurface gộp; Nước qua `water.gdshader` (1 material trên isosurface gộp). Màu Gỗ/Nước lấy theo model art (`wooden-foundation-block.mtl` / `teal-water-block.mtl`) để đồng bộ style zen gỗ. Cả Gỗ + Nước dựng bởi `VoxelSurfaceManager`. Gear/Bell dùng material của model glb (`wooden-cogwheel`/`zen-chime`). Lá phong cam (`AmbientLeaves`).
+- **Mesh chi tiết (không phải primitive trơn)**: Gear = hub cylinder + 10 răng box dựng bằng `scripts/blocks/gear_block.gd` (răng là con của MeshInstance3D nên quay cùng khi GearManager xoay). Bell = nón cụt + quai (torus) + đỉnh (sphere) + quả lắc, author trong `bell_block.tscn`. Koi = model Blockbench `generated/koi.glb` (thân box thon trắng + đốm đỏ Kohaku + vây đuôi/lưng/ngực + mắt đen; `_add_koi` fit theo CHIỀU DÀI, `_process` xoay đầu +X theo hướng bơi), lá sen có khía + đôi khi hoa súng hồng, rêu là cụm 4-6 blob nhiều sắc xanh — tất cả trong `pond_decor_manager.gd`/`decor_manager.gd`.
 - **Post-processing (`main.tscn` Environment)**: glow/bloom (bắt sáng foam/sparkle/emissive — `glow_hdr_threshold=1.0` để chỉ vùng thật sáng mới bloom, tránh cháy trắng), fog mật độ thấp cho không khí xa, adjustment color-grade (saturation 1.15). Đều chạy trên `gl_compatibility` (glow/fog/adjustment được hỗ trợ; SSAO/SSR/SDFGI thì KHÔNG).
 - **Squash & stretch**: `placement_controller._animate_drop` — lún sâu (y 0.55) rồi nảy `TRANS_ELASTIC` cho cảm giác thạch dẻo.
 - **AO & soft shadow — HÀNG GIẢ, ghi rõ để không nhầm**: renderer `gl_compatibility` KHÔNG có SSAO/SSIL/SDFGI thật (chỉ Forward+ mới có). "Đổ bóng mềm" hiện làm bằng `DirectionalLight3D.shadow_blur` + PSSM 4-split, KHÔNG phải AO thật. "AO góc kẹt" giữa 2 khối chỉ có gián tiếp nhờ merge system ẩn mặt trong (khe hở tự tối). Rim-light trong `wood`/`metal` shader cũng là mẹo làm cạnh khối "nổi" mềm, KHÔNG phải bevel/AO thật. Muốn AO/soft-shadow thật phải đổi sang Forward+ — nhưng thế thì mất khả năng export Web/Mobile nhẹ (đánh đổi đã chọn từ đầu dự án).
@@ -167,13 +179,13 @@ Hướng nghệ thuật: đảo nổi trong không gian vô cực kiểu Townsca
 
 1. `PlacementController._place_block()` — raycast, xác định `_ghost_cell`, tạo node qua `BlockFactory.instantiate(type)`, tween rơi+nảy, gọi `GridManager.set_block(cell, BlockData.new(...))`
 2. `GridManager.set_block()` lưu vào `_blocks`, bắn `block_placed(cell)`
-3. Tất cả autoload đã `connect()` vào signal này chạy `_refresh()` gần như đồng thời trong cùng frame: `BlockMergeManager` rebuild mesh ô này + 6 hàng xóm; `WaterFlowManager` tính lại toàn bộ BFS; `DecorManager`/`PondDecorManager` quét lại điều kiện rêu/hoa súng/cờ; `GearManager` sẽ thấy trạng thái mới ở `_process` frame kế tiếp (không nghe signal trực tiếp, tự poll `is_powered` mỗi frame vì cần animate liên tục dù không có gì thay đổi ở lưới)
+3. Tất cả autoload đã `connect()` vào signal này chạy `_refresh()` gần như đồng thời trong cùng frame: `VoxelSurfaceManager` đánh dấu dirty để rebuild mặt Gỗ/Nước (throttled); `WaterFlowManager` tính lại toàn bộ BFS; `DecorManager`/`PondDecorManager` quét lại điều kiện rêu/hoa súng/cờ; `GearManager` sẽ thấy trạng thái mới ở `_process` frame kế tiếp (không nghe signal trực tiếp, tự poll `is_powered` mỗi frame vì cần animate liên tục dù không có gì thay đổi ở lưới)
 
 ## Save/Load (`scripts/autoload/save_manager.gd`)
 
 Lưu **toàn bộ dữ liệu gameplay** (vị trí + loại từng khối) — khác hoàn toàn setting âm lượng (`user://settings.cfg` qua `ConfigFile`, xem `pause_menu.gd`). 2 file riêng biệt, đừng gộp.
 
-- Định dạng: JSON array tại `user://save_data.json`, mỗi phần tử `{"x":int,"y":int,"z":int,"type":int}` (`type` là giá trị số của `BlockData.Type`).
+- Định dạng: JSON array tại `user://save_data.json`, mỗi phần tử `{"x":int,"y":int,"z":int,"type":int}` (`type` là giá trị số của `BlockData.Type`). Gear thêm `"axis":[ax,ay,az]` (trục đặt); khi load, entry có axis + type GEAR → set `block.state["axis"]` + gọi `instance.apply_axis()`. Save cũ thiếu `axis` → gear nằm ngang mặc định (+Y) — backward-compatible.
 - `save_game()`: `GridManager.get_all_cells()` (KHÔNG lọc theo type — quét toàn bộ `_blocks`, chấp nhận được vì chỉ chạy lúc bấm Lưu, không phải mỗi frame) → serialize → ghi file.
 - `load_game()`: đọc file → `GridManager.clear_all()` (xoá sạch lưới hiện tại trước, không merge với build cũ) → với mỗi entry: `BlockFactory.instantiate(type)` → add làm con của `get_tree().current_scene` (KHÔNG phải con của `SaveManager` — `SaveManager` là autoload, cha của nó là `/root`, không phải "Main") → `GridManager.set_block(...)`. Trả `false` nếu file không tồn tại hoặc JSON hỏng (`data == null` hoặc không phải `Array`) — gọi ở nơi khác PHẢI check giá trị trả về, đừng giả định luôn thành công.
 - **Decor tự regenerate, không cần lưu riêng**: rêu/hoa súng/cá/cờ/sparkle KHÔNG nằm trong file save — vì `load_game()` gọi `GridManager.set_block()` y hệt lúc đặt tay, mọi autoload phản ứng signal (`DecorManager`, `PondDecorManager`, `GearManager`...) tự tính lại từ đầu theo đúng rule của chúng. Đây là lợi ích trực tiếp của kiến trúc reactive — đừng thêm state decor vào file save, sẽ chỉ làm phức tạp hoá và có nguy cơ lệch dữ liệu.
@@ -182,10 +194,10 @@ Lưu **toàn bộ dữ liệu gameplay** (vị trí + loại từng khối) — 
 ## Cách thêm 1 loại khối mới (checklist)
 
 1. Thêm vào `BlockData.Type` enum (`scripts/data/block_data.gd`)
-2. Tạo `scenes/blocks/xxx_block.tscn`: `StaticBody3D` root + `MeshInstance3D` (con tên đúng `"MeshInstance3D"` nếu muốn tương thích `BlockMergeManager`/animation lookup pattern) + `CollisionShape3D` (BoxShape3D 1x1x1 để raycast đặt/gỡ nhất quán, kể cả nếu mesh nhìn không phải hình hộp)
-3. Nếu khối này KHÔNG nên bị merge/ẩn mặt (hình dạng riêng như Gear/Bell): đừng thêm vào `BlockMergeManager.MERGEABLE_TYPES`
-4. `BlockFactory`: thêm `const XXX_SCENE`, thêm vào `SCENES_BY_TYPE` (KHÔNG sửa `PlacementController` hay `SaveManager` — cả 2 đều gọi qua `BlockFactory.instantiate()`). Thêm phím tắt trong `PlacementController._unhandled_input`
-5. `material_ui.gd` + `main.tscn`: thêm 1 `Button` mới trong `HBoxContainer`, thêm vào `buttons` dictionary trong script (khớp tên node)
+2. Tạo `scenes/blocks/xxx_block.tscn`: `StaticBody3D` root + `MeshInstance3D` (con tên đúng `"MeshInstance3D"` nếu cần GearManager/animation lookup) + `CollisionShape3D` (BoxShape3D 1x1x1 để raycast đặt/gỡ nhất quán). Khối render bằng isosurface gộp (kiểu Gỗ/Nước) thì KHÔNG có mesh — chỉ CollisionShape.
+3. Nếu khối muốn merge liền kiểu Gỗ/Nước (occupancy-isosurface): thêm loại vào `VoxelSurfaceManager` (một cặp `MeshInstance3D` + hàm gom centers riêng). Hình dạng riêng có mesh thật (Gear/Bell): ĐỪNG thêm.
+4. `BlockFactory`: thêm `const XXX_SCENE` + vào `SCENES_BY_TYPE` (KHÔNG sửa `PlacementController`/`SaveManager` — đều qua `BlockFactory.instantiate()`). Thêm phím tắt trong `PlacementController._unhandled_input`
+5. `material_ui.gd`: thêm loại vào mảng `ENTRIES`. Icon dựng qua `_build_icon_visual(type)` — khối CÓ mesh thật (Gear/Bell) instance scene; khối meshless (Gỗ/Nước) dựng BoxMesh đại diện + shader tương ứng.
 6. Nếu khối cần logic riêng theo thời gian/trạng thái lưới (như Gear xoay, Bell kêu): tạo autoload mới theo đúng pattern ở trên, đăng ký trong `project.godot` SAU `GridManager` (và sau bất kỳ autoload nào nó cần đọc trong `_ready`)
 
 ## Audio

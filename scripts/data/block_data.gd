@@ -1,7 +1,7 @@
 class_name BlockData
 extends RefCounted
 
-enum Type { WOOD, WATER, GEAR, BELL }
+enum Type { WOOD, WATER, GEAR, BELL, SOURCE, PIPE, PIPE_BEND, JELLY }
 
 var type: Type
 var state: Dictionary = {}

@@ -1,28 +1,9 @@
-[gd_scene load_steps=5 format=3]
-
-[ext_resource type="Shader" path="res://shaders/wood.gdshader" id="1_wood_shader"]
-
-[sub_resource type="BoxMesh" id="BoxMesh_wood"]
-size = Vector3(1, 1, 1)
-
-[sub_resource type="ShaderMaterial" id="Material_wood"]
-shader = ExtResource("1_wood_shader")
-shader_parameter/base_color = Color(0.76, 0.62, 0.4, 1)
-shader_parameter/grain_color = Color(0.52, 0.38, 0.22, 1)
-shader_parameter/grain_scale = 6.0
-shader_parameter/grain_strength = 0.5
-shader_parameter/rim_color = Color(1.0, 0.92, 0.78, 1)
-shader_parameter/rim_power = 3.5
-shader_parameter/rim_strength = 0.35
+[gd_scene load_steps=2 format=3]
 
 [sub_resource type="BoxShape3D" id="Shape_wood"]
 size = Vector3(1, 1, 1)
 
 [node name="WoodBlock" type="StaticBody3D"]
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("BoxMesh_wood")
-surface_material_override/0 = SubResource("Material_wood")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("Shape_wood")

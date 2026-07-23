@@ -351,3 +351,308 @@ Mới: `shaders/wood.gdshader`, `shaders/metal.gdshader`, `scripts/blocks/gear_b
 - [ ] Toàn bộ chuyển động (sóng/caustic/sparkle nước, gear quay, lá rơi, koi bơi, glow) cần mắt xem real-time — ảnh tĩnh không thể hiện
 - [ ] Vân gỗ hơi đậm (chevron rõ) — nếu thấy rối mắt, giảm `grain_strength` trong wood_block.tscn
 - [ ] Vẫn không có AO/soft-shadow/reflection thật (giới hạn gl_compatibility, đánh đổi cho Web/Mobile)
+
+## PHẦN 17: NƯỚC ISOSURFACE + BÁNH RĂNG TRUYỀN ĐỘNG + KHỐI PHỒNG (Overhaul 2)
+
+User vẫn thấy "block vô hồn" → chọn bản tham vọng: nước 1 thực thể liền, bánh răng ăn khớp truyền động, bo tròn cả Gỗ+Nước. 3 phase, verify từng phase bằng ảnh GPU thật + benchmark.
+
+### Phase 1 — Nước isosurface (metaball) [x]
+- `scripts/data/iso_surface.gd` (`class_name IsoSurface`): **Surface Nets** (chọn thay Marching Cubes để khỏi bảng 256-entry, ít lỗi transcription, mặt blob mượt hợp nước). Test riêng: 2 metaball → fuse thành 1 blob liền, 636 vert, no NaN.
+- `scripts/autoload/water_surface_manager.gd`: gom mọi ô nước (khối đặt + `WaterFlowManager._active_flows`) → density field → 1 isosurface gộp → gán `water.gdshader`. Throttled rebuild 0.05s.
+- `WaterFlowManager` viết lại: KHÔNG render segment nữa, chỉ track tập ô + bắn `flow_changed`. `water_block.tscn` bỏ mesh (giữ collision). Nước gỡ khỏi `MERGEABLE_TYPES`. `water.gdshader` viết lại world-space (bỏ UV/edge_mask/v_is_top).
+- **Bug bắt qua benchmark**: metaball `K/d²` (support vô hạn) → density tích luỹ trên pool dày → surface phình quá vùng mẫu, bị clip → 64 ô chỉ ra 56 vert. Fix: falloff HỮU HẠN `(1-(d/R)²)²` (bounded) + cull khoảng cách + margin ≥ R. Sau fix: 64 ô → 1644 vert đúng.
+- **Benchmark/tune**: res 3 → 62ms (chậm cho rebuild mỗi flow-tick). Giảm `SAMPLES_PER_CELL` 3→2 → 20.7ms cho pool 64 ô (worst-case hiếm; pool thường <20 ô → <5ms). Chấp nhận.
+- Verify ảnh: nước là khối liquid teal liền mạch (thác cong bao cột, pool bao viền khay) — đúng "thực thể nước thật".
+
+### Phase 2 — Bánh răng truyền động [x]
+`gear_manager.gd` viết lại: mỗi frame dựng đồ thị liên thông Gear (BFS 6 hướng), component quay nếu ≥1 gear `_is_driver` (chạm nước). Chiều quay = parity `(x+y+z)` — lưới 6-hướng là **bipartite** nên ô kề tự động ngược chiều, KHÔNG cần BFS chiều. Verify test: hàng 4 gear + 1 nước đầu → deltas `[+0.6,-0.6,+0.6,-0.6]` (cả 4 quay, xen kẽ chiều = ăn khớp thật), gear lẻ không nước đứng yên.
+
+### Phase 3 — Khối gỗ phồng (pillow) [x]
+`block_mesh_builder.gd`: mỗi mặt lộ chia lưới `SUBDIV=4`, đẩy đỉnh giữa ra theo normal `PILLOW=0.06`, đỉnh mép giữ nguyên → khối mềm kiểu Townscaper mà mép chung không xê dịch (merge khít, không hở góc). Đây là cách Townscaper thật làm (khối phồng, không phải bevel cứng). **Bug winding sub-cell** (đảo p01/p10 → lộn mặt) — sửa, verify ảnh cận cảnh: khối solid mềm mại, cầu thang merge khít.
+
+### Còn treo
+- [ ] Rebuild isosurface worst-case (pool ~64 ô đang đổ đầy) ~20ms/lần → có thể giật nhẹ 1 frame khi vừa đổ đầy pool cực lớn; nếu cần, tối ưu bằng scatter (splat per-cell thay vì gather per-sample) hoặc rebuild vùng đổi. Chưa cần cho quy mô thường.
+- [ ] Nước isosurface hơi phồng/bulbous (metaball R=1.4) — nếu muốn nước "gọn" hơn, giảm `METABALL_R` (nhưng phải giữ đủ để ô kề fuse).
+- [ ] Chuyển động thật (nước chảy/sóng, gear quay ăn khớp, gỗ phồng khi orbit) cần mắt xem real-time — ảnh tĩnh không thể hiện.
+
+## PHẦN 18: FIX 3 PHẢN HỒI (nước xuyên, particle đặt khối, gear ăn khớp)
+
+Feedback sau khi xem Overhaul 2:
+1. **Nước nhìn xuyên qua vách xa** (X-ray). Nguyên nhân: mặt nước trong suốt không ghi depth → vũng dạng vòng nhìn qua vách gần thấy vách xa. Fix: `water.gdshader` thêm `depth_draw_always` (vách gần ghi depth che vách xa, vẫn blend với nền sau) + tăng opacity (water_color.a 0.72→0.9, deep 0.9→0.97), giảm foam 0.28→0.22. Verify ảnh: vách nước đục hoàn toàn, hết xuyên.
+2. **Thiếu phản hồi môi trường khi đặt khối**. Thêm `placement_controller._spawn_place_effect(type, pos)` gọi qua tween callback đúng lúc khối CHẠM đất: Gỗ→bụi đất nâu, Nước→tia nước sáng bắn, Gear/Bell→tia kim loại. Chỉ ở đặt-tay (PlacementController), KHÔNG ở SaveManager.load (tránh nổ particle hàng loạt lúc tải).
+3. **Bánh răng đặt cạnh nên khớp để quay**. `gear_manager.gd`: lệch pha nửa răng (`HALF_TOOTH = TAU/20`, 10 răng) theo parity `(x+y+z)` — răng của bánh này khớp vào KHE của bánh kia (không đụng răng-với-răng), kết hợp quay ngược chiều sẵn có → ăn khớp thật. Set 1 lần khi gear xuất hiện (`_phased`), dọn theo remove/clear.
+
+### Còn treo
+- [ ] Particle đặt khối verify bằng smoke (không lỗi) + code y hệt pattern splash/sparkle đã chạy; chưa bắt được bằng ảnh tĩnh (transient) — user tự xem live.
+- [ ] Nước vẫn hơi nhợt ở mặt trên hứng sáng trời (opaque rồi nhưng foam+ambient làm sáng) — giảm thêm foam/ambient nếu muốn teal đậm hơn.
+- [ ] Phase gear khớp hoàn hảo lúc đặt; nếu thêm gear vào 1 hệ ĐANG quay, gear mới vào đúng pha gốc chứ chưa khớp pha tức thời với hệ (lệch nhỏ, chấp nhận được).
+
+## PHẦN 19: OCCUPANCY-ISOSURFACE (Gỗ+Nước) + GEAR ĐỊNH HƯỚNG THEO MẶT + RĂNG KHỚP (Overhaul 3)
+
+Feedback sau Overhaul 2 — 4 vấn đề ở tầng thiết kế. Chốt với user: (a) Nước + Gỗ đều dựng bằng **occupancy-isosurface** (đổ đầy ô, bo góc, merge liền — KHÔNG phình bong bóng); (b) Nước trong nhẹ (thấy đáy) + chống xuyên vách; (c) Gear trục = pháp tuyến mặt đặt.
+
+### Phase 1 — Occupancy isosurface cho CẢ Gỗ + Nước [x]
+- **Trường mật độ mới "union of rounded boxes"** (thay metaball điểm — thủ phạm bong bóng): mỗi ô LẤP ĐẦY cube của nó `inside = min_axes(1 - smoothstep(0.5-r, 0.5+r, |p-c|.axis))`, các ô CỘNG lại (`d += ...`) → 1 ô ra cube bo góc lấp đầy (không phình), nhiều ô liền → 1 KHỐI mịn (mặt phẳng chỗ dày, bo cạnh lộ). Test toán riêng: 1 ô=56 vert (cube bo), 2 ô kề=110 vert (bar liền), 3 ô=164 vert (cột liền) — KHÔNG phình, merge solid. Đúng Townscaper + đúng vật lý nước.
+- `scripts/autoload/voxel_surface_manager.gd` (autoload MỚI, thay CẢ `water_surface_manager.gd` lẫn `block_merge_manager.gd`): 2 `MeshInstance3D` (wood/water), mỗi loại gom centers riêng (Nước = ô WATER + `_active_flows`), dựng trường occupancy, `IsoSurface.build`, throttled 0.05s, chỉ rebuild loại dirty. `HALF=0.5, ROUND_R=0.2, ISO=0.5, SAMPLES_PER_CELL=3`.
+- Đổi kèm: XOÁ `water_surface_manager.gd` + `block_merge_manager.gd` + `block_mesh_builder.gd` (pillow không còn dùng). `wood_block.tscn` bỏ mesh (chỉ collision, như water). `project.godot`: bỏ 2 autoload cũ, thêm `VoxelSurfaceManager` sau `WaterFlowManager`. `material_ui.gd`: Gỗ/Nước meshless → icon dựng BoxMesh đại diện + shader (`_build_icon_visual`); Gear/Bell vẫn instance scene thật.
+- Verify ảnh GPU (vũng vòng gỗ+nước): gỗ merge solid liền, nước đổ đầy ô merge liền — KHÔNG bong bóng (wood 904 vert, water 1482 vert).
+
+### Phase 2 — Water shader trong nhẹ + không xuyên vách [x]
+`water.gdshader`: hạ alpha (water_color 0.9→0.6, deep 0.97→0.8) để thấy đáy/đất qua 1 vách nước, giữ `depth_draw_always` để vách gần ghi depth che vách xa (vũng vòng không nhìn xuyên sang mặt bên kia). Verify ảnh: thấy sàn gỗ qua vách nước trước, không lộ vách xa. (2 ô vuông cam trong ảnh = đom đóm decor, không phải bug.)
+
+### Phase 3 — Gear định hướng theo pháp tuyến mặt đặt [x]
+- `placement_controller.gd`: lưu `_ghost_normal`; khi đặt GEAR → `axis = Vector3i(round(normal))`, set `block.state["axis"]`, gọi `instance.apply_axis(axis)`.
+- `gear_block.gd`: `apply_axis(axis)` orient ROOT (StaticBody3D) qua `_basis_for_axis` (6 pháp tuyến cardinal → xoay 90°/180° cố định) sao cho local-Y (trục đĩa) = axis. Mặt trên (+Y)→nằm ngang; mặt bên (±X/±Z)→dựng đứng như guồng nước.
+- `gear_manager.gd` KHÔNG đổi: `mesh_instance.rotate_y` quay quanh Y của KHÔNG GIAN CHA (= root-local Y = axis) nên tự quay đúng trục sau khi root đã orient. Parity counter-rotate vẫn đúng cho gear đồng phẳng kề nhau.
+- `save_manager.gd`: lưu `axis:[ax,ay,az]` cho Gear; load → set state + `apply_axis`; save cũ thiếu axis → mặc định +Y (backward-compatible). Test headless save→clear→load: cả 3 gear giữ đúng `state.axis` + orient local-Y (STATE_OK + ORIENT_OK cho +X/+Z/+Y).
+
+### Phase 4 — Răng gear thật sự ăn khớp [x]
+`gear_block.gd`: tip răng ra `TOOTH_RADIUS(0.45)+TOOTH_LENGTH/2(0.11)=0.56` — VƯỢT ranh giới ô 0.5, thò sang ô kề. 2 gear đồng phẳng (tâm cách 1.0) overlap band 0.44..0.56; kết hợp lệch pha nửa răng (`HALF_TOOTH`) + quay ngược chiều → răng bánh này LỒNG vào khe bánh kia. Verify ảnh top-down 2 gear kề: răng lồng vào khe, không đụng đầu-đầu.
+
+### Còn treo
+- [ ] Mặt trên occupancy hơi lượn sóng (scallop do `SAMPLES_PER_CELL=3` + `ROUND_R`) — đọc như sóng nước nhẹ (ổn cho nước, hơi rõ cho gỗ). Tăng samples sẽ mượt hơn nhưng tốn hơn; chưa cần.
+- [ ] `_on_grid_changed` đánh dấu CẢ wood+water dirty (không biết loại ô bị gỡ) → rebuild dư 1 mặt mỗi lần đặt/gỡ. Đặt khối không thường xuyên nên chấp nhận; nếu cần, truyền type qua signal.
+- [ ] Gear thêm vào hệ ĐANG quay vào đúng pha gốc, chưa khớp pha tức thời (như PHẦN 18, lệch nhỏ chấp nhận được).
+
+## PHẦN 20: FIX XUYÊN + POLISH HÌNH ẢNH + WATERFALL VÔ HẠN (Overhaul 4)
+
+Feedback sau Overhaul 3: (1) khối merge nhìn xuyên thấu; (2) nước trong suốt quá mức; (3) răng 2 gear phải thực sự đan xen để chạy; (4) cập nhật toàn diện hình ảnh; (5) nước chảy vô hạn ra ngoài map như thác (giữ cơ chế chặn). Chốt với user: waterfall = **particle** ở rìa (isosurface giữ trong map), art = **tinh chỉnh style hiện tại**.
+
+### Chẩn đoán "nhìn xuyên" [x]
+Test ảnh cụm gỗ: gỗ KHÔNG xuyên (đặc, cull_back opaque) — vệt trắng là rim-light cháy (bloom threshold 1.0). Thủ phạm "xuyên khi merge" thật ra là NƯỚC quá trong (alpha 0.6 từ PHẦN 19 để "thấy đáy") → nhìn xuyên sang mặt bên kia. Nên bản này ĐẢO lại: nước đục hơn.
+
+### Fix [x]
+1. **Nước đục hơn** (`water.gdshader`): water_color.a 0.6→0.88, deep_color.a 0.8→0.97. Giữ `depth_draw_always`. Đọc như khối nước đặc, hết X-ray, vẫn hơi trong ở góc xiên.
+2. **Rim-light gỗ hết cháy** (`wood.gdshader` + override trong `voxel_surface_manager._configure_wood_material` + `material_ui.gd`): rim_strength 0.35→0.16, rim_color bớt trắng (1.0,0.92,0.78)→(0.95,0.85,0.68), rim_power 3.5→4.0. (Nhớ: material do manager set_shader_parameter ghi đè default shader — phải sửa CẢ 3 chỗ.)
+3. **Dẹp scallop mặt gộp** (`iso_surface.gd`): thêm `_smooth()` — 2 vòng Laplacian (kéo đỉnh về trung bình hàng xóm cạnh, factor 0.5) trước khi tính normal. Mặt gộp mịn hẳn ở `SAMPLES_PER_CELL=3` (không phải tăng sample = không tốn thêm nhiều). Verify ảnh: gỗ + nước mịn, không lồi lõm facet.
+4. **Răng gear đan xen thật** (`gear_block.gd` + `gear_block.tscn`): thu hub 0.36→0.28 (răng lộ rõ, đọc thành bánh RĂNG chứ không phải đĩa), răng tip `0.44+0.34/2=0.61` (>0.5, thò sang ô kề), inner 0.27 (tụt dưới hub 0.28 = liền khối). Verify ảnh top-down 2 gear kề + lệch pha giả lập giữa-chừng-quay: răng lồng sâu vào khe nhau, giữ khớp khi quay.
+
+### Waterfall vô hạn (particle) [x]
+`water_flow_manager.gd`:
+- Cap CAO: `MAX_FALL_CELLS` 60→200, `MAX_POOL_CELLS` 24→260 → nước tràn khắp đảo (bán kính đảo `MAP_RADIUS=8.5`, xem `main.tscn` IslandTop=9.0).
+- BFS pooling: ô mà hàng xóm ngang ra ngoài `MAP_RADIUS` (`_beyond_rim`) = **pour cell** → KHÔNG pool isosurface ra trời (giữ mesh bounded/nhanh), đánh dấu `_pour_candidates`, dừng lan hướng đó. Cơ chế chặn dòng (has_block) giữ nguyên.
+- `_refresh_waterfalls()` (quản như `_source_audio`): pour candidate nào ĐÃ được reveal (`_active_flows`) → spawn `_make_waterfall()` (GPUParticles3D giọt nước đổ thẳng xuống, lifetime 2.2s, gravity -9, visibility_aabb cao 15 để không bị cull), cap `MAX_WATERFALLS=48`. Ô khô/biến mất → free. Dọn ở `grid_cleared`.
+- Test headless (nguồn nước gần rìa): active_flows=20, pour_candidates=48, waterfalls=3 (số pour đã reveal), **active_beyond_rim=0** (isosurface đúng là chỉ nằm trong đảo, phần ra ngoài là particle).
+
+### Còn treo
+- [ ] Flood cả đảo (200+ ô) reveal tuần tự ~0.09s/ô → mất ~20s mới đầy hẳn (hiệu ứng trickle — hợp game thư giãn, nhưng ai muốn nhanh thì giảm `REVEAL_INTERVAL`).
+- [ ] Waterfall particle đổ xuống "trời" vô tận (lifetime giới hạn nên biến mất sau ~2.2s rơi) — trông như thác đổ vào mây, không có bể hứng. Đúng ý "đổ ra ngoài map".
+- [ ] `_smooth()` Laplacian có thể co nhẹ silhouette ở chi tiết rất nhỏ (1 ô lẻ) — không đáng kể ở `factor=0.5, passes=2`; tăng passes sẽ co nhiều hơn.
+- [ ] Chuyển động thật (gear quay khớp, nước chảy + waterfall, sóng) cần xem real-time — ảnh tĩnh chỉ xác nhận hình học/màu.
+
+## PHẦN 21: ÁP MODEL 3D ART (assets/3DModel) — zen gỗ
+
+User có sẵn model art trong `assets/3DModel` (form ý tưởng thiết kế = moodboard: zen-garden diorama gỗ ấm). Chốt: **Hybrid** cho Gỗ/Nước (giữ merge+flow, chỉ lấy PALETTE từ model), swap model cho Gear/Bell.
+
+### Preview model (đo AABB + render lưới)
+wooden-foundation-block.obj = slab dẹt 1.1×0.42 (xám, obj không load .mtl); teal-water-block.glb = cube nước teal + foam + lá sen; wooden-cogwheel.glb = bánh răng gỗ TO (2.4); zen-chime.glb = chuông trên giá (~1 cao); bamboo-water-pipe = ống tre tí (0.32); zen-garden.glb = cả diorama đảo (2.5×4.5). → Gỗ/Nước là isosurface meshless nên KHÔNG thay được bằng model per-block (mất merge+flow); chỉ Gear/Bell (có mesh thật) swap được.
+
+### Làm [x]
+- `scripts/data/mesh_fit.gd` (`class_name MeshFit`): `local_aabb` (AABB mọi MeshInstance3D con, không cần vào tree) + `fit_centered(model, target)` (scale theo max ngang, dời tâm về gốc — cho gear xoay quanh tâm) + `fit_bottom(model, height, floor_y)` (scale theo cao, đáy chạm sàn ô — cho bell đứng). Robust với model có pivot/scale bất kỳ.
+- **Gear** (`gear_block.tscn` + `gear_block.gd`): bỏ răng parametric, con "MeshInstance3D" thành pivot RỖNG (GearManager vẫn xoay/phase nó), `_ready` nạp `wooden-cogwheel.glb` vào pivot + `MeshFit.fit_centered(.., 1.15)` (răng tip ~0.57 > 0.5 → lồng gear kề). Giữ `apply_axis` (orient ROOT theo trục đặt). GearManager KHÔNG đổi.
+- **Bell** (`bell_block.tscn` + `bell_block.gd` MỚI): bỏ mesh dựng tay, `_ready` nạp `zen-chime.glb` + `MeshFit.fit_bottom(.., 0.95, -0.5)`. Thuần visual; GearManager gõ chuông qua type + `node.global_position` (không đổi).
+- **Palette Gỗ/Nước** (giữ merge): `wood.gdshader` base/grain theo `wooden-foundation-block.mtl` (wood_top 0.571,0.323,0.109 / wood_side 0.462,0.234,0.068); `water.gdshader` color/foam theo `teal-water-block.mtl` (Kd 0.028,0.468,0.434 / foam 0.93,0.90,0.84). Sửa CẢ shader default + `voxel_surface_manager._configure_wood_material` + `material_ui` icon (material do manager ghi đè default).
+- Verify ảnh: 2 gear gỗ nằm ngang lồng răng nhau + 1 gear dựng đứng (guồng nước, trục chìa ra) + chuông zen trên giá + gỗ nâu ấm merge + vũng nước teal — đồng bộ style moodboard.
+
+### Còn treo
+- Gear model ~12 răng (không phải 10 như `GearManager.TOOTH_COUNT`) → lệch pha `HALF_TOOTH` không khớp khe tuyệt đối, nhưng counter-rotate + overlap vẫn đọc như ăn khớp. Muốn chuẩn: đếm răng model, set `TOOTH_COUNT` khớp.
+- Model cogwheel material sáng (kem) + bloom → gear hơi chói; giảm glow threshold nếu muốn trầm hơn.
+- zen-garden.glb + bamboo-water-pipe CHƯA đặt in-game (moodboard). Sau này có thể: bamboo-pipe = decor vòi nước ở nguồn (spill source), zen-garden = vật trang trí trung tâm.
+- `metal.gdshader` giờ không còn ai dùng (gear/bell theo model); giữ lại phòng khi cần.
+
+## PHẦN 22: SINH TOÀN BỘ ASSET BẰNG BLENDER THEO artstyle.md
+
+User có `artstyle.md` (chunky+bevel, matte flat, palette hex, fit 2×2×2) + Blender (`D:\Apps\Blender\blender.exe` 5.2). Yêu cầu: dùng Blender làm lại TOÀN BỘ object đồng bộ, cả cây cỏ + nước.
+
+### Pipeline Blender headless (đã dựng)
+- `scratchpad/stylekit.py` (copy vào `assets/3DModel/generated/`): style kit đúng master prompt — `hexc()` sRGB→linear cho palette (Wood D4A373 / Bamboo 8CB369 / Water 48CAE4 / Stone BDBDBD / Accent E07A5F), builder primitive (cyl/box/cone/ico/uvsphere), `finish()` = Bevel modifier (limit angle) apply + Shade Auto Smooth, `mat()` matte (roughness 1, metallic 0, spec 0.1), `export()` glb.
+- `gen_assets.py`: 1 hàm/asset → 11 glb. Chạy `blender --background --python gen_assets.py -- <outdir>`.
+- `contact.py`: import 11 glb thành lưới, render Cycles iso-ortho nền beige → `_contact_sheet.png`.
+- Vòng lặp render→xem→sửa: grass ban đầu xòe ngang (Y-rotation sai) → sửa nghiêng theo bán kính; cogwheel/bamboo chỉnh tỉ lệ.
+
+### 11 asset (assets/3DModel/generated/*.glb)
+wood_block, water_block (jelly), cogwheel, chime, grass_tuft, bamboo_stalk, bamboo_pipe, lily_pad (khía+hoa), rock, lantern, bonsai. Palette verify bằng dump Godot: albedo khớp CHÍNH XÁC hex artstyle.
+
+### Ráp vào game
+- **Gear** → `generated/cogwheel.glb`; **Bell** → `generated/chime.glb` (repoint `MODEL` const; giữ MeshFit).
+- **MeshFit.matte()** (MỚI): glTF import để `metallic_specular=0.5` → bề mặt mượt bị chói (chuông đá #BDBDBD thành trắng). `matte()` duplicate material → ép metallic 0 / spec 0 / roughness 1. Gọi sau fit ở gear/bell/lily/grass.
+- **Palette Gỗ/Nước** (giữ isosurface merge): `wood.gdshader` = #D4A373, `water.gdshader` = #48CAE4 (+ sửa override ở `voxel_surface_manager` + `material_ui`). Đồng bộ với model.
+- **Cây cỏ + Nước**: `PondDecorManager._add_lily_pad` → instance `lily_pad.glb` (bỏ dựng disc/notch/flower tay); `DecorManager._spawn_moss` → instance `grass_tuft.glb` + vài blob rêu gốc (giữ grow tween). Verify ảnh: lá sen model nổi trên ao, cỏ mọc trên gỗ.
+- Verify in-engine: gỗ sand + nước cyan jelly + gear/bell model matte + lá sen — đồng bộ style. Boot + import sạch.
+
+### Còn treo / chưa auto-đặt
+- rock, lantern, bonsai, bamboo_stalk, bamboo_pipe: asset đã sinh + đúng style nhưng CHƯA có rule đặt tự động (chưa rõ đặt đâu). Chọn 1: (a) thành loại khối đặt được trong material bar; (b) decor ngẫu nhiên (rock/bonsai/lantern rải trên gỗ, bamboo-pipe ở nguồn nước); (c) trang trí trung tâm.
+- Chuông đá #BDBDBD vốn sáng → dưới key light + bloom hơi chói; giảm glow threshold hoặc hạ sáng bell nếu muốn trầm.
+- Bevel block Gỗ/Nước model (0.14/0.22) chỉ dùng cho ICON (khối in-game vẫn là isosurface). Nếu sau muốn bỏ isosurface, đã có model per-block sẵn.
+- Tất cả model author trong bevel 0.05 seg2 theo spec (block dùng bevel to hơn cho pillow look — lệch có chủ đích, đã ghi).
+
+### Audit animation sau khi swap model (headless, đo số thật)
+Lo swap model làm hỏng animation. Verify:
+- **Bánh răng quay**: GearManager xoay con "MeshInstance3D" (giờ là pivot chứa cogwheel model) — rot.y đổi qua thời gian khi gear chạm nước ✓.
+- **Nước chảy**: `_active_flows` tăng + sóng shader + reveal + waterfall particle ✓.
+- **Bèo nổi lềnh bềnh**: `PondDecorManager._pad_data` bob node wrapper (model lá sen bên trong) — y dao động ✓ (tăng biên độ 0.015-0.03 → 0.035-0.06 cho dễ thấy).
+- **Cỏ đung đưa** (THÊM): `DecorManager._grass_data` — sway rot.z/x nhẹ theo sin trong `_process` (như cờ). Verify: rot.z đổi qua thời gian ✓.
+Các animation khác không đụng: Koi bơi, cờ bay, đom đóm, lá phong rơi, sparkle gear, drop tween đặt khối, bell strike → chime+firefly.
+
+## PHẦN 23: KARAKURI STREAM — NƯỚC CHẢY QUA ỐNG TRE (pivot gameplay) + sửa model + khung cảnh
+
+User: (1) khung cảnh cỏ cây (Blender), (2) gear+chuông vẽ SAI, sửa, (3) THÊM ống tre dẫn nước — **mục tiêu chính**: chọn 1 điểm phun dòng xuống, dùng ống tre điều hướng, rơi trúng gỗ/chuông/bánh răng tạo âm. Không để nước chảy lung tung. Chốt: giữ ao tĩnh + thêm dòng riêng; ống thẳng + cong 90° (aqueduct); va chạm = ô đích dưới điểm rơi.
+
+### Sửa model (phát hiện lỗi TRỤC Blender Z-up vs Godot Y-up)
+Gear/chuông "sai" vì author sai hệ trục: Blender Z-up, Godot Y-up, glTF đổi (x,y,z)→(x,z,-y). Bản cũ dựng wheel trong Blender X-Z (đứng) → Godot thành đứng; cột chuông dùng Blender Y làm "cao" → Godot thành NGANG. Sửa: author "cao" theo Blender Z, wheel phẳng trong Blender X-Y. `gen_fix.py`:
+- **gear**: đĩa ĐẶC (cyl) + 10 răng trên vành (dính đĩa, không rời) + hub + trục. Verify Godot: nằm ngang trục đứng ✓, xoay 90° = guồng nước trục ngang ✓.
+- **bell**: giá torii (2 cột đứng + xà) + chuông đền (skirt cone + vai dome + quai) treo dưới xà + dây chu sa. Verify: đứng đúng ✓.
+- Repoint `gear_block.gd`→`gear.glb`, `bell_block.gd`→`bell.glb`. **Bài học: LUÔN verify orientation trong Godot, không chỉ contact sheet Blender (cũng Z-up nên che lỗi).**
+
+### Model mới (Blender): pipe_straight, pipe_elbow, source + scenery (pine_tree, bush, reeds, rock_cluster)
+
+### Gameplay nước-qua-ống
+- **Block types mới**: SOURCE, PIPE, PIPE_BEND (`BlockData.Type`, `BlockFactory`, scenes, scripts). Material bar 7 icon (phím 1-7), R xoay ống. `material_ui._build_icon_visual`: mọi loại trừ Gỗ/Nước dùng model thật.
+- **Ống có `state["ports"]`** = 2 đầu mở (Vector3i). Straight: `PORT_SETS` X/Z/Y. Elbow: {+Y đỉnh, 1 bên} × 4. `apply_ports()` orient model theo ports. Đặt: cycle bằng R (`_pipe_rot`). Save/load `ports`.
+- **`StreamManager`** (autoload MỚI, sau WaterFlowManager): trace mỗi SOURCE — dir=DOWN, qua PIPE thì vào port `-dir` ra port kia, else rơi (ngang ra khỏi ống → gravity DOWN), tới khi trúng khối/ra map. Gom `_segments` (cylinder nước cyan) + `_impacts` (ô đích → âm mỗi 0.55s: gỗ/pipe→wood_hit, bell→chime+firefly, gear→clack) + `_driven_gears`. Rebuild throttled.
+- **Gear driven bởi stream**: `GearManager._is_driver` += `StreamManager._driven_gears.has(cell)` (giữ fallback kề nước tĩnh).
+- **Flood NGHỈ**: `WaterFlowManager._get_spill_sources()` → `[]`. Khối WATER = ao tĩnh (VoxelSurface render, Pond mọc bèo/koi), không tràn. Đúng "không lung tung".
+- **`SceneryManager`** (autoload): rải 9 prop scenery quanh rìa đảo lúc khởi động.
+- Verify: test headless routing (source→elbow→pipe→rơi→gear: segments=7, impact gear, gear spin ✓); ảnh: dòng cyan uốn qua ống tre rơi trúng gear/chuông; main scene có vòng scenery + 7 icon.
+
+### Còn treo
+- Ống chỉ straight (3 trục) + elbow (đỉnh+4 bên). Chưa có T/cross, chưa elbow ngang-ngang. Đủ cho toy cơ bản.
+- Stream visual = cylinder tĩnh (chưa scroll/chảy động); splash + âm theo nhịp cho cảm giác chảy. Có thể thêm droplet particle chảy dọc sau.
+- Scenery vị trí cố định, đá hơi sáng (#BDBDBD). SOURCE luôn phun (chưa có on/off).
+- Ghost preview chưa hiện orientation ống trước khi đặt (chỉ thấy sau khi đặt + R).
+
+## PHẦN 24: FIX GỖ MERGE XUYÊN + ĐỒNG NHẤT MÀU NƯỚC
+
+Feedback: (1) gỗ merge nhìn xuyên; (2) màu nước trước/sau ống phải giống nhau; (3) thích màu nước tươi của stream → sửa block nước cho tươi.
+- **Gỗ xuyên**: thủ phạm là Laplacian smoothing (PHẦN 20) CO mesh → mối nối mỏng/hở, đặc biệt ô kề CHÉO (bậc thang). Fix: đổi sang **Taubin** (`iso_surface._smooth`: co +λ rồi phồng -μ, net không co) + `VoxelSurfaceManager` `ROUND_R` 0.2→0.26, `ISO` 0.5→0.42 (phồng nhẹ bắc cầu ô chéo). Verify ảnh: bậc thang gỗ merge liền đặc, hết hở.
+- **Màu nước đồng nhất + tươi**: `StreamManager._stream_mat` và `water.gdshader` cùng dùng #48CAE4. Water shader: base bias về `water_color` (mix factor 0.6 thay 0.3 → head-on vẫn cyan tươi, không tối jade), `deep_color` sáng hơn (0.2,0.66,0.79), thêm self-emission `water_color*0.08` cho tươi như stream. → nước ao, nước trong ống, nước sau ống đều 1 màu cyan tươi.
+
+## PHẦN 25: FIX "1 CỤC GỖ NHÌN XUYÊN" — thực ra là ẢO GIÁC shader, không phải lỗi hình học
+
+User báo đặt 1 cục gỗ đã nhìn xuyên. Điều tra KỸ: mesh **watertight** (holes=0, nonmanifold=0, **flipped_winding=0** — kiểm bằng phân tích cạnh có/vô hướng), render 8+ góc (4 bên/trên/dưới/orbit) + nền trời đều ĐẶC. → hình học KHÔNG hề xuyên.
+
+Thủ phạm THẬT: **ảo giác nhận thức** (hollow-face illusion) do:
+1. `wood.gdshader` cũ vẽ `rings = sin(world_pos.y * ...)` → dải zigzag "W" TỐI ngang mặt, trông như rãnh khắc/nếp lõm → mặt đặc đọc thành rỗng. (artstyle.md vốn muốn flat matte, không texture → banding này sai ngay từ đầu.)
+2. Cục bo tròn mềm (ROUND_R 0.26 + ISO 0.42 + Taubin) + matte phẳng, nhìn góc-đối-diện thì lồi/lõm nhập nhằng.
+
+Fix:
+- Bỏ hẳn sine "rings", grain = noise 3D mềm low-contrast, `grain_strength` 0.5→0.15, `grain_scale` 6→4 (vân rất nhẹ, flat matte đúng artstyle).
+- `SMOOTH_PASSES` 2→1 (cạnh rõ hơn chút) + `rim_strength` 0.16→0.26 (rim-light viền silhouette = cue LỒI, khử nhập nhằng).
+- Verify: 1 cục + 2 tầng + bậc thang chéo + khối nước — tất cả đọc RÕ là đặc, hết ảo giác xuyên. (Sửa cả 3 chỗ set param: shader default + `voxel_surface_manager` + `material_ui`.)
+
+## PHẦN 26: FIX 6 PHẢN HỒI (xuyên vẫn còn + nước + bèo + ghost + ống tự nối)
+
+1+4. **Vẫn xuyên (gỗ+nước)**: PHẦN 25 chưa đủ — cục bo tròn MỀM + matte phẳng vẫn nhập nhằng lồi/lõm (hollow-face illusion) từ góc nhìn xuống. Fix TRIỆT ĐỂ: (a) geo CRISP hơn — `ROUND_R` 0.26→0.16, `ISO` 0.42→0.48, `SAMPLES_PER_CELL` 3→4 (mặt phẳng + cạnh rõ, mịn không scallop); (b) **fake-sun bake** trong wood+water shader — `albedo *= mix(dark, bright, dot(world_normal, SUN)*0.5+0.5)` phân biệt MỌI mặt → đọc 3D đặc bất kể camera/đèn scene. Verify red-bg + main env: đặc hẳn.
+2. **Nước mất tiếng + không lan**: PHẦN 23 tắt flow. Khôi phục `_get_spill_sources` (mọi ô nước hở đỉnh, kể cả y=0 → lan ngang) + caps NHỎ (fall 40, pool 18) → lan lân cận + tiếng nước loop + waterfall rìa, KHÔNG flood cả map.
+3. **Bèo chụm**: `PondDecorManager._spawn_pond` mỗi ô ao chỉ `randf()<0.45` → 1 lá (bỏ luôn-2-lá/ô), koi `<0.3` → rải đều, không đống.
+5. **Ghost = model thật**: `placement_controller` bỏ boxmesh ghost, dựng `_ghost_root` = model thật của loại đang chọn, TRONG SUỐT (tint), orient đúng (gear theo normal, pipe theo auto-shape). Rebuild chỉ khi type/shape/orient đổi (key). Gỗ/Nước = box mờ.
+6. **Ống tự nối (kiểu ray Minecraft)**: gộp còn **1 loại PIPE** (bỏ PIPE_BEND khỏi bar). `PipeRouting.ports_for(cell)` suy 2 đầu mở từ hàng xóm PIPE/SOURCE → `pipe_block` tự chọn model thẳng/cong + orient, nghe grid đổi để `refresh_shape`. `StreamManager` route qua CÙNG `PipeRouting`. Đặt 2 ống vuông góc → tự thành elbow. Phím: 1 Gỗ,2 Nước,3 Nguồn,4 Ống,5 Gear,6 Chuông (bỏ R). Save: pipe chỉ lưu type (shape tự suy lại). Verify ảnh: source→ống tự bẻ→rơi trúng gear quay ✓ (segments=7).
+
+## PHẦN 27: KIỂM TRA TOÀN HỆ + FIX 5 LỖI (ghost là thủ phạm chính)
+
+1+... **Ghost là NGUỒN GỐC của #2/#4/#5**: ghost dựng bằng BlockFactory.instantiate(type) = full block scene CÓ COLLISION → raycast đặt khối đập vào chính GHOST → sai ô đặt + ghost nhảy loạn (gear/chuông/nguồn "lỗi ghost" + "sai vị trí đặt"). Fix: `_disable_collision()` đệ quy tắt mọi CollisionObject3D (layer=0) + CollisionShape3D (disabled) trong ghost. Verify: mọi loại ghost có visual + **0 collision active**.
+1+4. **Vẫn xuyên**: (a) gỗ shader thêm `render_mode cull_disabled` (2 mặt → không mặt nào bị cull, hết mọi khả năng hở dù winding); (b) nước đục hơn `alpha 0.9→0.97`. Xác nhận render red-bg: gỗ đặc.
+2. **Nước "chảy mọi nơi"**: giảm caps `MAX_FALL 40→18, MAX_POOL 18→6` (lan cục bộ ~6 ô, không tràn) — phần lớn cảm giác "mọi nơi" là do đặt sai vị trí (ghost bug) tạo nhiều nguồn.
+3+6. **Ống T/thập/đa hướng**: bỏ model straight/elbow riêng → dựng THỦ TỤC (hub + nhánh tới mỗi hàng xóm) trong `pipe_block.build_visual(dirs)`, dùng chung ghost. `PipeRouting.connections()` trả TẤT CẢ hàng xóm. `StreamManager._trace` viết lại stack-based **RẼ NHÁNH** (nước tách ở T/thập, có `seen` chống lặp). Verify: T-junction → nước tách 2 nhánh → 2 gear quay (segments=11, impacts=2, driven=2).
+5. **Chuông sai vị trí**: cùng nguyên nhân ghost-collision, fix theo #ghost.
+- Còn treo: warning "material is null" (1 lần, từ surface glb thiếu material — vô hại, khối vẫn render đúng). Source luôn phun (đúng thiết kế fountain). Nước block vẫn lan nhẹ 6 ô + có tiếng.
+
+## PHẦN 28: FIX 5 PHẢN HỒI (chuông/nước/nguồn/gear) + học tutorial public
+
+Tham khảo public (godotshaders.com toon water; blog gear-mesh Blender): water = depth blend + foam giao tuyến (tránh blow-out trắng); gears = quay NGƯỢC chiều cùng tốc + lệch nửa răng, ăn khớp ở PITCH LINE (không chồng sâu).
+1. **Chuông**: (a) `FLOOR_Y=-0.5` sát đất; (b) concept — chuông THỤ ĐỘNG, chỉ kêu khi bị **stream rơi trúng** (StreamManager) hoặc **gear kề quay** (GearManager) gõ → đúng "kết hợp nước/bánh răng"; thêm `bell.ring()` = tween lắc nhẹ khi bị gõ (đọc rõ là phản ứng, không tự kêu). GearManager + StreamManager gọi `ring()`.
+2. **Nước lộ khối dưới + chảy không tự nhiên**: (a) z-fighting mặt gỗ/nước trùng ở y=1 → **ISO riêng**: gỗ 0.5 (đúng ô), nước 0.4 (phồng xuống che mối nối); (b) `MAX_POOL 6→0` — nước block TĨNH (cube gọn, không lan lộn xộn), vẫn giữ tiếng + `MAX_FALL` cho nước cao rơi. Dòng chảy chủ đích = Source/Pipe.
+3. **Nguồn cạnh nước tự quay vòi**: `source_block.face_adjacent_water()` — xoay vòi (+X) về khối WATER kề. Placement/Save set `grid_cell` + gọi.
+4. **2 gear quá sát/dính**: `WHEEL_DIAMETER 1.15→0.96` (tip ~0.46, ăn khớp ở pitch, thân KHÔNG chồng thành 1 blob) + `ROTATION_SPEED 3.0→1.6` (quay chậm, mượt). Verify ảnh: 2 gear RÕ riêng, răng lồng ở ngã ba.
+5. Đã học tutorial + áp: giảm foam 0.22→0.08, caustic 0.4→0.18, sparkle 0.9→0.35 (hết đốm trắng); gear theo nguyên tắc pitch-line meshing.
+
+## PHẦN 29: ĐẠI TU ÂM THANH (game phụ thuộc âm thanh)
+
+User đã tự "nhặt" file thật (Freesound) vào `assets/sounds/`: wood-block-hit, chimes-5, water-stream-looped, wooden-gear-rattling, waterflow2, jellybounce. Việc = WIRE chuẩn theo hướng dẫn user (humanization, ngũ cung pitch, reverb, bus).
+- **Bus** (`default_bus_layout.tres`): 3 bus — Master (AudioEffectReverb wet 0.3, room 0.72) ← Music (-10dB) + SFX. Mọi SFX qua SFX, nhạc nền qua Music, cùng đổ vào Reverb → vang trong trẻo ASMR.
+- **AudioManager**: pool 24 trên SFX. `play_wood_hit`/`play_chime` giữ humanization (pitch ±6%, vol ngẫu nhiên) + **ngũ cung** cho chuông (`PENTATONIC_RATIOS`, đánh loạn vẫn êm). Thêm `make_gear_loop_player` (rattle gỗ "kẽo kẹt" loop, WAV `loop_mode=FORWARD`, pitch jitter chống phase), `play_ambient_note` (nốt ngũ cung 2 quãng tám mềm, bus Music).
+- **Tiếng suối**: `StreamManager._refresh_source_audio` — loop nước ở MỖI khối SOURCE (quản create/free theo grid). WaterFlowManager vẫn loop ở nước tĩnh đỉnh.
+- **Kẽo kẹt bánh răng**: `GearManager._ensure_creak/_remove_creak` — loop rattle theo MỖI gear đang quay (con của mesh, positional, free theo block; như sparkle).
+- **Nhạc nền**: `AmbientMusic` autoload (sau AudioManager) — generative, rải nốt ngũ cung mỗi 2.2–5.5s → zen vô tận, không loop nghe được. Đúng "cheat code ngũ cung" của user.
+- Verify headless: source_loops=1, gear_creaks=1, bus Music=1/SFX=2, không lỗi audio. (Headless dùng AudioDriverDummy — cần chạy Godot thật để NGHE + tinh chỉnh volume/reverb bằng tai.)
+- Còn treo: cân chỉnh mix (volume từng loại, reverb wet) cần TAI THẬT; file `.mp3 waterflow2` + jellybounce chưa wire (dự phòng); có thể thêm drone nền trầm nếu muốn dày hơn.
+
+## PHẦN 30: MODEL BLOCKBENCH + JELLY CUBE (bắt đầu redraw art)
+
+User muốn vẽ lại model đẹp/chi tiết hơn bằng **Blockbench** (đã nối MCP) + thêm object dễ thương. Chốt: khối tương tác trước; jelly = khối đặt được.
+- **Pipeline Blockbench→Godot** (xem `assets/3DModel/blockbench/README.md`): gltf export của MCP hỏng (async→rỗng) → dùng **OBJ**. `bb_bridge.py` (Blender): import OBJ (Y-up, KHÔNG xoay trục), gán màu flat matte theo TÊN part (colormap.json keyword→hex, `_default` fallback), bevel theo % kích thước (0.05 thường, 0.08 cho jelly mềm) + smooth, join → GLB. Godot import → MeshFit.fit + matte. Style flat-màu khớp artstyle; chi tiết = geometry nhiều part (mắt/má như vịt).
+- **Jelly cube** (Blockbench): body cyan #48CAE4 + 2 mắt sphere đậm + má hồng + miệng. Wire thành **khối đặt được**: `BlockData.Type.JELLY`, `jelly_block.tscn/.gd` (load `generated/jelly.glb`, MeshFit, **wobble** squash-stretch loop trên wrapper để giữ fit scale), factory, material bar (phím 7), placement. Verify ảnh in-game: mặt dễ thương (mắt+má+miệng), bo tròn, nảy nhẹ.
+- **Batch 2 (xong)**: vẽ lại **Gear** (disc+hub+trục+8 răng bo), **Bell** (giá torii gỗ + chuông đá skirt+dome + dây chu sa), **Source** (vòi tre post+node+spout nghiêng+dây) bằng Blockbench → bridge → copy đè `generated/{gear,bell,source}.glb` (script trỏ sẵn, khỏi sửa). Verify ảnh in-game: đồng bộ Ghibli chunky. cmaps + preview lưu ở `assets/3DModel/blockbench/`.
+- **Còn lại**: Pipe giữ thủ tục (cube bamboo trong `pipe_block`, không cần model). Wood/Water = isosurface (chỉ shader). Thêm object dễ thương khác (slime, mầm cây có mặt, koi mập, đèn lồng mặt cười) thành khối đặt được — batch sau.
+
+## PHẦN 31: HỆ VARIANT (nhiều biến thể mỗi loại khối)
+
+User: click vào 1 loại khối → có nhiều biến thể (ống kín/hở, gỗ/đất, nước nhiều màu, gear/cối xay...).
+- **`block_variants.gd`** (`class_name BlockVariants`): registry `V[type] = [{name, color?/model?/open?}]`. WOOD: gỗ/đất/rêu/đá (màu); WATER + JELLY: 4 màu; PIPE: kín/hở; GEAR: bánh răng/cối xay (model). `get_variant`, `count`, `color_of`.
+- **Chọn**: `placement.select_material(type)` — chọn LẠI loại đang cầm → **cycle variant** (click icon / bấm phím lại). Lưu `state["variant"]`. Khi đặt: `instance.apply_variant(v)` nếu có.
+- **Render theo variant**:
+  - Gỗ/Nước (isosurface): `VoxelSurfaceManager` viết lại — nhóm cell theo `(type, variant)`, mỗi nhóm 1 mesh + material màu riêng (material cache theo hex). Dirt merge dirt, không merge gỗ.
+  - Model: `gear_block.apply_variant` swap model gear↔mill (`generated/mill.glb` — guồng nước 6 mái chèo, vẽ Blockbench). `jelly_block.apply_variant` → `MeshFit.tint(model, cyan, màu)` chỉ đổi BODY (khớp albedo cyan), giữ mắt/má. `pipe_block.apply_variant` → `_open` → `build_visual(dirs, open)` hạ thấp thành máng (nước stream ở giữa ô nổi trên → thấy chảy).
+- **Icon material bar**: `_on_material_changed(type, variant)` rebuild icon loại đó theo variant (thấy màu/model đổi khi cycle). Lazy-build model (`jelly._ensure_model`, `gear._ready` chỉ build nếu pivot rỗng) để apply_variant chạy được TRƯỚC khi vào tree (icon/ghost).
+- **Save/load**: `variant` trong JSON; load set state + apply_variant.
+- **`.gdignore`** ở `assets/3DModel/blockbench/` để Godot bỏ qua .obj trung gian (chỉ import .glb ở `generated/`).
+- Verify ảnh: gỗ 4 màu, nước 4 màu, jelly 4 màu (body đổi, mặt giữ), gear+mill. Boot sạch.
+- Còn treo: pipe hở đọc rõ nhất khi CÓ nước chảy qua (source phía trên → ống dưới hứng). Bell/Source hiện 1 variant.
+
+## PHẦN 32: FIX gear orbit + nước trong + audio
+
+1. **Gear xoay lệch (orbit quanh trục vô hình)**: `MeshFit.local_aabb` **BỎ giá trị return** của `_accumulate` (AABB là value type) → luôn trả rỗng → `fit_centered/fit_bottom` KHÔNG căn tâm. Model Blender cũ ở gốc (0) nên không lộ; model Blockbench toạ độ 0..16 → lệch (0.5,0.5,0.5) → gear quay thành orbit. Fix: `box = _accumulate(...)` capture return. → gear căn tâm (center=0,0,0), xoay tại chỗ; đồng thời sửa fit đúng cho MỌI model Blockbench (bell/source/jelly cũng chuẩn hơn).
+2. **Nước trong quá**: alpha 0.97→**1.0** (opaque) ở `water.gdshader` + variant materials (`VoxelSurfaceManager`) + stream 0.98. Đặc như style, hết cảm giác xuyên.
+3. **Audio**: gear creak mềm hơn (-12→-19dB, pitch 0.85-1.1→0.62-0.82 = tiếng gỗ trầm, không rít sprocket); nhạc nền ấm hơn (`play_ambient_note` thêm hoà âm nhẹ 40%, nốt trầm hơn). CHƯA rõ user muốn gì cụ thể ở audio — cần feedback (to/nhỏ? thiếu giai điệu? chói?).
+
+## PHẦN 33: FIX nước xuyên (thật) + gear khớp
+
+- **Nước vẫn xuyên**: alpha 1.0 chưa đủ vì `water.gdshader` vẫn `blend_mix` (transparent pass, winding hole của isosurface lộ X-ray) + `cull_back`. Fix GIỐNG WOOD: `render_mode cull_disabled` (bỏ blend_mix + depth_draw_always) → **OPAQUE 2 mặt** → không mặt nào bị cull, không thể xuyên. Verify red-bg: nước teal đặc, hết đỏ lọt. (Nước giờ hoàn toàn opaque — không còn trong; pipe-hở thấy nước là nhờ STREAM cyan riêng, không phải khối nước.)
+- **Gear khớp khi kề nhau**: (a) `WHEEL_DIAMETER 0.96→1.1` → tip răng ra 0.55 > 0.5 → 2 gear cách 1.0 overlap 0.1 (răng lồng vào khe, thân/hub vẫn tách ~0.64); (b) `GearManager.TOOTH_COUNT 10→8` khớp SỐ RĂNG model Blockbench → `HALF_TOOTH=TAU/16` lệch đúng nửa pitch → gear parity khác nhau lệch pha + quay ngược chiều → răng lồng khe, không đụng đầu-đầu. Verify ảnh: 2 gear kề răng đan xen.
+
+## PHẦN 34: FIX lily chìm + source stream lệch + pipe hub tròn + open pipe thiếu vách
+
+1. **Lily chìm**: fix `local_aabb` (PHẦN 32) làm `fit_centered` giờ căn tâm lily → hạ thấp; + nước opaque/inflate. Nâng `base_pos.y 0.52→0.62` → lily nổi trên mặt nước (dập dình).
+2. **Source stream lệch khỏi ống**: stream ở TÂM ô nhưng vòi model cũ offset +X. Rebuild source (Blockbench) = ống tre ĐỨNG CĂN TÂM (x=8,z=8), miệng ở đáy-tâm → stream từ tâm khớp vòi.
+3. **Pipe đầu tròn xấu**: `build_visual` hub SphereMesh → **BoxMesh** (cube 0.34) fill ngã ba/góc sạch, không tròn.
+4. **Open pipe chỉ có đáy, thiếu vách**: hack `scale.y=0.5` chỉ bẹp ống. Viết lại `_add_trough`: máng U THẬT = 1 tấm đáy + 2 vách bên (BoxMesh), hở trên, dựng dọc +X rồi xoay `_basis_x_to(d)`. Nước stream (tâm ô) chảy trong máng → thấy rõ. Verify ảnh: source thẳng, pipe kín tube + open máng có nước, lily nổi.
+
+## PHẦN 35: FIX source mất vòi + pipe thẳng liền/rẽ tròn + koi mất
+
+1. **Source mất vòi nối nước**: source PHẦN 34 là ống đứng căn tâm nhưng BỎ vòi. Rebuild (Blockbench "source3") = thân tre đứng căn tâm + **vòi bên** (cylinder [10.2,8.2,8] rot z=90) + spout_tip + node_mid + string_accent. Bridge → `generated/source.glb`. `face_adjacent_water()` xoay root cho vòi +X hướng ô WATER kề.
+2. **Pipe: đầu tròn xấu khi thẳng, giữ tròn khi rẽ**: `build_visual` phân nhánh — `straight = dirs.size()==2 and dirs[0]==-dirs[1]`. THẲNG → `_add_tube_through` 1 tube liền (KHÔNG hub) / open → `_add_trough` 1 máng dài. RẼ/ngã ba/xuống/lẻ → **SphereMesh** hub tròn (revert box PHẦN 34) + 1 stub/hướng. Verify ảnh `_pipe3`: run ngang = tube liền sạch, elbow xuống = khớp tròn.
+3. **Koi biến mất**: nước opaque (PHẦN 33) che koi chìm. Nâng `swim_y 0.56` (mặt nước, lưng nhô trên nước opaque), body radius 0.09/height 0.32, tail (0.18,0.01,0.14), spawn chance 0.3→0.55. Verify ảnh `_koi`: koi cam bơi ở mặt, lá bèo nổi.
+
+Dọn `_dev_f2*`; headless boot sạch.
+
+## PHẦN 36: KOI MODEL THẬT (Blockbench, thay capsule+prism)
+
+User: "cá làm chi tiết hơn, dùng Blockbench làm con cá thực sự". Koi cũ = CapsuleMesh + PrismMesh thô.
+
+- **Thử 1 (fail)**: thân = chuỗi sphere chồng → bb_bridge chỉ join (KHÔNG union), các vỏ sphere cắt nhau thành "accordion" gợn sóng, vây rời. Bỏ.
+- **Thử 2 (OK)**: **box-based** (đúng artstyle chunky Blockbench, bevel 0.08 bo mịn). Project "koi2": thân 4 box thon (main/snout/mid/rear, hẹp dần), đốm đỏ Kohaku 3 box nhô trên lưng (patch_head/back1/back2), mắt 2 box đen, vây coral (caudal top/bot xòe ±18°, dorsal, pectoral ±20°). Export OBJ → `bb_bridge.py` + `koi_cmap.json` (eye #242424 / patch #E24E32 / fin #F2A57C / _default #F5EFE6 trắng) → `generated/koi.glb`.
+- `pond_decor_manager._add_koi`: instance `KOI.glb`, `MeshFit.fit_centered(0.52-0.7)` (fit theo max(x,z)=chiều dài) + `matte`. `_process`: `swim_y=0.5`; hướng đầu +X theo tiếp tuyến `rotation.y=atan2(-cos a,-sin a)` (verify a=0→-PI/2 khớp vận tốc +Z); thêm lắc thân `rotation.z=sin(...)*0.12`.
+- Verify ảnh: close-up = koi trắng+đốm đỏ+vây+mắt rõ; pond = koi nổi mặt nước opaque. Dọn `_dev_koi*`, boot sạch.
+
+## PHẦN 37: FIX source lệch ống + nước ra lệch (căn tâm)
+
+User: "nối ống tre lỗi, ống đầu tới ống nối lệch nhau, nước ra khỏi ống đầu cũng lệch".
+
+- **Root**: source model có vòi bên lệch +X → `MeshFit.fit_bottom` căn theo AABB → AABB bất đối xứng đẩy THÂN lệch -X khỏi tâm ô. Nhưng `StreamManager` phun stream từ **tâm ô** thẳng xuống, `PipeRouting`/ống dưới cũng ở **tâm ô** → thân source (lệch) ≠ nước (tâm) ≠ ống dưới (tâm) = 3 thứ lệch nhau.
+- **Fix**: rebuild source (Blockbench "source4") = ống tre ĐỨNG CĂN TÂM (mọi cylinder tại x=8,z=8), miệng `rim_mouth` ở đáy-tâm; lá `leaf_a/b` đối xứng ±Z (giữ AABB center = tâm). → sau fit_bottom thân vẫn ở tâm ô. `source_cmap`: ring/rim #6E8A3C, leaf #A7C957, bamboo #8CB369. → `generated/source.glb`.
+- Kết quả: source thẳng hàng ống dọc dưới, nước rơi đúng tâm khớp miệng. Nước trong ống bị che (stream radius 0.09 < ống 0.15 = chảy TRONG tre, đúng), chỉ hiện khi thoát ra.
+- Bỏ vòi bên (đổi lại "connect vào pond bên cạnh" thành thuần trang trí — model đối xứng, `face_adjacent_water` giờ vô hại). Verify ảnh `_pipe_align`: source→ống dọc→elbow tròn→ống ngang→wood đều thẳng hàng.
+
+## PHẦN 38: Open pipe hết khớp tròn (hub hộp thay cầu)
+
+User: ống KÍN nối liên tục không có khớp tròn, nhưng ống HỞ chưa áp dụng — thêm vào.
+
+- Đã có: straight open (2 hướng đối) → 1 máng liền (no hub). Vấn đề còn lại: end/bend/T/cross open dùng `_sphere(HUB_R)` = **quả cầu tròn dính trên máng phẳng** → lạc quẻ.
+- Fix `build_visual`: nhánh non-straight, `if open` → `_box(0.34,0.30,0.34)` hub PHẲNG lấp mặt cắt máng; `else` → sphere (ống kín tròn thì cầu tròn hợp). → open run: giữa liền, đầu/góc vuông phẳng, không cầu tròn.
+- Verify ảnh `_openpipe`: straight run open liền mạch đầu vuông; T-junction hub hộp lấp tâm 3 nhánh liền, góc vuông. Boot sạch, dev dọn.
+
+## PHẦN 39: Dọn file thừa + wire jelly sound
+
+- **Jelly sound chưa dùng**: `463590__mixtos__jellybounce.wav` có nhưng 0 ref. Wire: `AudioManager.play_jelly_bounce(pos)` (pitch jitter 0.88–1.18, SFX bus) — gọi khi ĐẶT jelly (`placement_controller`) + khi STREAM chạm jelly (`stream_manager._play_impact`, thêm case JELLY).
+- **Xóa file thừa** (0 ref, verify trước): GLB `bamboo_pipe/bamboo_stalk/pipe_straight/rock/water_block/wood_block` (+.import) — pipe procedural, wood/water isosurface, rock dùng rock_cluster. Giữ `pipe_elbow.glb` (pipe_bend còn wired factory/stream). Xóa `_shot.png(.import)` stray + `blockbench/rubber_duck.obj` (bỏ dở, không GLB). → 15 GLB còn, đều dùng.
+- **Chưa xóa** (cần user xác nhận): `845864__bongath_kh__waterflow2.mp3` — sound nước thứ 2 chưa wire (nước đang dùng 249666 ogg).

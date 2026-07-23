@@ -1,9 +1,5 @@
 extends Node
 
-## Purely decorative maple-leaf drift — the wabi-sabi orange accent. Not tied
-## to any gameplay state (doesn't listen to GridManager), just spawns once at
-## startup and drifts forever above wherever the island is.
-
 func _ready() -> void:
 	var particles := GPUParticles3D.new()
 	particles.amount = 24
@@ -11,8 +7,7 @@ func _ready() -> void:
 	particles.preprocess = 6.0
 	particles.position = Vector3(0.0, 7.0, 0.0)
 	particles.visibility_aabb = AABB(Vector3(-14, -12, -14), Vector3(28, 24, 28))
-	# Tiny billboards would otherwise scatter dark shadow specks all over the
-	# island — leaves are decorative fluff, they shouldn't cast shadows.
+
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 	var mat := ParticleProcessMaterial.new()

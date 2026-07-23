@@ -1,36 +1,39 @@
 shader_type spatial;
-render_mode blend_mix, cull_back, diffuse_lambert, specular_schlick_ggx;
+// OPAQUE + cull_disabled: the jelly water is a solid mass, never see-through.
+// Opaque means it's in the opaque pass (writes depth, sorts correctly) and
+// cull_disabled means no isosurface winding hole can ever open an X-ray gap —
+// exactly the fix used for wood. The water look comes from colour + waves +
+// foam, not from transparency.
+render_mode cull_disabled, diffuse_lambert, specular_schlick_ggx;
 
-uniform vec4 water_color : source_color = vec4(0.16, 0.58, 0.56, 0.6);
-uniform vec4 deep_color : source_color = vec4(0.06, 0.34, 0.42, 0.82);
-uniform vec4 foam_color : source_color = vec4(0.95, 0.98, 0.96, 0.95);
-uniform float wave_speed : hint_range(0.0, 3.0) = 0.8;
-uniform float wave_scale : hint_range(0.0, 20.0) = 8.0;
-uniform float wave_height : hint_range(0.0, 0.2) = 0.035;
-uniform float foam_width : hint_range(0.0, 0.5) = 0.12;
-uniform float fresnel_power : hint_range(0.5, 6.0) = 3.0;
-uniform float caustic_strength : hint_range(0.0, 1.0) = 0.35;
-uniform float sparkle_strength : hint_range(0.0, 2.0) = 0.8;
+// Water surface shader for the merged metaball isosurface (one continuous
+// body, no per-cell tiles). Everything is world-space — there are no reliable
+// UVs or per-face edges on an isosurface, so foam/waves/caustics/sparkle all
+// key off world position + surface normal. edge_mask / v_is_top from the old
+// per-block version are gone (the surface has no internal seams by construction).
 
-// Flow animation: still water (flow_amount = 0) keeps a gentle standing
-// ripple. Flow segments (flow_amount > 0) travel along flow_dir and show a
-// scrolling foam streak, so moving water visibly reads as "flowing".
-uniform vec2 flow_dir = vec2(0.0, 0.0);
-uniform float flow_speed : hint_range(0.0, 5.0) = 1.8;
-uniform float flow_amount : hint_range(0.0, 1.0) = 0.0;
+// Mostly opaque so a merged body reads as a solid mass of water (no X-ray onto
+// the far side), with only a faint hint of translucency at grazing angles.
+// depth_draw_always still makes the near wall occlude the far wall of a ring.
+// Palette = artstyle.md Jelly Water #48CAE4 (bright cyan) + warm foam. Kept
+// FRESH: the deep tint barely darkens so a still pond reads the same lively cyan
+// as the routed stream (StreamManager uses the same colour). Mostly opaque (no
+// X-ray); depth_draw_always occludes the far wall of a ring pool.
+uniform vec4 water_color : source_color = vec4(0.282, 0.792, 0.894, 1.0);
+uniform vec4 deep_color : source_color = vec4(0.18, 0.62, 0.76, 1.0);
+uniform vec4 foam_color : source_color = vec4(0.95, 0.91, 0.85, 0.98);
+uniform float wave_speed : hint_range(0.0, 3.0) = 0.9;
+uniform float wave_scale : hint_range(0.0, 20.0) = 5.0;
+uniform float wave_height : hint_range(0.0, 0.12) = 0.025;
+uniform float fresnel_power : hint_range(0.5, 6.0) = 3.2;
+uniform float foam_amount : hint_range(0.0, 1.0) = 0.08;
+uniform float caustic_strength : hint_range(0.0, 1.0) = 0.18;
+uniform float sparkle_strength : hint_range(0.0, 2.0) = 0.35;
 
-// Per-instance mask for the TOP face only: 1.0 = true pool boundary (show
-// foam), 0.0 = touching another water cell on that side (internal seam,
-// suppress foam so a connected pool reads as one surface, not a grid of
-// tiles). Order: +X, -X, +Z, -Z. Set by BlockMergeManager from the same
-// same-type-neighbor check that hides the geometry seams between blocks.
-uniform vec4 edge_mask = vec4(1.0, 1.0, 1.0, 1.0);
-
-varying float v_is_top;
 varying vec3 v_world_pos;
+varying vec3 v_world_normal;
 varying float v_crest;
 
-// Sum of directional sine waves for a livelier surface than a single ripple.
 float layered_waves(vec2 p, float t) {
 	float w = 0.0;
 	w += sin(dot(p, vec2(1.0, 0.4)) * wave_scale + t * 4.0);
@@ -40,80 +43,56 @@ float layered_waves(vec2 p, float t) {
 }
 
 void vertex() {
-	v_is_top = step(0.49, VERTEX.y);
 	vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	v_world_pos = world_pos;
-
-	float disp;
-	if (flow_amount > 0.0) {
-		vec2 dir = normalize(flow_dir + vec2(0.0001));
-		disp = sin((dot(world_pos.xz, dir) * wave_scale - TIME * wave_speed * 4.0));
-	} else {
-		disp = layered_waves(world_pos.xz, TIME * wave_speed);
-	}
+	vec3 world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float disp = layered_waves(world_pos.xz, TIME * wave_speed);
 	v_crest = disp;
-	// Only the top face rides the waves; side faces stay flat so stacked
-	// water columns don't tear apart at their shared vertical seams.
-	VERTEX.y += disp * wave_height * v_is_top;
+	// Ripple only the upward-facing part of the blob so the sides don't wobble.
+	float up = clamp(world_normal.y, 0.0, 1.0);
+	VERTEX += NORMAL * disp * wave_height * up;
+	v_world_pos = world_pos;
+	v_world_normal = world_normal;
 }
 
 void fragment() {
 	vec3 view_dir = normalize(VIEW);
 	float fresnel = pow(1.0 - clamp(dot(NORMAL, view_dir), 0.0, 1.0), fresnel_power);
 
-	// Foam ring near the border of each face. On the top face, edges that
-	// touch another water cell are masked out so a connected pool's surface
-	// reads as one continuous sheet instead of a grid of foam-edged tiles.
-	float edge_dist;
-	if (v_is_top > 0.5) {
-		float d_plus_x = mix(1.0, 1.0 - UV.x, edge_mask.x);
-		float d_minus_x = mix(1.0, UV.x, edge_mask.y);
-		float d_plus_z = mix(1.0, 1.0 - UV.y, edge_mask.z);
-		float d_minus_z = mix(1.0, UV.y, edge_mask.w);
-		edge_dist = min(min(d_plus_x, d_minus_x), min(d_plus_z, d_minus_z));
-	} else {
-		float edge_u = min(UV.x, 1.0 - UV.x);
-		float edge_v = min(UV.y, 1.0 - UV.y);
-		edge_dist = min(edge_u, edge_v);
-	}
-	float foam = 1.0 - smoothstep(0.0, foam_width, edge_dist);
+	// Depth-ish tint, but biased toward the bright surface colour so the body
+	// stays a fresh lively cyan (matching the stream) instead of going dark jade.
+	vec3 base = mix(deep_color.rgb, water_color.rgb, fresnel * 0.4 + 0.6);
+	float base_a = mix(deep_color.a, water_color.a, fresnel * 0.4 + 0.6);
 
-	// Depth tint: viewed head-on the eye looks deep into the water (darker
-	// jade), grazing angles skim the bright surface — a fake-depth gradient
-	// since gl_compatibility can't read the real depth buffer.
-	vec3 base = mix(deep_color.rgb, water_color.rgb, fresnel * 0.7 + 0.3);
-	float base_a = mix(deep_color.a, water_color.a, fresnel * 0.7 + 0.3);
+	// Foam gathers a little along the silhouette rim and on the upper crests —
+	// frothy edges where water meets air, but kept subtle so the body stays
+	// teal rather than washing out to white on thin cascade geometry.
+	float up = clamp(v_world_normal.y, 0.0, 1.0);
+	float foam = clamp(fresnel * 0.6 + smoothstep(0.7, 1.0, v_crest) * up, 0.0, 1.0) * foam_amount;
 
-	// Caustic shimmer: interfering bands that crawl across the surface, only
-	// on the top face where you'd actually see light dancing through water.
-	float caustic = 0.0;
-	if (v_is_top > 0.5) {
-		vec2 cp = v_world_pos.xz * 3.0;
-		float c = sin(cp.x + TIME * 1.3) * sin(cp.y - TIME * 1.1);
-		c += 0.5 * sin(cp.x * 1.8 - TIME * 0.7) * sin(cp.y * 1.6 + TIME * 0.9);
-		caustic = smoothstep(0.4, 1.0, c) * caustic_strength;
-	}
+	// Caustic shimmer crawling across the top.
+	vec2 cp = v_world_pos.xz * 3.0;
+	float c = sin(cp.x + TIME * 1.3) * sin(cp.y - TIME * 1.1);
+	c += 0.5 * sin(cp.x * 1.8 - TIME * 0.7) * sin(cp.y * 1.6 + TIME * 0.9);
+	float caustic = smoothstep(0.4, 1.0, c) * caustic_strength * up;
 
-	vec3 albedo = mix(base, foam_color.rgb, max(foam, fresnel * 0.4));
+	vec3 albedo = mix(base, foam_color.rgb, foam);
 	albedo += vec3(0.9, 1.0, 0.98) * caustic * 0.4;
-	float alpha = clamp(mix(base_a, foam_color.a, foam) + fresnel * 0.15, 0.0, 1.0);
+	// Baked fixed-sun shade so a water block reads as a solid convex jelly from
+	// any angle, not a hollow shell (same fix as wood — kills the concave/
+	// see-through illusion).
+	const vec3 WSUN = normalize(vec3(0.35, 0.82, 0.45));
+	float wl = dot(v_world_normal, WSUN) * 0.5 + 0.5;
+	albedo *= mix(0.66, 1.12, wl);
+	float alpha = clamp(mix(base_a, foam_color.a, foam) + fresnel * 0.12, 0.0, 1.0);
 
-	// Sharp glint on wave crests -> tiny sparkles the bloom will bloom out.
-	float sparkle = smoothstep(0.85, 1.0, v_crest) * sparkle_strength * v_is_top;
-	float emission_amount = foam * 0.2 + caustic * 0.3 + sparkle * 0.5;
-
-	if (flow_amount > 0.0) {
-		vec2 dir = normalize(flow_dir + vec2(0.0001));
-		float scroll = dot(UV, dir) * 5.0 - TIME * flow_speed;
-		float streak = smoothstep(0.65, 1.0, fract(scroll)) * flow_amount;
-		albedo = mix(albedo, foam_color.rgb, streak * 0.6);
-		emission_amount += streak * 0.3;
-	}
+	float sparkle = smoothstep(0.85, 1.0, v_crest) * sparkle_strength * up;
 
 	ALBEDO = albedo;
 	ALPHA = alpha;
-	ROUGHNESS = mix(0.02, 0.5, foam);
-	METALLIC = 0.2;
-	SPECULAR = 0.6;
-	EMISSION = foam_color.rgb * emission_amount;
+	ROUGHNESS = mix(0.04, 0.5, foam);
+	METALLIC = 0.1;
+	SPECULAR = 0.5;
+	// A faint self-glow of the water colour keeps the pond as lively/fresh as the
+	// emissive stream cylinders, plus the foam/caustic/sparkle highlights.
+	EMISSION = water_color.rgb * 0.08 + foam_color.rgb * (foam * 0.15 + caustic * 0.3 + sparkle * 0.5);
 }

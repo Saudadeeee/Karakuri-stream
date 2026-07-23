@@ -1,0 +1,25 @@
+# Exported by three-d-stage
+newmtl bamboo
+Kd 0.2918 0.4342 0.1248
+Ks 0.2000 0.2000 0.2000
+Ns 20
+d 1.0000
+
+newmtl inner
+Kd 0.1144 0.1590 0.0497
+Ks 0.2000 0.2000 0.2000
+Ns 0
+d 1.0000
+
+newmtl bamboo_node
+Kd 0.2016 0.3231 0.0762
+Ks 0.2000 0.2000 0.2000
+Ns 20
+d 1.0000
+
+newmtl cinnabar_string
+Kd 0.5210 0.0437 0.0242
+Ks 0.2000 0.2000 0.2000
+Ns 50
+d 1.0000
+

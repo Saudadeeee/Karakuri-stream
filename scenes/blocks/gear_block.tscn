@@ -1,23 +1,6 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=3 format=3]
 
-[ext_resource type="Shader" path="res://shaders/metal.gdshader" id="1_metal"]
 [ext_resource type="Script" path="res://scripts/blocks/gear_block.gd" id="2_gear"]
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_gear"]
-top_radius = 0.36
-bottom_radius = 0.36
-height = 0.22
-radial_segments = 24
-
-[sub_resource type="ShaderMaterial" id="Material_gear"]
-shader = ExtResource("1_metal")
-shader_parameter/base_color = Color(0.6, 0.62, 0.66, 1)
-shader_parameter/metallic_amount = 0.85
-shader_parameter/roughness_amount = 0.3
-shader_parameter/rim_color = Color(0.95, 0.97, 1.0, 1)
-shader_parameter/rim_power = 2.5
-shader_parameter/rim_strength = 0.6
-shader_parameter/glow_amount = 0.1
 
 [sub_resource type="BoxShape3D" id="Shape_gear"]
 size = Vector3(1, 1, 1)
@@ -26,8 +9,6 @@ size = Vector3(1, 1, 1)
 script = ExtResource("2_gear")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-mesh = SubResource("CylinderMesh_gear")
-surface_material_override/0 = SubResource("Material_gear")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("Shape_gear")

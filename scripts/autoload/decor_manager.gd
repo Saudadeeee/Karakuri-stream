@@ -2,11 +2,13 @@ extends Node
 
 const GROW_TIME: float = 10.0
 const FLAG_HEIGHT_THRESHOLD: int = 5
+const GRASS_TUFT: PackedScene = preload("res://assets/3DModel/generated/grass_tuft.glb")
 
 var _timers: Dictionary = {} # Vector3i -> float elapsed
 var _has_moss: Dictionary = {} # Vector3i -> true
 var _has_flag: Dictionary = {} # Vector3i -> true
 var _flag_data: Array = [] # [{node, phase}]
+var _grass_data: Array = [] # [{node, phase, base_y}] — gentle wind sway
 
 func _ready() -> void:
 	GridManager.block_placed.connect(_on_grid_changed)
@@ -29,6 +31,7 @@ func _on_grid_cleared() -> void:
 	_has_moss.clear()
 	_has_flag.clear()
 	_flag_data.clear()
+	_grass_data.clear()
 
 func _check_wood_cell(cell: Vector3i) -> void:
 	var block: BlockData = GridManager.get_block(cell)
@@ -64,26 +67,40 @@ func _process(delta: float) -> void:
 			continue
 		flag["node"].rotation.z = sin(t * 2.0 + flag["phase"]) * 0.3
 
+	# Grass leans gently back and forth like a soft breeze passing through.
+	for g in _grass_data:
+		if not is_instance_valid(g["node"]):
+			continue
+		var ph: float = g["phase"]
+		g["node"].rotation.z = sin(t * 1.3 + ph) * 0.08
+		g["node"].rotation.x = cos(t * 1.1 + ph) * 0.06
+
 func _spawn_moss(cell: Vector3i) -> void:
 	var block: BlockData = GridManager.get_block(cell)
 	if block == null or not is_instance_valid(block.node):
 		return
 	_has_moss[cell] = true
 
-	# A clump of a few small blobs at varied greens reads as fuzzy moss
-	# spreading over the surface, not one plastic ball.
+	# A styled grass tuft (art model) sprouting on the wood, with a couple of
+	# low mossy blobs at its base for fuzz. Grows in via the scale tween.
 	var clump := Node3D.new()
 	clump.position = Vector3(randf_range(-0.2, 0.2), 0.5, randf_range(-0.2, 0.2))
 	clump.scale = Vector3.ZERO
 	block.node.add_child(clump)
 
-	var blob_count: int = randi_range(4, 6)
-	for i in blob_count:
+	var grass: Node3D = GRASS_TUFT.instantiate()
+	clump.add_child(grass)
+	MeshFit.fit_bottom(grass, randf_range(0.38, 0.58), 0.0)
+	MeshFit.matte(grass)
+	grass.rotation.y = randf_range(0.0, TAU)
+	_grass_data.append({"node": grass, "phase": randf_range(0.0, TAU)})
+
+	for i in randi_range(2, 3):
 		var blob := MeshInstance3D.new()
 		var sphere := SphereMesh.new()
-		var r: float = randf_range(0.1, 0.17)
+		var r: float = randf_range(0.09, 0.14)
 		sphere.radius = r
-		sphere.height = r * 1.4
+		sphere.height = r * 1.3
 		sphere.radial_segments = 7
 		sphere.rings = 4
 		blob.mesh = sphere
@@ -91,7 +108,7 @@ func _spawn_moss(cell: Vector3i) -> void:
 		material.albedo_color = Color(0.24, 0.4, 0.18).lerp(Color(0.36, 0.5, 0.26), randf())
 		material.roughness = 1.0
 		blob.material_override = material
-		blob.position = Vector3(randf_range(-0.22, 0.22), randf_range(-0.05, 0.06), randf_range(-0.22, 0.22))
+		blob.position = Vector3(randf_range(-0.2, 0.2), 0.0, randf_range(-0.2, 0.2))
 		clump.add_child(blob)
 
 	var tween: Tween = create_tween()

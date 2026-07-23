@@ -18,19 +18,18 @@ config/icon="res://icon.svg"
 [autoload]
 
 GridManager="*res://scripts/autoload/grid_manager.gd"
-BlockMergeManager="*res://scripts/autoload/block_merge_manager.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
+AmbientMusic="*res://scripts/autoload/ambient_music.gd"
 WaterFlowManager="*res://scripts/autoload/water_flow_manager.gd"
+StreamManager="*res://scripts/autoload/stream_manager.gd"
+VoxelSurfaceManager="*res://scripts/autoload/voxel_surface_manager.gd"
 DecorManager="*res://scripts/autoload/decor_manager.gd"
 PondDecorManager="*res://scripts/autoload/pond_decor_manager.gd"
 FireflyManager="*res://scripts/autoload/firefly_manager.gd"
 GearManager="*res://scripts/autoload/gear_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
 AmbientLeaves="*res://scripts/autoload/ambient_leaves.gd"
-
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
+SceneryManager="*res://scripts/autoload/scenery_manager.gd"
 
 [display]
 

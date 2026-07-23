@@ -1,0 +1,19 @@
+# Exported by three-d-stage
+newmtl wood_top
+Kd 0.5711 0.3231 0.1095
+Ks 0.2000 0.2000 0.2000
+Ns 36
+d 1.0000
+
+newmtl wood_side
+Kd 0.4621 0.2346 0.0685
+Ks 0.2000 0.2000 0.2000
+Ns 30
+d 1.0000
+
+newmtl wood_groove
+Kd 0.2747 0.1329 0.0369
+Ks 0.2000 0.2000 0.2000
+Ns 20
+d 1.0000
+
