@@ -656,3 +656,35 @@ User: ống KÍN nối liên tục không có khớp tròn, nhưng ống HỞ ch
 - **Jelly sound chưa dùng**: `463590__mixtos__jellybounce.wav` có nhưng 0 ref. Wire: `AudioManager.play_jelly_bounce(pos)` (pitch jitter 0.88–1.18, SFX bus) — gọi khi ĐẶT jelly (`placement_controller`) + khi STREAM chạm jelly (`stream_manager._play_impact`, thêm case JELLY).
 - **Xóa file thừa** (0 ref, verify trước): GLB `bamboo_pipe/bamboo_stalk/pipe_straight/rock/water_block/wood_block` (+.import) — pipe procedural, wood/water isosurface, rock dùng rock_cluster. Giữ `pipe_elbow.glb` (pipe_bend còn wired factory/stream). Xóa `_shot.png(.import)` stray + `blockbench/rubber_duck.obj` (bỏ dở, không GLB). → 15 GLB còn, đều dùng.
 - **Chưa xóa** (cần user xác nhận): `845864__bongath_kh__waterflow2.mp3` — sound nước thứ 2 chưa wire (nước đang dùng 249666 ogg).
+
+## PHẦN 40: Audio chill/mưa (CC0) + scenery đầu map (sakura/núi/petals)
+
+**Audio (CC0 OpenGameArt, public domain):**
+- Tải: `chill_ambient.ogg` (Ambient-Loop isaiah658) + `chill_loop.mp3` (Relaxing wipics) + `rain_loop.ogg` (Rain loopable Ylmir).
+- Wire `ambient_music.gd`: `_start_bed` loop nhạc chill (random 1/2 track, -17dB) + lớp mưa nhẹ (-25dB) trên bus Music, DƯỚI generative pentatonic notes. Set `stream.loop=true` (ogg/mp3).
+
+**Scenery (Blockbench → GLB):**
+- `sakura_tree.glb`: thân+cành nâu + tán 6 sphere hồng #F5B7CE (hoa anh đào). Thêm 2 cây vào ring PROPS.
+- `mountain.glb`: 4 sphere thân xanh-xám #86A6A8 + đỉnh tuyết #EAF2F2 (lumpy Ghibli peak). Ring MOUNTAINS 8 núi ở radius 32-42, y -10..-13, height 19-30 → backdrop chân trời qua fog.
+- `scenery_manager.gd`: `_place_ring_model` chung; `_add_sakura_petals` (billboard hồng #F5B7CE, gravity nhẹ -0.22, bay dịu) — mùa xuân đối ứng lá thu cam (AmbientLeaves).
+- Verify ảnh `_scenery_wide/near`: sakura hồng rõ, núi tuyết bao quanh, petals+lá bay. Boot sạch.
+
+## PHẦN 41: Full UI theme + Main menu (Ghibli garden style)
+
+User: thêm toàn bộ UI game — menu bắt đầu, button, khung lựa chọn — vẽ theo tông màu game, đừng để button trơn.
+
+**Theme thống nhất** `ui/karakuri_theme.tres` (gen bằng script 1 lần, set `gui/theme/custom` project-wide → mọi Control tự đẹp):
+- Panel = giấy kem #F4EFE2 bo góc 20 + viền #CDB492 + shadow mềm.
+- Button = thẻ gỗ #ECD0A0 bo 14 viền nâu; hover sáng+viền salmon; pressed nâu đậm. Text #4A3F35.
+- HSlider = track tre xanh #8CB369 + grabber tròn salmon (texture vẽ code).
+- Window/dialog = giấy kem.
+
+**Main menu** `scenes/main_menu.tscn` + `scripts/ui/main_menu.gd` (là main_scene mới):
+- Backdrop 3D SỐNG: env sky/fog/glow + đảo (2 cylinder) + camera xoay chậm; scenery autoload (núi/sakura/cây) + petals tự trang trí; nhạc chill tự chạy.
+- UI: **biển gỗ** khắc title "KARAKURI STREAM / ～Vườn Thủy Cơ～" (Panel nâu #7A5A3A viền sáng) + nút "▶ Chơi / ⚙ Cài đặt / ✕ Thoát" (thẻ gỗ) + hint chân màn.
+- Panel Cài đặt: 3 slider volume theo bus (Master/Music/SFX) lưu `user://settings.cfg`.
+- Chơi → `change_scene` main.tscn.
+
+**Pause menu**: theme tự áp (giấy kem + nút gỗ + slider) + thêm nút "🏠 Về menu chính" (unpause → về menu).
+
+Verify ảnh `_menu`/`_menu_settings`/`_game_pause`: title gỗ, nút thẻ gỗ, panel giấy, slider tre+salmon, hotbar có khung gỗ quanh icon 3D. Boot sạch từ menu, dev dọn.

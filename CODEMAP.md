@@ -16,8 +16,11 @@ CODEMAP.md              File này
 plan.md                 Nhật ký thiết kế/bugfix theo phiên — lịch sử, không phải tài liệu tham chiếu
 
 scenes/
-  main.tscn             Scene chính (duy nhất) — camera, ground, PlacementController, UI
-  pause_menu.tscn       Instance con trong main.tscn/UI — pause, xoá build, âm lượng
+  main_menu.tscn        **MAIN SCENE** (khởi động ở đây). `main_menu.gd`: backdrop 3D vườn sống (env+đảo+camera xoay chậm, scenery autoload trang trí) + UI biển gỗ title + nút Chơi/Cài đặt/Thoát + panel volume theo bus. Chơi → main.tscn
+  main.tscn             Scene sandbox — camera, ground, PlacementController, UI
+  pause_menu.tscn       Instance con trong main.tscn/UI — pause, save/load/xoá, âm lượng, "Về menu chính"
+ui/
+  karakuri_theme.tres   Theme project-wide (`gui/theme/custom`): panel giấy kem, button thẻ gỗ (hover salmon), slider tre+grabber salmon. Mọi Control tự áp. Gen 1 lần bằng script.
   blocks/
     wood_block.tscn      StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — gỗ là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
     water_block.tscn     StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — nước là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
@@ -113,8 +116,8 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | # | Tên | File | Vai trò |
 |---|-----|------|---------|
 | 1 | `GridManager` | `autoload/grid_manager.gd` | Nguồn sự thật duy nhất của lưới. `set_block`/`remove_block`/`get_block`/`has_block`/`get_neighbors`/`get_all_cells_of_type`. Bắn signal `block_placed(cell)`/`block_removed(cell)`/`grid_cleared` (khi gọi `clear_all()` — xoá 1 lần, KHÔNG lặp `remove_block()` per-cell vì sẽ trigger rescan dây chuyền ở mọi autoload bên dưới). |
-| 2 | `AudioManager` | `autoload/audio_manager.gd` | Pool 24 player trên bus **SFX**. `play_wood_hit`/`play_chime` (ngũ cung `PENTATONIC_RATIOS` + humanization pitch/vol ngẫu nhiên), `make_water_loop_player` (tiếng suối, loop), `make_gear_loop_player` (rattle gỗ "kẽo kẹt", loop), `play_ambient_note` (nốt ngũ cung mềm, bus **Music**, cho AmbientMusic). Files thật trong `assets/sounds/`. |
-| 2b | `AmbientMusic` | `autoload/ambient_music.gd` | Nhạc nền GENERATIVE: rải nốt ngũ cung mềm mỗi 2.2–5.5s (bus Music). Luôn hoà âm (ngũ cung) + ngẫu nhiên → soundscape zen vô tận, không loop nghe được. |
+| 2 | `AudioManager` | `autoload/audio_manager.gd` | Pool 24 player trên bus **SFX**. `play_wood_hit`/`play_chime` (ngũ cung `PENTATONIC_RATIOS` + humanization pitch/vol ngẫu nhiên), `play_jelly_bounce` (boing khi đặt jelly / stream chạm jelly), `make_water_loop_player` (tiếng suối, loop), `make_gear_loop_player` (rattle gỗ "kẽo kẹt", loop), `play_ambient_note` (nốt ngũ cung mềm, bus **Music**, cho AmbientMusic). Files thật trong `assets/sounds/`. |
+| 2b | `AmbientMusic` | `autoload/ambient_music.gd` | 3 lớp bus Music: (1) bed nhạc CHILL loop (CC0, random 1/2 track, -17dB), (2) lớp MƯA nhẹ loop (-25dB), (3) nốt ngũ cung GENERATIVE mỗi 2.2–5.5s ở trên → soundscape zen vô tận, không loop nghe được. |
 | 3 | `WaterFlowManager` | `autoload/water_flow_manager.gd` | Flow CỤC BỘ (PHẦN 26): khối WATER lan sang ô lân cận + tiếng nước loop + waterfall ở rìa, caps NHỎ (`MAX_FALL=40, MAX_POOL=18`) → KHÔNG flood cả đảo. Spill source = mọi ô nước hở đỉnh (kể cả y=0 → lan ngang tới hàng xóm). Dòng đường-xa CHỦ ĐÍCH = StreamManager. `_active_flows` cấp cho VoxelSurface render. |
 | 4 | `StreamManager` | `autoload/stream_manager.gd` | **CƠ CHẾ CHÍNH (karakuri)**: mỗi khối SOURCE phun dòng thẳng xuống; trace ô-theo-ô: qua PIPE/PIPE_BEND thì vào 1 port ra port kia (đọc `state["ports"]`), else rơi theo trọng lực tới khi trúng khối. `_trace()` gom `_segments` (dựng cylinder nước cyan) + `_impacts` (ô đích) + `_driven_gears`. Ô đích phát âm theo loại (gỗ/pipe→wood_hit, bell→chime+firefly, gear→clack+quay) mỗi `IMPACT_INTERVAL=0.55s` + splash. Rebuild throttled khi lưới đổi. |
 | 5 | `VoxelSurfaceManager` | `autoload/voxel_surface_manager.gd` | Dựng CẢ Gỗ + Nước thành isosurface gộp mịn — 2 `MeshInstance3D` riêng (wood/water), mỗi loại 1 material. Trường mật độ là **"union of rounded boxes" (KHÔNG phải metaball điểm)**: mỗi ô LẤP ĐẦY cube của nó, bo góc bán kính `ROUND_R`, các ô CỘNG lại (`d += min(ax,ay,az)`) nên ô kề fuse thành 1 khối liền (mặt phẳng chỗ dày, bo ở cạnh lộ) — đổ đầy ô như vật liệu thật, KHÔNG phình "bong bóng" như metaball. Gộp: Gỗ = ô WOOD; Nước = ô WATER + `WaterFlowManager._active_flows`. Rebuild throttled (`REBUILD_INTERVAL` 0.05s), chỉ loại bị đổi. `SAMPLES_PER_CELL=3`, `ISO=0.5`. Dùng `IsoSurface.build` (Surface Nets). |
@@ -124,7 +127,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | 9 | `GearManager` | `autoload/gear_manager.gd` | **Hệ truyền động**: mỗi frame dựng đồ thị liên thông Gear (6 hướng); 1 component quay nếu CÓ gear là driver. `_is_driver` = gear bị **STREAM rơi trúng** (`StreamManager._driven_gears`) HOẶC kề khối Nước tĩnh. Chiều quay = parity `(x+y+z)` → gear kề nhau tự quay NGƯỢC chiều (lưới bipartite). Răng ĂN KHỚP: gear parity lẻ lệch pha `HALF_TOOTH=TAU/20` (răng khớp vào khe, không đụng răng-răng), set 1 lần qua `_phased`. Xoay bằng `mesh_instance.rotate_y` — vì gear_block đã orient ROOT theo trục đặt (xem dưới), trục local-Y của mesh = trục đặt, nên quay quanh đúng trục. Bụi lấp lánh + gõ Chuông kề bên mỗi vòng. |
 | 10 | `SaveManager` | `autoload/save_manager.gd` | `save_game()`/`load_game()`/`has_save()`. KHÔNG `_ready()` nghe signal — 3 hàm gọi từ `pause_menu.gd`. Lưu thêm `axis` cho Gear + `ports` cho Pipe/Pipe_bend (`{x,y,z,type,axis?,ports?}`; save cũ thiếu → mặc định). Xem mục Save/Load. |
 | 11 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — lá phong cam rơi lơ lửng lúc khởi động, cast_shadow OFF. |
-| 12 | `SceneryManager` | `autoload/scenery_manager.gd` | Rải ~9 prop trang trí (thông/bụi/lau/đá/đèn/bonsai model) quanh rìa đảo lúc khởi động (`call_deferred`), vị trí cố định. Thuần backdrop, không phải khối lưới. |
+| 12 | `SceneryManager` | `autoload/scenery_manager.gd` | Rải prop trang trí quanh rìa đảo lúc khởi động (`call_deferred`, cố định): thông/bụi/lau/đá/đèn/bonsai + **sakura** (hoa anh đào). Ring **MOUNTAINS** (8 núi tuyết ở radius 32-42, y âm) làm backdrop chân trời. **Sakura petals** hồng bay (đối ứng lá thu cam của AmbientLeaves). Thuần backdrop, không phải khối lưới. |
 
 **Quan trọng khi thêm autoload mới**: đăng ký trong `project.godot` [autoload] — nếu autoload mới cần đọc `GridManager`/`AudioManager`/`WaterFlowManager` trong `_ready()`, đặt SAU chúng trong danh sách (autoload load tuần tự theo thứ tự khai báo). `VoxelSurfaceManager` đặt SAU `WaterFlowManager` vì đọc `_active_flows` của nó.
 
