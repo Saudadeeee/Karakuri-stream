@@ -1,0 +1,65 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Shader" path="res://shaders/metal.gdshader" id="1_metal"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_bell"]
+top_radius = 0.16
+bottom_radius = 0.4
+height = 0.5
+radial_segments = 24
+
+[sub_resource type="SphereMesh" id="SphereMesh_crown"]
+radius = 0.12
+height = 0.18
+radial_segments = 16
+rings = 8
+
+[sub_resource type="TorusMesh" id="TorusMesh_loop"]
+inner_radius = 0.04
+outer_radius = 0.09
+rings = 12
+ring_segments = 8
+
+[sub_resource type="SphereMesh" id="SphereMesh_clapper"]
+radius = 0.09
+height = 0.16
+radial_segments = 12
+rings = 6
+
+[sub_resource type="ShaderMaterial" id="Material_bell"]
+shader = ExtResource("1_metal")
+shader_parameter/base_color = Color(0.78, 0.56, 0.2, 1)
+shader_parameter/metallic_amount = 0.9
+shader_parameter/roughness_amount = 0.22
+shader_parameter/rim_color = Color(1.0, 0.88, 0.6, 1)
+shader_parameter/rim_power = 2.2
+shader_parameter/rim_strength = 0.7
+shader_parameter/glow_amount = 0.15
+
+[sub_resource type="BoxShape3D" id="Shape_bell"]
+size = Vector3(1, 1, 1)
+
+[node name="BellBlock" type="StaticBody3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CylinderMesh_bell")
+surface_material_override/0 = SubResource("Material_bell")
+position = Vector3(0, -0.1, 0)
+
+[node name="Crown" type="MeshInstance3D" parent="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.28, 0)
+mesh = SubResource("SphereMesh_crown")
+surface_material_override/0 = SubResource("Material_bell")
+
+[node name="Loop" type="MeshInstance3D" parent="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("TorusMesh_loop")
+surface_material_override/0 = SubResource("Material_bell")
+
+[node name="Clapper" type="MeshInstance3D" parent="MeshInstance3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0)
+mesh = SubResource("SphereMesh_clapper")
+surface_material_override/0 = SubResource("Material_bell")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_bell")

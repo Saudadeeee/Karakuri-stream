@@ -1,0 +1,10 @@
+[gd_resource type="AudioBusLayout" format=3 uid="uid://dby30ngxs82k"]
+
+[sub_resource type="AudioEffectReverb" id="AudioEffectReverb_1"]
+predelay_msec = 60.0
+damping = 0.6
+wet = 0.28
+
+[resource]
+bus/0/effect/0/effect = SubResource("AudioEffectReverb_1")
+bus/0/effect/0/enabled = true

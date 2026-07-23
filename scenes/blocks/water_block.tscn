@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Shader" path="res://shaders/water.gdshader" id="1_shader"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_water"]
+size = Vector3(1, 1, 1)
+
+[sub_resource type="ShaderMaterial" id="Material_water"]
+shader = ExtResource("1_shader")
+shader_parameter/water_color = Color(0.16, 0.58, 0.56, 0.6)
+shader_parameter/foam_color = Color(0.95, 0.98, 0.96, 0.95)
+shader_parameter/wave_speed = 0.8
+shader_parameter/wave_scale = 8.0
+shader_parameter/wave_height = 0.03
+shader_parameter/foam_width = 0.12
+shader_parameter/fresnel_power = 3.0
+
+[sub_resource type="BoxShape3D" id="Shape_water"]
+size = Vector3(1, 1, 1)
+
+[node name="WaterBlock" type="StaticBody3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_water")
+surface_material_override/0 = SubResource("Material_water")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_water")
