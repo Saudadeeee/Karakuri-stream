@@ -25,11 +25,53 @@ var _ghost_normal: Vector3 = Vector3.UP
 var _ghost_root: Node3D
 var _ghost_key: String = ""
 
+## Grounded ghost: a soft contact shadow under the hovered cell + four cream
+## corner brackets that snap onto each NEW cell — the preview feels physically
+## anchored, and every cell change gives a tiny tactile snap. Built once here,
+## reused forever (zero per-frame allocation).
+var _ghost_shadow: MeshInstance3D
+var _brackets: Node3D
+var _bracket_mat: StandardMaterial3D
+var _last_bracket_cell := Vector3i(9999, 9999, 9999)
+var _bracket_tween: Tween
+
 func _ready() -> void:
 	ghost.visible = false   # old boxmesh ghost retired in favour of _ghost_root
 	_ghost_root = Node3D.new()
 	add_child(_ghost_root)
 	_ghost_root.visible = false
+
+	_ghost_shadow = MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.85, 0.85)
+	_ghost_shadow.mesh = quad
+	_ghost_shadow.rotation_degrees.x = -90.0
+	var sm := StandardMaterial3D.new()
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sm.albedo_color = Color(0.1, 0.1, 0.15, 0.16)
+	sm.render_priority = 1
+	_ghost_shadow.material_override = sm
+	_ghost_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ghost_shadow.visible = false
+	add_child(_ghost_shadow)
+
+	_brackets = Node3D.new()
+	_bracket_mat = StandardMaterial3D.new()
+	_bracket_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_bracket_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_bracket_mat.albedo_color = Color(0.98, 0.94, 0.86, 0.5)
+	for corner in [Vector3(1, 0, 1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(-1, 0, -1)]:
+		for axis in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
+			var bar := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.02, 0.02, 0.02) + axis * 0.18
+			bar.mesh = bm
+			bar.material_override = _bracket_mat
+			bar.position = corner * 0.5 - corner * axis * 0.1 + Vector3(0, -0.47, 0)
+			_brackets.add_child(bar)
+	_brackets.visible = false
+	add_child(_brackets)
 
 ## Selecting the material already in hand CYCLES its variant (click the icon /
 ## press its key again to flip a pipe open, change wood→dirt, recolour water …).
@@ -92,11 +134,15 @@ var photo_mode: bool = false
 func _update_ghost() -> void:
 	if photo_mode:
 		_ghost_root.visible = false
+		_ghost_shadow.visible = false
+		_brackets.visible = false
 		return
 	var hit: Dictionary = _raycast_from_mouse()
 	if hit.is_empty():
 		_ghost_valid = false
 		_ghost_root.visible = false
+		_ghost_shadow.visible = false
+		_brackets.visible = false
 		return
 	var normal: Vector3 = hit["normal"]
 	var hit_cell: Vector3i = GridManager.world_to_cell(hit["position"] - normal * 0.5)
@@ -111,11 +157,29 @@ func _update_ghost() -> void:
 		and place_cell.y >= 0 and place_cell.y <= 24
 	_ghost_valid = on_island and not GridManager.has_block(place_cell)
 	_ghost_root.visible = _ghost_valid
+	_ghost_shadow.visible = _ghost_valid
+	_brackets.visible = _ghost_valid
 	if _ghost_valid:
-		_ghost_root.position = GridManager.cell_to_world(place_cell)
+		var world := GridManager.cell_to_world(place_cell)
+		_ghost_root.position = world
 		# Gentle breathing so the ghost feels alive under the cursor.
 		var t: float = Time.get_ticks_msec() / 1000.0
 		_ghost_root.scale = Vector3.ONE * (1.0 + sin(t * 5.0) * 0.02)
+		# Contact shadow rests on the support surface; brackets frame the cell.
+		_ghost_shadow.position = world + Vector3(0, -0.48, 0)
+		_brackets.position = world
+		# Snap-pop ONLY when the hovered cell changes (same-cell hover is calm).
+		if place_cell != _last_bracket_cell:
+			_last_bracket_cell = place_cell
+			if _bracket_tween != null and _bracket_tween.is_valid():
+				_bracket_tween.kill()
+			_brackets.scale = Vector3.ONE * 1.2
+			_bracket_mat.albedo_color.a = 0.0
+			_bracket_tween = create_tween()
+			_bracket_tween.set_parallel(true)
+			_bracket_tween.tween_property(_brackets, "scale", Vector3.ONE, 0.12) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			_bracket_tween.tween_property(_bracket_mat, "albedo_color:a", 0.5, 0.12)
 		_refresh_ghost_model()
 
 ## Rebuild the ghost's model only when the type or its resolved orientation/shape
@@ -204,14 +268,23 @@ func _place_block() -> void:
 		# Auto-connecting blocks derive orientation/shape from neighbours; set
 		# their cell before set_block so the placement signal drives the refresh.
 		instance.grid_cell = _ghost_cell
-	_animate_drop(instance, final_pos, _current_type)
+	# The ghost visibly condenses into the real thing (afterimage swells+fades
+	# while the block drops through it), and the block's VOICE moves to the
+	# moment of impact — snapped onto the music's beat grid (see _landing_voice).
+	var cell := _ghost_cell
+	var click_phase: float = StreamManager.beat_phase()
+	_spawn_afterimage()
+	# Immediate quiet acknowledgment tick so input never feels swallowed while
+	# the landing voice waits for the impact/beat.
+	AudioManager.play_wood_pitch(final_pos, 2.0, -14.0)
+	_animate_drop(instance, final_pos, _current_type, cell, click_phase)
 	GridManager.set_block(_ghost_cell, block)
 	UndoManager.record_place(_ghost_cell, block)
 	if _current_type == BlockData.Type.PIPE:
 		instance.refresh_shape()
 	elif _current_type == BlockData.Type.SOURCE:
 		instance.face_adjacent_water()
-	_play_place_sound(_current_type, final_pos)
+	PondDecorManager.excite_near(final_pos)
 	# Placing water — or landing a block right beside water — sends a ripple
 	# splash through the pond surface.
 	if _current_type != BlockData.Type.WATER:
@@ -221,12 +294,24 @@ func _place_block() -> void:
 				StreamManager._spawn_splash(GridManager.cell_to_world(_ghost_cell + dir) + Vector3(0, 0.55, 0))
 				break
 
-## Every material lands with its OWN voice — the placement itself is already
-## an instrument (wood knock, water plop, drum boom, this chime's note…).
-func _play_place_sound(type: BlockData.Type, pos: Vector3) -> void:
+## Landing voice, played AT impact: if machines are making rhythm, wait for the
+## next 16th of the shared beat grid so the click JOINS the song (max wait
+## ~0.14s — reads as tightness, not lag).
+func _landing_voice(type: BlockData.Type, pos: Vector3, cell: Vector3i) -> void:
+	var delay: float = StreamManager.seconds_to_next_sub(4) if StreamManager.is_playing() else 0.0
+	if delay <= 0.0:
+		_play_place_sound(type, pos, cell)
+	else:
+		get_tree().create_timer(delay).timeout.connect(_play_place_sound.bind(type, pos, cell))
+
+## Every material lands with its OWN voice — and the wood family is a marimba:
+## the cell's HEIGHT picks the pentatonic degree (octave up past y=5), so
+## stacking a tower plays an ascending run. Drum/shishi/chime/bell/jelly keep
+## their own voices so material identity survives.
+func _play_place_sound(type: BlockData.Type, pos: Vector3, cell: Vector3i = Vector3i.ZERO) -> void:
 	match type:
 		BlockData.Type.WOOD:
-			AudioManager.play_wood_hit(pos)
+			AudioManager.play_wood_note(pos, cell.y % 5, cell.y >= 5)
 		BlockData.Type.WATER:
 			AudioManager.play_jelly_bounce(pos)          # soft wet plop
 		BlockData.Type.JELLY:
@@ -242,31 +327,44 @@ func _play_place_sound(type: BlockData.Type, pos: Vector3) -> void:
 		BlockData.Type.MUSIC_BOX:
 			AudioManager.play_music_box_note(pos, 0)
 		BlockData.Type.GEAR:
-			AudioManager.play_wood_pitch(pos, 1.25, -1.0)  # lighter clack
-		_:  # pipe, source, scoop… bamboo-ish knock
-			AudioManager.play_wood_pitch(pos, 1.1, -1.0)
+			AudioManager.play_wood_note(pos, cell.y % 5, cell.y >= 5, 1.25, -1.0)
+		_:  # pipe, source, scoop… bamboo-ish knock, still on the marimba
+			AudioManager.play_wood_note(pos, cell.y % 5, cell.y >= 5, 1.1, -1.0)
 
-func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type) -> void:
-	instance.position = final_pos + Vector3(0.0, 3.0, 0.0)
-	instance.scale = Vector3.ONE
+func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type, cell: Vector3i = Vector3i.ZERO, click_phase: float = 0.5) -> void:
+	# Lower spawn (the ghost afterimage sits at the cell — the block visibly
+	# drops THROUGH the condensing promise), pre-stretched along the fall so the
+	# deep squash finally has its anticipation partner.
+	instance.position = final_pos + Vector3(0.0, 2.2, 0.0)
+	instance.scale = Vector3(0.86, 1.24, 0.86)
+	instance.set_meta("dropping", true)   # sympathy ripple must not fight this tween
 	var tween: Tween = create_tween()
 	# Jelly feel: drop in, squash DEEP on impact, then a slow springy
 	# overshoot back to rest (ELASTIC) so the block wobbles like soft jelly
 	# settling rather than a rigid object snapping into place.
 	tween.tween_property(instance, "position", final_pos, 0.24) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# Kick up dust / splash the instant it lands, right at the base of the block,
-	# plus an expanding ground ring — the landing visibly "presses" the world.
+	# THE impact instant: dust, ground ring (gold when the click landed on the
+	# beat), a soft material-tinted light kiss, the landing voice (beat-snapped),
+	# and a sympathy ripple through the neighbours.
+	var on_beat: bool = click_phase < 0.12 or click_phase > 0.88
 	tween.tween_callback(_spawn_place_effect.bind(type, final_pos + Vector3(0.0, -0.45, 0.0)))
-	tween.tween_callback(_spawn_ring.bind(final_pos + Vector3(0.0, -0.48, 0.0)))
+	tween.tween_callback(_spawn_ring.bind(final_pos + Vector3(0.0, -0.48, 0.0), on_beat))
+	tween.tween_callback(_spawn_kiss.bind(type, final_pos))
+	tween.tween_callback(_landing_voice.bind(type, final_pos, cell))
+	tween.tween_callback(_ripple_neighbors.bind(cell))
 	tween.tween_property(instance, "scale", Vector3(1.35, 0.55, 1.35), 0.07) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(instance, "scale", Vector3.ONE, 0.5) \
 		.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	tween.tween_callback(func():
+		if is_instance_valid(instance):
+			instance.remove_meta("dropping"))
 
 ## A short burst when a block lands: wood kicks up earthy dust, water sprays
-## bright droplets, gear/bell throws a couple of metallic sparks.
-func _spawn_place_effect(type: BlockData.Type, pos: Vector3) -> void:
+## bright droplets, gear/bell throws a couple of metallic sparks. `rise` flips
+## gravity so removal dust drifts UP after the ascending block.
+func _spawn_place_effect(type: BlockData.Type, pos: Vector3, rise: bool = false) -> void:
 	var particles := GPUParticles3D.new()
 	particles.one_shot = true
 	particles.explosiveness = 0.9
@@ -327,6 +425,9 @@ func _spawn_place_effect(type: BlockData.Type, pos: Vector3) -> void:
 			particle_mat.albedo_color = Color(0.62, 0.5, 0.34, 0.85)
 			particle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
+	if rise:
+		mat.gravity = Vector3(0.0, 1.0, 0.0)
+
 	var scale_curve := Curve.new()
 	scale_curve.add_point(Vector2(0.0, 1.0))
 	scale_curve.add_point(Vector2(1.0, 0.0))
@@ -344,6 +445,12 @@ func _spawn_place_effect(type: BlockData.Type, pos: Vector3) -> void:
 func add_sibling_block(instance: Node3D) -> void:
 	get_parent().add_child(instance)
 
+## Removal streak state — repeated removals inside 2s walk DOWN the pentatonic
+## scale (the graceful "un-melody" mirror of building).
+var _remove_streak: int = 0
+var _last_remove_ms: int = 0
+var _ascending: int = 0   # concurrent ascension tweens (web cap)
+
 func _remove_block() -> void:
 	var hit: Dictionary = _raycast_from_mouse()
 	if hit.is_empty():
@@ -354,16 +461,54 @@ func _remove_block() -> void:
 	if block == null:
 		return
 	UndoManager.record_remove(hit_cell, block)
-	# Removal deserves feedback too: a soft low knock + a dust puff + ring
-	# where the block used to sit (silent vanishing feels broken).
 	var pos: Vector3 = GridManager.cell_to_world(hit_cell)
-	AudioManager.play_wood_pitch(pos, 0.72, -2.0)
-	_spawn_place_effect(BlockData.Type.WOOD, pos)
+
+	# Un-melody: streak walks down the scale; a soft lower echo follows.
+	var now: int = Time.get_ticks_msec()
+	_remove_streak = mini(_remove_streak + 1, 7) if now - _last_remove_ms < 2000 else 0
+	_last_remove_ms = now
+	var degree: int = 4 - (_remove_streak % 5)
+	AudioManager.play_wood_pitch(pos, AudioManager.PENTATONIC_RATIOS[degree], -3.0)
+	if _remove_streak <= 3:
+		get_tree().create_timer(0.09).timeout.connect(
+			AudioManager.play_wood_pitch.bind(pos, AudioManager.PENTATONIC_RATIOS[maxi(degree - 1, 0)] * 0.5, -1.0))
+
+	_spawn_place_effect(BlockData.Type.WOOD, pos, true)   # dust drifts UP
 	_spawn_ring(pos + Vector3(0.0, -0.4, 0.0))
+	_ripple_neighbors(hit_cell)
+	PondDecorManager.excite_near(pos)
+
+	# Ascension: the block came from the sky and returns to it — pluck, float
+	# up, yaw, shrink into a firefly puff. The visual is orphaned from the grid
+	# BEFORE removal (UndoManager stores only type/variant/axis, never nodes).
+	var visual: Node3D = block.node if is_instance_valid(block.node) else null
+	var meshless: bool = block.type == BlockData.Type.WATER or block.type == BlockData.Type.WOOD
+	if visual == null or meshless or _ascending >= 6:
+		GridManager.remove_block(hit_cell)
+		return
+	block.node = null
 	GridManager.remove_block(hit_cell)
+	_disable_collision(visual)   # raycasts must pass through the dying block
+	_ascending += 1
+	var tw := create_tween()
+	tw.tween_property(visual, "scale", visual.scale * Vector3(1.08, 0.9, 1.08), 0.07)  # the pluck
+	tw.set_parallel(true)
+	tw.tween_property(visual, "position", visual.position + Vector3(0, 1.2, 0), 0.55) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(visual, "rotation:y", visual.rotation.y + 0.7, 0.55)
+	tw.tween_property(visual, "scale", Vector3.ONE * 0.001, 0.45) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN).set_delay(0.1)
+	tw.chain().tween_callback(func():
+		FireflyManager.burst_at(pos + Vector3(0, 1.0, 0))
+		if is_instance_valid(visual):
+			visual.queue_free()
+		_ascending -= 1)
 
 ## Expanding, fading ground ring — the classic satisfying "impact pulse".
-func _spawn_ring(pos: Vector3) -> void:
+## GOLD when the click landed on the music's beat (the rhythm reward).
+var _last_gold_ms: int = 0
+
+func _spawn_ring(pos: Vector3, on_beat: bool = false) -> void:
 	var mi := MeshInstance3D.new()
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.42
@@ -372,7 +517,7 @@ func _spawn_ring(pos: Vector3) -> void:
 	torus.ring_segments = 6
 	mi.mesh = torus
 	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.98, 0.94, 0.86, 0.7)
+	m.albedo_color = Color(1.0, 0.86, 0.5, 0.8) if on_beat else Color(0.98, 0.94, 0.86, 0.7)
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mi.material_override = m
@@ -381,7 +526,126 @@ func _spawn_ring(pos: Vector3) -> void:
 	add_child(mi)
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(mi, "scale", Vector3(1.5, 0.25, 1.5), 0.38) \
+	var end_scale := Vector3(1.7, 0.25, 1.7) if on_beat else Vector3(1.5, 0.25, 1.5)
+	tw.tween_property(mi, "scale", end_scale, 0.38) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.38)
 	tw.chain().tween_callback(mi.queue_free)
+	if on_beat and Time.get_ticks_msec() - _last_gold_ms > 1500:
+		_last_gold_ms = Time.get_ticks_msec()
+		FireflyManager.burst_at(pos + Vector3(0, 1.0, 0))
+
+## Soft additive shell inflating at the exact contact instant — a pastel light
+## kiss tinted by material. Alpha 0.3 / 0.25s is the zen ceiling: a kiss, never
+## a pop.
+func _spawn_kiss(type: BlockData.Type, pos: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE * 1.02
+	mi.mesh = box
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	var tint := Color(0.95, 0.75, 0.5)       # warm amber default
+	match type:
+		BlockData.Type.WATER, BlockData.Type.SOURCE, BlockData.Type.PIPE:
+			tint = Color(0.6, 0.9, 0.95)
+		BlockData.Type.BELL, BlockData.Type.CHIME, BlockData.Type.MUSIC_BOX:
+			tint = Color(1.0, 0.9, 0.55)
+		BlockData.Type.JELLY:
+			tint = Color(1.0, 0.75, 0.85)
+	m.albedo_color = Color(tint.r, tint.g, tint.b, 0.3)
+	mi.material_override = m
+	mi.position = pos
+	add_child(mi)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(mi, "scale", Vector3.ONE * 1.18, 0.25) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.25)
+	tw.chain().tween_callback(mi.queue_free)
+
+## The ghost's afterimage: bare-mesh copy (never duplicate the ghost root — its
+## block scenes carry scripts) that swells and fades while the real block drops
+## through it — the promise visibly condenses into the thing.
+func _spawn_afterimage() -> void:
+	var meshes: Array[MeshInstance3D] = []
+	_collect_meshes(_ghost_root, meshes)
+	if meshes.is_empty():
+		return
+	var root := Node3D.new()
+	add_sibling_block(root)
+	root.global_transform = _ghost_root.global_transform
+	var mats: Array[StandardMaterial3D] = []
+	for src in meshes:
+		var mi := MeshInstance3D.new()
+		mi.mesh = src.mesh
+		root.add_child(mi)
+		mi.global_transform = src.global_transform
+		if src.material_override is StandardMaterial3D:
+			var d: StandardMaterial3D = src.material_override.duplicate()
+			mi.material_override = d
+			mats.append(d)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(root, "scale", root.scale * 1.18, 0.28) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	for m in mats:
+		tw.tween_property(m, "albedo_color:a", 0.0, 0.28)
+	tw.chain().tween_callback(root.queue_free)
+
+func _collect_meshes(node: Node, out: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		out.append(node)
+	for c in node.get_children():
+		_collect_meshes(c, out)
+
+## Sympathy ripple: the landing's weight travels outward — neighbours within
+## Manhattan distance 2 squash 3% and spring back, staggered ~60ms per cell.
+## One click makes a dense build shiver like one connected clay body. Wood and
+## water skip naturally (their nodes are invisible colliders; visuals live in
+## the merged isosurface).
+var _flex_base: Dictionary = {}    # instance_id -> Vector3 (scale captured once)
+var _flex_tweens: Dictionary = {}  # instance_id -> Tween
+
+func _ripple_neighbors(center: Vector3i) -> void:
+	for off in _ripple_offsets():
+		var b: BlockData = GridManager.get_block(center + off)
+		if b == null or not is_instance_valid(b.node):
+			continue
+		if b.type == BlockData.Type.WOOD or b.type == BlockData.Type.WATER:
+			continue
+		var node: Node3D = b.node
+		if node.has_meta("dropping"):
+			continue
+		var now: int = Time.get_ticks_msec()
+		if node.has_meta("sympathy_ms") and now - int(node.get_meta("sympathy_ms")) < 500:
+			continue
+		node.set_meta("sympathy_ms", now)
+		var id: int = node.get_instance_id()
+		if not _flex_base.has(id):
+			_flex_base[id] = node.scale
+		if _flex_tweens.has(id) and is_instance_valid(_flex_tweens[id]):
+			_flex_tweens[id].kill()
+		var base: Vector3 = _flex_base[id]
+		var dist: int = absi(off.x) + absi(off.y) + absi(off.z)
+		var tw := create_tween()
+		tw.tween_interval(0.06 * dist)
+		tw.tween_property(node, "scale", base * Vector3(1.03, 0.97, 1.03), 0.08) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(node, "scale", base, 0.35) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+		_flex_tweens[id] = tw
+
+## The 24 offsets at Manhattan distance 1-2, built once.
+var _ripple_cache: Array = []
+func _ripple_offsets() -> Array:
+	if _ripple_cache.is_empty():
+		for x in range(-2, 3):
+			for y in range(-2, 3):
+				for z in range(-2, 3):
+					var d: int = absi(x) + absi(y) + absi(z)
+					if d >= 1 and d <= 2:
+						_ripple_cache.append(Vector3i(x, y, z))
+	return _ripple_cache

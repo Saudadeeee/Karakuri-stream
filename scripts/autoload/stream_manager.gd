@@ -117,6 +117,24 @@ func _rebuild() -> void:
 	_refresh_source_audio(sources)
 	_render()
 
+# ------------------------------------------------ beat-grid accessors (juice)
+## Where we are inside the current beat, 0..1 (placement uses this to judge
+## whether a click landed "on the beat" for the gold-ring reward).
+func beat_phase() -> float:
+	return fmod(_clock, BASE_BEAT) / BASE_BEAT
+
+## Seconds until the next 16th-note subdivision — placement voices snap to it
+## so a click near a running machine JOINS its rhythm. Near-zero phase counts
+## as "now" so the voice never feels delayed when already on grid.
+func seconds_to_next_sub(sub_div: int = 4) -> float:
+	var sub: float = BASE_BEAT / float(sub_div)
+	var ph: float = fmod(_clock, sub)
+	return 0.0 if ph < 0.03 else sub - ph
+
+## Any machine currently making rhythm? (No rhythm → no need to quantize.)
+func is_playing() -> bool:
+	return not _impacts.is_empty()
+
 ## The spout's TEMPO variant scales the beat: steady ×1, slow ×2, quick ×0.5.
 func _interval_for_source(cell: Vector3i) -> float:
 	var b: BlockData = GridManager.get_block(cell)

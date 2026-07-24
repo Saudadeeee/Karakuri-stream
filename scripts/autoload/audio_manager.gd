@@ -78,6 +78,13 @@ func play_wood_pitch(global_pos: Vector3, pitch: float, vol_db: float = 0.0) -> 
 	player.volume_db = vol_db + randf_range(-1.5, 0.0)
 	player.play()
 
+## Marimba-island note: a wood knock pitched to a pentatonic degree (placement
+## maps the cell's HEIGHT to the degree, so stacking plays an ascending run).
+## Clamped — wood past ~2.2× goes chipmunk-thin.
+func play_wood_note(global_pos: Vector3, degree: int, octave_up: bool, base_pitch: float = 1.0, vol_db: float = 0.0) -> void:
+	var p: float = base_pitch * PENTATONIC_RATIOS[degree % PENTATONIC_RATIOS.size()] * (2.0 if octave_up else 1.0)
+	play_wood_pitch(global_pos, clampf(p, 0.6, 2.2), vol_db)
+
 ## Deep taiko boom.
 func play_drum(global_pos: Vector3) -> void:
 	play_wood_pitch(global_pos, 0.52, 2.5)

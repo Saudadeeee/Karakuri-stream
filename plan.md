@@ -892,3 +892,20 @@ Ba mục cuối từ review phê bình:
 **3. Screenshot P** (`_take_screenshot`): ẩn UI+ghost 1 frame → chụp sạch → desktop lưu `user://screenshots/karakuri-<ms>.png`, WEB `JavaScriptBridge.download_buffer` tải PNG về máy + toast "Screenshot saved".
 
 Test `T3 ALL OK` (card hiện + Got it persist, interval 0.55 vs 0.275 đúng per-source, screenshot ra file) + REGRESS ALL OK + boot sạch.
+
+## PHẦN 57: MAGIC-ON-CLICK đại tu (design panel 3 lens + 8 nâng cấp)
+
+Workflow panel (game-feel/audio/VFX lens + judge) → build list 8 món, implement đủ:
+
+1. **Click joins the song**: giọng khối chuyển từ lúc-click → lúc-CHẠM-ĐẤT, snap vào 16th-note của beat grid khi máy đang chơi (`StreamManager.beat_phase/seconds_to_next_sub/is_playing`); tick ack nhỏ ngay click (input không bao giờ "nuốt"); click TRÚNG BEAT → ring VÀNG GOLD + firefly burst (throttle 1.5s).
+2. **Marimba island**: `play_wood_note` — độ CAO ô = bậc pentatonic (octave-up từ y≥5); xếp tháp = chạy gam. Wood/gear/tre theo marimba; trống/shishi/chime/bell/jelly giữ giọng riêng.
+3. **Removal ascension + un-melody**: khối bị nhổ (pluck squeeze) → bay LÊN xoay nhẹ thu nhỏ → firefly puff + bụi bay LÊN; chuỗi xóa <2s đi XUỐNG gam (un-melody) + echo trầm. Node orphan trước remove (Undo chỉ giữ type/variant/axis — verified); cap 6 ascension đồng thời; wood/water (meshless) đi đường cũ.
+4. **Sympathy ripple**: đặt/xóa → hàng xóm Manhattan ≤2 nhún 3% squash-spring, trễ 60ms/ô — cả cụm máy rùng mình như một khối đất sét. Registry `_flex_base/_flex_tweens` (scale gốc bắt 1 lần), guard meta "dropping"+"sympathy_ms" 500ms; wood/water skip (isosurface).
+5. **Ghost condensation**: afterimage bare-mesh (KHÔNG duplicate ghost root — scene scripts) nở 18% + fade 0.28s trong khi khối thật rơi XUYÊN QUA (spawn hạ 3.0→2.2).
+6. **Stretch-fall + light kiss**: khối rơi pre-stretch (0.86,1.24,0.86) — squash có anticipation; chạm đất → shell additive tint theo vật liệu (amber/aqua/gold/pink) nở 1.18 fade 0.25s alpha 0.3 — "nụ hôn ánh sáng", không pop.
+7. **Curious koi**: refactor góc bơi sang TÍCH LŨY (fix bug speed-đổi-là-teleport); `excite_near(pos,3)` — koi nhanh ×1.9 vòng rộng ×1.3 decay 3s, lá bèo bob ×2.5; cooldown 2s/con (tò mò, không hoảng).
+8. **Grounded ghost**: bóng tiếp xúc mềm dưới ô + 4 khung góc kem snap khi ĐỔI ô (scale 1.2→1, alpha 0→0.5, 0.12s) — build 1 lần trong _ready, 0 allocation/frame; ẩn theo photo mode.
+
+Rejected (judge): variable drop duration (= input lag), hover pre-echo audio (pointer-tracking sound), hover neighbor squeeze (tween churn), call-and-response chime (quá tải), hotbar strum (2D khô lệch reverb).
+
+Verify: JUICE2 ALL OK (beat accessors, koi excite, ripple meta, ascension orphan) + REGRESS ALL OK + boot sạch; ảnh impact: squash + ring gold + trống hàng xóm nhún. placement_controller 651 dòng (<700, chưa cần tách).
