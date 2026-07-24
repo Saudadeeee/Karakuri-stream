@@ -45,8 +45,8 @@ func apply_variant(v: Dictionary) -> void:
 	MeshFit.tint(_tube_model, TUBE_BASE, Color(v.get("color", "#9BD4CE")))
 
 ## Stream impact tick → this chime's own note + a pendulum swing.
-func ring() -> void:
-	AudioManager.play_chime(global_position, _note)
+func ring(pitch_mul: float = 1.0) -> void:
+	AudioManager.play_chime(global_position, _note, pitch_mul)
 	var tw := create_tween()
 	tw.tween_property(_swing, "rotation:z", 0.35, 0.1)
 	tw.tween_property(_swing, "rotation:z", 0.0, 0.7) \

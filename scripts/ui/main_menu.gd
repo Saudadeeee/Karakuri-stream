@@ -72,7 +72,8 @@ func _build_backdrop() -> void:
 	add_child(sun)
 	_sun = sun
 
-	_add_island()
+	# Island visual comes from the IslandBuilder autoload (sculpted mesh).
+	IslandBuilder.rebuild()
 
 	_cam_rig = Node3D.new()
 	add_child(_cam_rig)
@@ -227,14 +228,14 @@ func _on_map_card(i: int) -> void:
 	SceneryManager.rebuild()
 	AmbientLeaves.rebuild()
 	AmbientMusic.apply_theme_mix()
+	CloudSea.apply_theme()
+	IslandBuilder.rebuild()
 
 ## Repaint the live backdrop + restyle the cards for the current theme.
 func _apply_theme() -> void:
 	var t: Dictionary = MapThemes.theme()
 	MapThemes.apply_environment(_env, _sun)
-	if is_instance_valid(_island_top):
-		(_island_top.material_override as StandardMaterial3D).albedo_color = t["island_top"]
-		(_island_base.material_override as StandardMaterial3D).albedo_color = t["island_base"]
+	# (island colours now live in IslandBuilder.rebuild)
 	for i in _map_cards.size():
 		var ti: Dictionary = MapThemes.THEMES[i]
 		var sb := StyleBoxFlat.new()

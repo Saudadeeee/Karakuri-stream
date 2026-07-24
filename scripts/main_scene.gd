@@ -12,10 +12,13 @@ func _ready() -> void:
 	MapThemes.load_current()
 	var env: Environment = $WorldEnvironment.environment
 	MapThemes.apply_environment(env, $DirectionalLight3D)
-	var t: Dictionary = MapThemes.theme()
-	_paint($Ground/IslandTop, t["island_top"])
-	_paint($Ground/IslandBase, t["island_base"])
+	# The sculpted island (IslandBuilder autoload) replaces the old cylinders;
+	# the flat collision box in this scene still handles raycasts.
+	$Ground/IslandTop.visible = false
+	$Ground/IslandBase.visible = false
 	AmbientMusic.apply_theme_mix()
+	CloudSea.apply_theme()
+	IslandBuilder.rebuild()
 	# First run ever (no save yet): a small STARTER GARDEN machine already
 	# running in one corner — spout → shishi-odoshi → drum, a pond turning a
 	# gear — so the blank island never stares back at a new player. One-time:

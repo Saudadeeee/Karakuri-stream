@@ -31,6 +31,7 @@ const V: Dictionary = {
 	BlockData.Type.PIPE: [
 		{"name": "Closed pipe", "open": false},
 		{"name": "Open pipe", "open": true},
+		{"name": "Alternator pipe", "open": true, "alternator": true},
 	],
 	BlockData.Type.GEAR: [
 		{"name": "Gear", "model": "gear"},
@@ -58,7 +59,11 @@ const V: Dictionary = {
 		{"name": "Chime G", "note": 3, "color": "#D14E8A"},
 		{"name": "Chime A", "note": 4, "color": "#E08A2E"},
 	],
-	BlockData.Type.SHISHI: [{"name": "Shishi-odoshi"}],
+	BlockData.Type.SHISHI: [
+		{"name": "Shishi-odoshi", "fills": 2},
+		{"name": "Shishi — quick", "fills": 1},
+		{"name": "Shishi — patient", "fills": 5},
+	],
 	BlockData.Type.STONE_LANTERN: [{"name": "Stone lantern"}],
 	BlockData.Type.PINWHEEL: [
 		{"name": "Pink pinwheel", "color": "#F49CC4"},

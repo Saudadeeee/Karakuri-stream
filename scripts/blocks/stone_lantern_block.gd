@@ -54,8 +54,12 @@ func _light_up(root: Node) -> void:
 func _process(_delta: float) -> void:
 	if _glow_mats.is_empty():
 		return
-	# Slow candle breathing.
+	# Slow candle breathing — and on the NIGHT map, when the machine is
+	# playing, the lantern eases brighter on every downbeat (a breath, never a
+	# blink): the garden becomes a light instrument.
 	var t: float = Time.get_ticks_msec() / 1000.0
 	var e: float = 1.1 + sin(t * 1.7 + _phase) * 0.25
+	if MapThemes.current == 3 and StreamManager.is_playing():
+		e += 0.9 * pow(1.0 - StreamManager.beat_phase(), 2.0)
 	for m in _glow_mats:
-		m.emission_energy_multiplier = e
+		m.emission_energy_multiplier = lerpf(m.emission_energy_multiplier, e, 0.25)

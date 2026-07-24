@@ -114,12 +114,12 @@ func play_jelly_bounce(global_pos: Vector3) -> void:
 	player.volume_db = randf_range(-5.0, -1.5)
 	player.play()
 
-func play_chime(global_pos: Vector3, note_index: int = -1) -> void:
+func play_chime(global_pos: Vector3, note_index: int = -1, pitch_mul: float = 1.0) -> void:
 	var index: int = note_index if note_index >= 0 else randi() % PENTATONIC_RATIOS.size()
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
 	player.stream = CHIME
-	player.pitch_scale = PENTATONIC_RATIOS[index] * randf_range(0.99, 1.01)
+	player.pitch_scale = PENTATONIC_RATIOS[index] * pitch_mul * randf_range(0.99, 1.01)
 	player.volume_db = randf_range(-2.0, 1.0)
 	player.play()
 

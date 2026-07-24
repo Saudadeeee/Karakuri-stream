@@ -39,3 +39,12 @@ func _wobble() -> void:
 	t.tween_property(_wobbler, "scale", Vector3(1.06, 0.92, 1.06), 0.9).set_trans(Tween.TRANS_SINE)
 	t.tween_property(_wobbler, "scale", Vector3(0.95, 1.08, 0.95), 0.9).set_trans(Tween.TRANS_SINE)
 	t.tween_property(_wobbler, "scale", Vector3.ONE, 0.8).set_trans(Tween.TRANS_SINE)
+
+## The trampoline flex when a stream bounces off — quick squash, springy return.
+var _bounce_tween: Tween
+func bounce() -> void:
+	if _bounce_tween != null and _bounce_tween.is_valid():
+		_bounce_tween.kill()
+	_bounce_tween = create_tween()
+	_bounce_tween.tween_property(self, "scale", Vector3(1.2, 0.7, 1.2), 0.06)
+	_bounce_tween.tween_property(self, "scale", Vector3.ONE, 0.25) 		.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)

@@ -909,3 +909,24 @@ Workflow panel (game-feel/audio/VFX lens + judge) → build list 8 món, impleme
 Rejected (judge): variable drop duration (= input lag), hover pre-echo audio (pointer-tracking sound), hover neighbor squeeze (tween churn), call-and-response chime (quá tải), hotbar strum (2D khô lệch reverb).
 
 Verify: JUICE2 ALL OK (beat accessors, koi excite, ripple meta, ascension orphan) + REGRESS ALL OK + boot sạch; ảnh impact: squash + ring gold + trống hàng xóm nhún. placement_controller 651 dòng (<700, chưa cần tách).
+
+## PHẦN 58: ĐẠI TU HÌNH ẢNH + MECHANIC (panel 3 lens, 9 rank)
+
+Workflow panel (environment/mechanic/player lens + judge) → 9 rank, implement đủ:
+
+**Visual:**
+1. **stream.gdshader** MỚI: nước CHẢY thật (2 lớp vệt foam cuộn dọc + wobble pinned 2 đầu không nứt khớp) + **beat_pulse** — cả máy PHÁT SÁNG theo downbeat (uniform per-material, không shader_globals — an toàn web); taper rơi (0.85→1.15).
+5. **Splash + ring MÀU NỐT**: mỗi impact splash tint màu khối bị gõ (chime = màu nốt của nó!) + ring pool 12 cái preallocated additive — máy VẼ giai điệu vào không khí.
+6. **Biển mây** dưới đảo (cloudsea.gdshader, 1 plane 3.2k tris vertex-noise): thác đổ vào mây, núi nhô khỏi mây; màu theo theme (hồng bình minh/vàng thu/trắng/chàm trăng); tăng contrast sóng sau render check.
+7. **Đảo điêu khắc** (island_builder.gd autoload, SurfaceTool, seed cố định): viền noise, đỉnh vòm, mép overhang, bụng đá nhọn lệch tâm + root rocks + 2 shard bay bồng bềnh — thay cylinder ở CẢ menu + game (cylinders cũ ẩn, collision giữ). Vertex color top→base theo theme, rebuild khi đổi map.
+9. **Night = nhạc cụ ánh sáng**: impact CHIME/DRUM/WOOD/JELLY ở map Đêm → firefly burst (throttle 2 beat/cell); đèn đá thở SÁNG theo downbeat (lerp mượt — thở, không nháy).
+
+**Mechanic:**
+2. **Shishi 3 sức chứa**: quick(1)/classic(2)/patient(5) fills → CLOCK DIVIDER xích được (2-shishi nuôi 5-shishi = tip mỗi 10 beat). Dip tay clamp.
+3. **Jelly TRAMPOLINE**: nước rơi trúng jelly → NẢY lên-qua-1-ô theo hướng ngang cuối (last_h carry) — phá thế thẳng đứng, mọi khối với được từ góc mới; ≤6 hop, seen-guard chặn ping-pong; jelly bounce() squash.
+4. **DYED STREAMS**: scoop múc hồ MÀU NÀO đổ ra màu ĐÓ, shishi nhớ màu đã uống; màu = thanh ghi âm sắc — DYE_VOICE: hồng ×1.4983 (lên), tím ×0.75 (xuống), bạc hà -8dB (mute nỉ). Đổi màu 1 hồ = đổi giọng cả máy. Material cache per-màu (≤4), play_chime nhận pitch_mul.
+8. **ALTERNATOR PIPE** (variant 3 của ống): chia nước cho các cửa ra LUÂN PHIÊN từng beat — 2 hàng chime từng đồng thanh thành hỏi-đáp; 2 alternator nối = chu kỳ 4 beat. Trace entries thành Dictionary {pos,dir,last_h,hops,interval,phase,color}; scheduler phase-lattice (`next = phase + ceil((clock-phase)/interval)*interval`, giữ schedule khi retrace CHỈ khi interval+phase khớp — chống stutter); hub accent đỏ nhận diện.
+
+Rejected giữ ghi chú: confluence, gear ratios, sluice gate, baked AO, critters, koi leap (đều lý do scope/rủi ro).
+
+Verify: OVERHAUL ALL OK (trampoline segment bay lên, alternator interval ×2 + phase lệch >0.4, shishi quick tip 1 fill + dump giữ hồng, scoop đọc màu hồ, cloud+island sống) + REGRESS ALL OK + boot sạch. Ảnh: đảo bay overhang + shard + 2 dòng nước hồng/cyan xuyên mây; arc jelly nhìn thấy được.

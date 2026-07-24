@@ -22,8 +22,11 @@ func _on_grid_changed(cell: Vector3i) -> void:
 	if cell == grid_cell or (cell - grid_cell) in GridManager.DIRECTIONS:
 		refresh_shape()
 
+var _alternator: bool = false
+
 func apply_variant(v: Dictionary) -> void:
 	_open = bool(v.get("open", false))
+	_alternator = bool(v.get("alternator", false))
 	if is_inside_tree():
 		refresh_shape()
 
@@ -33,7 +36,7 @@ func refresh_shape() -> void:
 	var dirs: Array = PipeRouting.connections(grid_cell)
 	if dirs.is_empty():
 		dirs = [Vector3i(0, 1, 0), Vector3i(0, -1, 0)]  # lone pipe = vertical tube
-	_visual = build_visual(dirs, _open)
+	_visual = build_visual(dirs, _open, _alternator)
 	add_child(_visual)
 
 ## Shape rules:
@@ -44,7 +47,7 @@ func refresh_shape() -> void:
 ## OPEN (variant) horizontal arms become U-channel troughs (floor + two walls,
 ## open top) so the routed water stream is visibly flowing through. Static so the
 ## placement ghost can reuse it.
-static func build_visual(dirs: Array, open: bool = false) -> Node3D:
+static func build_visual(dirs: Array, open: bool = false, alternator: bool = false) -> Node3D:
 	var root := Node3D.new()
 	var mat := _mat(BAMBOO)
 	var accent := _mat(ACCENT)
@@ -64,7 +67,8 @@ static func build_visual(dirs: Array, open: bool = false) -> Node3D:
 	# flat trough looked wrong) — so an open run reads as one seamless channel
 	# with square wooden corners, never a bulging bead.
 	if open:
-		root.add_child(_box(Vector3(0.34, 0.30, 0.34), Vector3(0.0, -0.04, 0.0), mat))
+		# Alternator wears the accent hub — the round-robin dealer reads at a glance.
+		root.add_child(_box(Vector3(0.34, 0.30, 0.34), Vector3(0.0, -0.04, 0.0), accent if alternator else mat))
 	else:
 		root.add_child(_sphere(HUB_R, mat))
 	for d in dirs:
