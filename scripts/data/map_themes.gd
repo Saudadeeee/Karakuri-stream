@@ -16,7 +16,7 @@ static var current: int = 0
 
 const THEMES: Array = [
 	{
-		"name": "Vườn Xuân",
+		"name": "Spring",
 		"sky_top": Color(0.42, 0.72, 0.71), "sky_horizon": Color(0.92, 0.78, 0.79),
 		"fog_color": Color(0.9, 0.82, 0.85), "fog_density": 0.006,
 		"sun_color": Color(1.0, 0.98, 0.92), "sun_energy": 0.9, "ambient_energy": 0.45,
@@ -28,7 +28,7 @@ const THEMES: Array = [
 			"gravity": -0.22, "amount": 22, "glow": false},
 	},
 	{
-		"name": "Rừng Thu",
+		"name": "Autumn",
 		"sky_top": Color(0.78, 0.55, 0.38), "sky_horizon": Color(0.97, 0.80, 0.55),
 		"fog_color": Color(0.95, 0.80, 0.60), "fog_density": 0.008,
 		"sun_color": Color(1.0, 0.85, 0.65), "sun_energy": 1.0, "ambient_energy": 0.4,
@@ -40,7 +40,7 @@ const THEMES: Array = [
 			"gravity": -0.35, "amount": 26, "glow": false},
 	},
 	{
-		"name": "Đồi Tuyết",
+		"name": "Snow",
 		"sky_top": Color(0.55, 0.68, 0.82), "sky_horizon": Color(0.88, 0.92, 0.96),
 		"fog_color": Color(0.88, 0.92, 0.96), "fog_density": 0.011,
 		"sun_color": Color(0.92, 0.96, 1.0), "sun_energy": 0.8, "ambient_energy": 0.55,
@@ -52,7 +52,7 @@ const THEMES: Array = [
 			"gravity": -0.28, "amount": 34, "glow": false},
 	},
 	{
-		"name": "Đêm Đom Đóm",
+		"name": "Night",
 		"sky_top": Color(0.10, 0.12, 0.28), "sky_horizon": Color(0.30, 0.24, 0.42),
 		"fog_color": Color(0.22, 0.20, 0.36), "fog_density": 0.010,
 		"sun_color": Color(0.72, 0.78, 1.0), "sun_energy": 0.35, "ambient_energy": 0.3,

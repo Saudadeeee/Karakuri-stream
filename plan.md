@@ -868,3 +868,9 @@ Tiếng trong ống tre (nguồn + ống dẫn) quá to → tắt TẠM:
 - `_refresh_source_audio`: disable — không spawn water-trickle loop per source nữa (dọn player cũ). Bật lại sau với loop nhỏ + filtered nếu muốn.
 - `_play_impact`: PIPE/PIPE_BEND/SOURCE → IM LẶNG (nước đi TRONG hệ ống không kêu; chỉ đích cuối cùng kêu — wood/gear/bell/trống/chime...).
 Boot + REGRESS ALL OK.
+
+## PHẦN 54: Nhạc êm lại + English localization + redeploy tunnel
+
+- **Nhạc**: bỏ track chill_loop.mp3 (có percussion, "sôi động" — đè tiếng nước/chuông vốn LÀ game); bed chỉ còn pad tĩnh chill_ambient.ogg, hạ -17→-24dB; generative notes hạ -4dB nữa. Tiếng game (nước, chuông, gõ) giờ là lớp chính.
+- **English toàn bộ** (77 strings): menu (Play/Settings/Quit/Map/Audio settings), map names (Spring/Autumn/Snow/Night), pause (Paused/Resume/Save build/…/Main menu + dialogs + statuses), 32 tên variant khối, 14 hint hotbar, title sub "- a water garden toy -".
+- Boot + REGRESS ALL OK; re-export đè `build/web` — tunnel giữ nguyên URL serve bản mới.

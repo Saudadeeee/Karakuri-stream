@@ -18,20 +18,20 @@ const SPIN_SPEED: float = 0.9
 ## One-line onboarding hints — hovering an icon tells you what the block DOES
 ## (several blocks have hidden pairings a new player would never guess).
 const HINTS: Dictionary = {
-	BlockData.Type.WOOD: "Khối xây nền — bấm lại icon để đổi Gỗ/Đất/Rêu/Đá",
-	BlockData.Type.WATER: "Hồ nước tĩnh — chạm bánh răng là truyền lực",
-	BlockData.Type.SOURCE: "Vòi nguồn — đổ dòng nước thẳng xuống",
-	BlockData.Type.PIPE: "Ống tre tự nối — bấm lại icon để đổi kín/hở",
-	BlockData.Type.GEAR: "Quay khi chạm nước/dòng chảy — đặt cạnh nhau để truyền lực",
-	BlockData.Type.BELL: "Ngân khi dòng nước rơi trúng hoặc bánh răng kề gõ",
-	BlockData.Type.JELLY: "Thạch nảy — kêu boing khi nước rơi trúng",
-	BlockData.Type.SHISHI: "Hứng nước → đầy thì lật đổ nước tiếp + gõ cốc!",
-	BlockData.Type.DRUM: "Trống — dòng nước hoặc bánh răng kề đánh nhịp",
-	BlockData.Type.CHIME: "Mỗi màu 1 nốt nhạc — xếp hàng dưới nước = giai điệu",
-	BlockData.Type.MUSIC_BOX: "Đặt cạnh bánh răng ĐANG QUAY → tự chơi nhạc",
-	BlockData.Type.SCOOP: "Đặt cạnh HỒ + bánh răng quay → múc nước thành dòng mới",
-	BlockData.Type.STONE_LANTERN: "Đèn đá phát sáng — lung linh nhất ở map Đêm",
-	BlockData.Type.PINWHEEL: "Chong chóng — dòng nước thổi là quay tít",
+	BlockData.Type.WOOD: "Building block — click again for Wood/Dirt/Moss/Stone",
+	BlockData.Type.WATER: "Still pond — powers any gear touching it",
+	BlockData.Type.SOURCE: "Spout — pours a stream straight down",
+	BlockData.Type.PIPE: "Self-connecting pipe — click again for closed/open",
+	BlockData.Type.GEAR: "Spins when touching water — chain them to transfer power",
+	BlockData.Type.BELL: "Rings when a stream hits it or a gear strikes it",
+	BlockData.Type.JELLY: "Bouncy jelly — boings when water lands on it",
+	BlockData.Type.SHISHI: "Fills with water, then TIPS: pours onward + knock!",
+	BlockData.Type.DRUM: "Drum — beaten by streams or a gear next to it",
+	BlockData.Type.CHIME: "Each colour is a note — line them up = a melody",
+	BlockData.Type.MUSIC_BOX: "Put beside a SPINNING gear → plays a tune",
+	BlockData.Type.SCOOP: "Beside a POND + spinning gear → ladles a new stream",
+	BlockData.Type.STONE_LANTERN: "Glowing lantern — prettiest on the Night map",
+	BlockData.Type.PINWHEEL: "Pinwheel — spins when a stream hits it",
 }
 
 const ENTRIES: Array = [

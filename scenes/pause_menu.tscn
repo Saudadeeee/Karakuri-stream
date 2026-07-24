@@ -29,7 +29,7 @@ theme_override_constants/separation = 16
 [node name="TitleLabel" type="Label" parent="Panel/VBoxContainer"]
 layout_mode = 2
 horizontal_alignment = 1
-text = "Tạm dừng"
+text = "Paused"
 
 [node name="VolumeRow" type="HBoxContainer" parent="Panel/VBoxContainer"]
 layout_mode = 2
@@ -37,7 +37,7 @@ theme_override_constants/separation = 10
 
 [node name="VolumeLabel" type="Label" parent="Panel/VBoxContainer/VolumeRow"]
 layout_mode = 2
-text = "Âm lượng"
+text = "Volume"
 
 [node name="VolumeSlider" type="HSlider" parent="Panel/VBoxContainer/VolumeRow"]
 custom_minimum_size = Vector2(140, 0)
@@ -50,27 +50,27 @@ value = 0.8
 [node name="ResumeButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "Tiếp tục"
+text = "Resume"
 
 [node name="SaveButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "Lưu công trình"
+text = "Save build"
 
 [node name="LoadButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "Tải công trình"
+text = "Load build"
 
 [node name="ClearButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "Xoá toàn bộ"
+text = "Clear all"
 
 [node name="MenuButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "Về menu chính"
+text = "Main menu"
 
 [node name="StatusLabel" type="Label" parent="Panel/VBoxContainer"]
 layout_mode = 2
@@ -78,17 +78,17 @@ horizontal_alignment = 1
 modulate = Color(1, 1, 1, 0)
 
 [node name="ConfirmClearDialog" type="ConfirmationDialog" parent="."]
-title = "Xác nhận"
+title = "Confirm"
 size = Vector2i(420, 140)
-dialog_text = "Xoá toàn bộ công trình đã xây?
-Thao tác này KHÔNG thể hoàn tác trừ khi bạn đã Lưu trước đó."
-ok_button_text = "Xoá"
-cancel_button_text = "Huỷ"
+dialog_text = "Clear the whole build?
+This cannot be undone unless you saved first."
+ok_button_text = "Clear"
+cancel_button_text = "Cancel"
 
 [node name="ConfirmLoadDialog" type="ConfirmationDialog" parent="."]
-title = "Xác nhận"
+title = "Confirm"
 size = Vector2i(420, 140)
-dialog_text = "Tải công trình đã lưu?
-Công trình HIỆN TẠI (chưa lưu) sẽ bị thay thế."
-ok_button_text = "Tải"
-cancel_button_text = "Huỷ"
+dialog_text = "Load the saved build?
+Your CURRENT (unsaved) build will be replaced."
+ok_button_text = "Load"
+cancel_button_text = "Cancel"

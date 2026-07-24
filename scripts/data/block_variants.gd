@@ -11,55 +11,55 @@ extends RefCounted
 
 const V: Dictionary = {
 	BlockData.Type.WOOD: [
-		{"name": "Gỗ", "color": "#D4A373"},
-		{"name": "Đất", "color": "#8B5E3C"},
-		{"name": "Rêu", "color": "#8CB369"},
-		{"name": "Đá", "color": "#BDBDBD"},
+		{"name": "Wood", "color": "#D4A373"},
+		{"name": "Dirt", "color": "#8B5E3C"},
+		{"name": "Moss", "color": "#8CB369"},
+		{"name": "Stone", "color": "#BDBDBD"},
 	],
 	BlockData.Type.WATER: [
-		{"name": "Nước ngọc", "color": "#48CAE4"},
-		{"name": "Nước hồng", "color": "#F49CC4"},
-		{"name": "Nước tím", "color": "#B39DE0"},
-		{"name": "Nước bạc hà", "color": "#7BE0C0"},
+		{"name": "Teal water", "color": "#48CAE4"},
+		{"name": "Pink water", "color": "#F49CC4"},
+		{"name": "Lilac water", "color": "#B39DE0"},
+		{"name": "Mint water", "color": "#7BE0C0"},
 	],
 	BlockData.Type.JELLY: [
-		{"name": "Jelly xanh", "color": "#48CAE4"},
-		{"name": "Jelly hồng", "color": "#F49CC4"},
-		{"name": "Jelly vàng", "color": "#F2D06B"},
-		{"name": "Jelly tím", "color": "#B39DE0"},
+		{"name": "Cyan jelly", "color": "#48CAE4"},
+		{"name": "Pink jelly", "color": "#F49CC4"},
+		{"name": "Sunny jelly", "color": "#F2D06B"},
+		{"name": "Lilac jelly", "color": "#B39DE0"},
 	],
 	BlockData.Type.PIPE: [
-		{"name": "Ống kín", "open": false},
-		{"name": "Ống hở", "open": true},
+		{"name": "Closed pipe", "open": false},
+		{"name": "Open pipe", "open": true},
 	],
 	BlockData.Type.GEAR: [
-		{"name": "Bánh răng", "model": "gear"},
-		{"name": "Cối xay", "model": "mill"},
+		{"name": "Gear", "model": "gear"},
+		{"name": "Water mill", "model": "mill"},
 	],
-	BlockData.Type.BELL: [{"name": "Chuông"}],
-	BlockData.Type.SOURCE: [{"name": "Vòi tre"}],
-	BlockData.Type.PIPE_BEND: [{"name": "Ống cong"}],
+	BlockData.Type.BELL: [{"name": "Bell"}],
+	BlockData.Type.SOURCE: [{"name": "Bamboo spout"}],
+	BlockData.Type.PIPE_BEND: [{"name": "Bend pipe"}],
 	# Phong linh: each variant is a FIXED pentatonic note (C D E G A) so a row
 	# of chimes becomes a playable melody. note = index into PENTATONIC_RATIOS.
 	# Saturated, clearly-separated note colours — pastel versions washed out to
 	# near-white under the game sun, losing the "read the melody by colour" idea.
 	BlockData.Type.CHIME: [
-		{"name": "Linh Đô", "note": 0, "color": "#2FA89A"},
-		{"name": "Linh Rê", "note": 1, "color": "#3E7EC6"},
-		{"name": "Linh Mi", "note": 2, "color": "#7C5BBF"},
-		{"name": "Linh Sol", "note": 3, "color": "#D14E8A"},
-		{"name": "Linh La", "note": 4, "color": "#E08A2E"},
+		{"name": "Chime C", "note": 0, "color": "#2FA89A"},
+		{"name": "Chime D", "note": 1, "color": "#3E7EC6"},
+		{"name": "Chime E", "note": 2, "color": "#7C5BBF"},
+		{"name": "Chime G", "note": 3, "color": "#D14E8A"},
+		{"name": "Chime A", "note": 4, "color": "#E08A2E"},
 	],
-	BlockData.Type.SHISHI: [{"name": "Ống gõ đá"}],
-	BlockData.Type.STONE_LANTERN: [{"name": "Đèn đá"}],
+	BlockData.Type.SHISHI: [{"name": "Shishi-odoshi"}],
+	BlockData.Type.STONE_LANTERN: [{"name": "Stone lantern"}],
 	BlockData.Type.PINWHEEL: [
-		{"name": "Chong chóng hồng", "color": "#F49CC4"},
-		{"name": "Chong chóng cam", "color": "#F2A65E"},
-		{"name": "Chong chóng xanh", "color": "#7BD1E8"},
+		{"name": "Pink pinwheel", "color": "#F49CC4"},
+		{"name": "Orange pinwheel", "color": "#F2A65E"},
+		{"name": "Blue pinwheel", "color": "#7BD1E8"},
 	],
-	BlockData.Type.DRUM: [{"name": "Trống gỗ"}],
-	BlockData.Type.MUSIC_BOX: [{"name": "Hộp nhạc"}],
-	BlockData.Type.SCOOP: [{"name": "Gầu múc"}],
+	BlockData.Type.DRUM: [{"name": "Wooden drum"}],
+	BlockData.Type.MUSIC_BOX: [{"name": "Music box"}],
+	BlockData.Type.SCOOP: [{"name": "Water scoop"}],
 }
 
 static func list_for(type: int) -> Array:

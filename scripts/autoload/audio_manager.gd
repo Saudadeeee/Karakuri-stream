@@ -121,9 +121,9 @@ func play_chime(global_pos: Vector3, note_index: int = -1) -> void:
 func play_ambient_note() -> void:
 	# A soft low root note, sometimes with a gentle harmony a pentatonic step up —
 	# warmer and more musical than a single ping.
-	_ambient_one(PENTATONIC_RATIOS.pick_random() * (0.5 if randf() < 0.7 else 0.25), randf_range(-8.0, -4.0))
+	_ambient_one(PENTATONIC_RATIOS.pick_random() * (0.5 if randf() < 0.7 else 0.25), randf_range(-12.0, -8.0))
 	if randf() < 0.4:
-		_ambient_one(PENTATONIC_RATIOS.pick_random() * 1.0, randf_range(-13.0, -9.0))
+		_ambient_one(PENTATONIC_RATIOS.pick_random() * 1.0, randf_range(-17.0, -13.0))
 
 func _ambient_one(pitch: float, vol: float) -> void:
 	var player := AudioStreamPlayer.new()

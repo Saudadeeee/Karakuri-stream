@@ -136,13 +136,13 @@ func _build_ui() -> void:
 	col.add_child(spacer)
 
 	col.add_child(_map_picker())
-	col.add_child(_menu_button("Chơi", _on_play))
-	col.add_child(_menu_button("Cài đặt", _on_settings))
-	col.add_child(_menu_button("Thoát", _on_quit))
+	col.add_child(_menu_button("Play", _on_play))
+	col.add_child(_menu_button("Settings", _on_settings))
+	col.add_child(_menu_button("Quit", _on_quit))
 
 	# Footer hint
 	var hint := Label.new()
-	hint.text = "Thả khối · nghe suối chảy · thư giãn"
+	hint.text = "Drop blocks · hear the stream · relax"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.7)
 	hint.add_theme_font_size_override("font_size", 15)
@@ -186,7 +186,7 @@ func _title_sign() -> Panel:
 	box.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "- Vườn Thủy Cơ -"
+	sub.text = "- a water garden toy -"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 20)
 	sub.add_theme_color_override("font_color", Color("f5c4a8"))
@@ -200,7 +200,7 @@ func _map_picker() -> VBoxContainer:
 	var wrap := VBoxContainer.new()
 	wrap.add_theme_constant_override("separation", 6)
 	var cap := Label.new()
-	cap.text = "Bản đồ"
+	cap.text = "Map"
 	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap.add_theme_font_size_override("font_size", 15)
 	cap.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.85)
@@ -274,21 +274,21 @@ func _build_settings_panel(root: Control) -> void:
 	_settings_panel.add_child(box)
 
 	var head := Label.new()
-	head.text = "Cài đặt âm thanh"
+	head.text = "Audio settings"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 24)
 	box.add_child(head)
 
-	box.add_child(_slider_row("Tổng", "Master"))
-	box.add_child(_slider_row("Nhạc nền", "Music"))
-	box.add_child(_slider_row("Hiệu ứng", "SFX"))
+	box.add_child(_slider_row("Master", "Master"))
+	box.add_child(_slider_row("Music", "Music"))
+	box.add_child(_slider_row("Effects", "SFX"))
 
 	var gap := Control.new()
 	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(gap)
 
 	var close := Button.new()
-	close.text = "Đóng"
+	close.text = "Close"
 	close.custom_minimum_size = Vector2(0, 48)
 	close.pressed.connect(func(): _settings_panel.visible = false)
 	box.add_child(close)

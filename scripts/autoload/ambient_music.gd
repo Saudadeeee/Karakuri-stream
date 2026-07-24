@@ -10,11 +10,11 @@ extends Node
 const MIN_GAP: float = 2.2
 const MAX_GAP: float = 5.5
 
-# CC0 (public domain, OpenGameArt) — a relaxing bed; one is picked per session
-# for a little variety.
+# CC0 (public domain, OpenGameArt). Only the still ambient PAD is used as the
+# bed — the synth/percussion track proved too lively and fought the water,
+# knocks and chimes that ARE the game. The bed sits far below them.
 const CHILL_BEDS: Array[AudioStream] = [
 	preload("res://assets/sounds/chill_ambient.ogg"),
-	preload("res://assets/sounds/chill_loop.mp3"),
 ]
 const RAIN_LAYER: AudioStream = preload("res://assets/sounds/rain_loop.ogg")
 
@@ -27,7 +27,7 @@ var _rain: AudioStreamPlayer
 const RAIN_DB_BY_THEME: Array[float] = [-28.0, -18.0, -44.0, -24.0]
 
 func _ready() -> void:
-	_start_bed(CHILL_BEDS.pick_random(), -17.0)   # chill music, under the notes
+	_start_bed(CHILL_BEDS.pick_random(), -24.0)   # quiet pad, far under the toy
 	_rain = _start_bed(RAIN_LAYER, -25.0)         # faint rain texture
 	apply_theme_mix()
 

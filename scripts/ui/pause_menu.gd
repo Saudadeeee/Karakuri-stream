@@ -67,13 +67,13 @@ func _on_resume_pressed() -> void:
 
 func _on_save_pressed() -> void:
 	SaveManager.save_game()
-	_show_status("Đã lưu công trình")
+	_show_status("Build saved")
 
 func _on_load_confirmed() -> void:
 	if SaveManager.load_game():
-		_show_status("Đã tải công trình")
+		_show_status("Build loaded")
 	else:
-		_show_status("Chưa có công trình nào được lưu")
+		_show_status("No saved build yet")
 
 func _on_clear_confirmed() -> void:
 	GridManager.clear_all()
