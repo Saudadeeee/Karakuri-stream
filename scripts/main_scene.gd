@@ -15,6 +15,7 @@ func _ready() -> void:
 	var t: Dictionary = MapThemes.theme()
 	_paint($Ground/IslandTop, t["island_top"])
 	_paint($Ground/IslandBase, t["island_base"])
+	AmbientMusic.apply_theme_mix()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed):

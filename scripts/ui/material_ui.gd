@@ -15,6 +15,25 @@ const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 const FADE_MIN_ALPHA: float = 0.18
 const SPIN_SPEED: float = 0.9
 
+## One-line onboarding hints — hovering an icon tells you what the block DOES
+## (several blocks have hidden pairings a new player would never guess).
+const HINTS: Dictionary = {
+	BlockData.Type.WOOD: "Khối xây nền — bấm lại icon để đổi Gỗ/Đất/Rêu/Đá",
+	BlockData.Type.WATER: "Hồ nước tĩnh — chạm bánh răng là truyền lực",
+	BlockData.Type.SOURCE: "Vòi nguồn — đổ dòng nước thẳng xuống",
+	BlockData.Type.PIPE: "Ống tre tự nối — bấm lại icon để đổi kín/hở",
+	BlockData.Type.GEAR: "Quay khi chạm nước/dòng chảy — đặt cạnh nhau để truyền lực",
+	BlockData.Type.BELL: "Ngân khi dòng nước rơi trúng hoặc bánh răng kề gõ",
+	BlockData.Type.JELLY: "Thạch nảy — kêu boing khi nước rơi trúng",
+	BlockData.Type.SHISHI: "Hứng nước → đầy thì lật đổ nước tiếp + gõ cốc!",
+	BlockData.Type.DRUM: "Trống — dòng nước hoặc bánh răng kề đánh nhịp",
+	BlockData.Type.CHIME: "Mỗi màu 1 nốt nhạc — xếp hàng dưới nước = giai điệu",
+	BlockData.Type.MUSIC_BOX: "Đặt cạnh bánh răng ĐANG QUAY → tự chơi nhạc",
+	BlockData.Type.SCOOP: "Đặt cạnh HỒ + bánh răng quay → múc nước thành dòng mới",
+	BlockData.Type.STONE_LANTERN: "Đèn đá phát sáng — lung linh nhất ở map Đêm",
+	BlockData.Type.PINWHEEL: "Chong chóng — dòng nước thổi là quay tít",
+}
+
 const ENTRIES: Array = [
 	BlockData.Type.WOOD,
 	BlockData.Type.WATER,
@@ -43,6 +62,8 @@ var _viewport_by_type: Dictionary = {} # BlockData.Type -> SubViewport
 var _selected_type: int = BlockData.Type.WOOD
 var _hovered_type: int = -1
 var _faded: bool = false
+var _hint_panel: PanelContainer
+var _hint_label: Label
 
 func _ready() -> void:
 	var vbox := VBoxContainer.new()
@@ -58,6 +79,18 @@ func _ready() -> void:
 
 	placement_controller.material_changed.connect(_on_material_changed)
 	_on_material_changed(BlockData.Type.WOOD)
+
+	# Hover hint card (name + what the block does), themed like everything else.
+	_hint_panel = PanelContainer.new()
+	_hint_panel.visible = false
+	_hint_panel.custom_minimum_size = Vector2(230, 0)
+	add_child(_hint_panel)
+	var vb := VBoxContainer.new()
+	_hint_panel.add_child(vb)
+	_hint_label = Label.new()
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint_label.add_theme_font_size_override("font_size", 14)
+	vb.add_child(_hint_label)
 
 func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
@@ -169,6 +202,15 @@ func _process(delta: float) -> void:
 func _on_icon_hover(type: int, entered: bool) -> void:
 	_hovered_type = type if entered else -1
 	_refresh_viewport_modes()
+	# Hint card floats next to the hovered icon.
+	if entered and _hint_panel != null:
+		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
+		_hint_label.text = "%s\n%s" % [vname, HINTS.get(type, "")]
+		var btn: Button = _buttons[type]
+		_hint_panel.position = Vector2(btn.global_position.x + ICON_SIZE + 14, btn.global_position.y)
+		_hint_panel.visible = true
+	elif _hint_panel != null:
+		_hint_panel.visible = false
 
 ## One live (UPDATE_ALWAYS) viewport at a time — selected, or hovered — the
 ## rest frozen on their last frame (UPDATE_ONCE keeps the image).

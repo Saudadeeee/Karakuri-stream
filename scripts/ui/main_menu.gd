@@ -56,8 +56,9 @@ func _build_backdrop() -> void:
 	env.fog_light_color = Color(0.9, 0.82, 0.85)
 	env.fog_density = 0.006
 	env.fog_sky_affect = 0.0
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC   # match the game's grade
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.15
+	env.adjustment_saturation = 1.2
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -225,6 +226,7 @@ func _on_map_card(i: int) -> void:
 	_apply_theme()
 	SceneryManager.rebuild()
 	AmbientLeaves.rebuild()
+	AmbientMusic.apply_theme_mix()
 
 ## Repaint the live backdrop + restyle the cards for the current theme.
 func _apply_theme() -> void:

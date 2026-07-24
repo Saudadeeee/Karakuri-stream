@@ -113,6 +113,9 @@ func _update_ghost() -> void:
 	_ghost_root.visible = _ghost_valid
 	if _ghost_valid:
 		_ghost_root.position = GridManager.cell_to_world(place_cell)
+		# Gentle breathing so the ghost feels alive under the cursor.
+		var t: float = Time.get_ticks_msec() / 1000.0
+		_ghost_root.scale = Vector3.ONE * (1.0 + sin(t * 5.0) * 0.02)
 		_refresh_ghost_model()
 
 ## Rebuild the ghost's model only when the type or its resolved orientation/shape
@@ -252,8 +255,10 @@ func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type) -
 	# settling rather than a rigid object snapping into place.
 	tween.tween_property(instance, "position", final_pos, 0.24) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# Kick up dust / splash the instant it lands, right at the base of the block.
+	# Kick up dust / splash the instant it lands, right at the base of the block,
+	# plus an expanding ground ring — the landing visibly "presses" the world.
 	tween.tween_callback(_spawn_place_effect.bind(type, final_pos + Vector3(0.0, -0.45, 0.0)))
+	tween.tween_callback(_spawn_ring.bind(final_pos + Vector3(0.0, -0.48, 0.0)))
 	tween.tween_property(instance, "scale", Vector3(1.35, 0.55, 1.35), 0.07) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(instance, "scale", Vector3.ONE, 0.5) \
@@ -346,6 +351,37 @@ func _remove_block() -> void:
 	var normal: Vector3 = hit["normal"]
 	var hit_cell: Vector3i = GridManager.world_to_cell(hit["position"] - normal * 0.5)
 	var block: BlockData = GridManager.get_block(hit_cell)
-	if block != null:
-		UndoManager.record_remove(hit_cell, block)
+	if block == null:
+		return
+	UndoManager.record_remove(hit_cell, block)
+	# Removal deserves feedback too: a soft low knock + a dust puff + ring
+	# where the block used to sit (silent vanishing feels broken).
+	var pos: Vector3 = GridManager.cell_to_world(hit_cell)
+	AudioManager.play_wood_pitch(pos, 0.72, -2.0)
+	_spawn_place_effect(BlockData.Type.WOOD, pos)
+	_spawn_ring(pos + Vector3(0.0, -0.4, 0.0))
 	GridManager.remove_block(hit_cell)
+
+## Expanding, fading ground ring — the classic satisfying "impact pulse".
+func _spawn_ring(pos: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.42
+	torus.outer_radius = 0.5
+	torus.rings = 24
+	torus.ring_segments = 6
+	mi.mesh = torus
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.98, 0.94, 0.86, 0.7)
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mi.material_override = m
+	mi.position = pos
+	mi.scale = Vector3(0.5, 0.25, 0.5)
+	add_child(mi)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(mi, "scale", Vector3(1.5, 0.25, 1.5), 0.38) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.38)
+	tw.chain().tween_callback(mi.queue_free)

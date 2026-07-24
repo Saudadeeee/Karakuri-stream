@@ -48,10 +48,19 @@ func toggle() -> void:
 func _pause() -> void:
 	visible = true
 	get_tree().paused = true
+	_set_music_muffle(true)
 
 func _resume() -> void:
 	visible = false
 	get_tree().paused = false
+	_set_music_muffle(false)
+
+## Classic pause muffle: a low-pass on the Music bus pulls the ambience
+## underwater while the menu is up (SFX are paused with the tree anyway).
+func _set_music_muffle(on: bool) -> void:
+	var idx: int = AudioServer.get_bus_index("Music")
+	if idx >= 0 and AudioServer.get_bus_effect_count(idx) > 0:
+		AudioServer.set_bus_effect_enabled(idx, 0, on)
 
 func _on_resume_pressed() -> void:
 	_resume()
@@ -80,6 +89,7 @@ func _on_menu_pressed() -> void:
 	SaveManager.save_game()
 	GridManager.clear_all()
 	get_tree().paused = false
+	_set_music_muffle(false)   # the low-pass must not follow us to the menu
 	get_tree().change_scene_to_file(MAIN_MENU)
 
 func _show_status(text: String) -> void:

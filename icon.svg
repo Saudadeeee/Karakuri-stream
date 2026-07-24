@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="124" height="124" x="2" y="2" fill="#363d52" stroke="#212532" stroke-width="4" rx="14"/><g fill="#fff" transform="translate(12.322 12.322)scale(.101)"><path d="M105 673v33q407 354 814 0v-33z"/><path fill="#478cbf" d="m105 673 152 14q12 1 15 14l4 67 132 10 8-61q2-11 15-15h162q13 4 15 15l8 61 132-10 4-67q3-13 15-14l152-14V427q30-39 56-81-35-59-83-108-43 20-82 47-40-37-88-64 7-51 8-102-59-28-123-42-26 43-46 89-49-7-98 0-20-46-46-89-64 14-123 42 1 51 8 102-48 27-88 64-39-27-82-47-48 49-83 108 26 42 56 81zm0 33v39c0 276 813 276 814 0v-39l-134 12-5 69q-2 10-14 13l-162 11q-12 0-16-11l-10-65H446l-10 65q-4 11-16 11l-162-11q-12-3-14-13l-5-69z"/><path d="M483 600c0 34 58 34 58 0v-86c0-34-58-34-58 0z"/><circle cx="725" cy="526" r="90"/><circle cx="299" cy="526" r="90"/></g><g fill="#414042" transform="translate(12.322 12.322)scale(.101)"><circle cx="307" cy="532" r="60"/><circle cx="717" cy="532" r="60"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#F4EFE2"/>
+  <rect x="10" y="10" width="108" height="108" rx="22" fill="none" stroke="#CDB492" stroke-width="4"/>
+  <!-- bamboo spout, tilted -->
+  <g transform="rotate(-18 52 46)">
+    <rect x="24" y="38" width="56" height="17" rx="8.5" fill="#8CB369"/>
+    <rect x="44" y="36" width="6" height="21" rx="3" fill="#6E8A3C"/>
+    <rect x="66" y="36" width="6" height="21" rx="3" fill="#E07A5F"/>
+  </g>
+  <!-- water drops -->
+  <path d="M84 58 C84 52 89 45 89 45 C89 45 94 52 94 58 C94 63 89.5 66 89 66 C88.5 66 84 63 84 58 Z" fill="#48CAE4"/>
+  <circle cx="80" cy="74" r="3.4" fill="#48CAE4"/>
+  <!-- wooden gear -->
+  <g transform="translate(48 88)">
+    <circle r="17" fill="#D4A373"/>
+    <circle r="6" fill="#A9764A"/>
+    <g fill="#D4A373">
+      <rect x="-4" y="-24" width="8" height="9" rx="3"/>
+      <rect x="-4" y="15" width="8" height="9" rx="3"/>
+      <rect x="15" y="-4" width="9" height="8" rx="3"/>
+      <rect x="-24" y="-4" width="9" height="8" rx="3"/>
+      <rect x="9" y="-21" width="8" height="9" rx="3" transform="rotate(45)"/>
+      <rect x="9" y="12" width="8" height="9" rx="3" transform="rotate(-45)"/>
+      <rect x="-17" y="-21" width="8" height="9" rx="3" transform="rotate(-45)"/>
+      <rect x="-17" y="12" width="8" height="9" rx="3" transform="rotate(45)"/>
+    </g>
+  </g>
+  <!-- ripple under -->
+  <path d="M74 100 q8 6 16 0 q8 -6 16 0" stroke="#48CAE4" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M78 110 q6 4.5 12 0 q6 -4.5 12 0" stroke="#48CAE4" stroke-width="3.4" fill="none" stroke-linecap="round" opacity="0.6"/>
+</svg>

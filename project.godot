@@ -14,6 +14,8 @@ config/name="KARAKURI STREAM"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.957, 0.937, 0.886, 1)
+boot_splash/show_image=false
 
 [autoload]
 
@@ -50,6 +52,6 @@ theme/custom="res://ui/karakuri_theme.tres"
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/size=2048
 lights_and_shadows/directional_shadow/size.mobile=1024
-textures/vram_compression/import_etc2_astc=true

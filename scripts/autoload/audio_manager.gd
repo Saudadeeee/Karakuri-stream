@@ -21,6 +21,11 @@ const PENTATONIC_RATIOS: Array[float] = [1.0, 1.1225, 1.2599, 1.4983, 1.6818]
 
 var _pool: Array[AudioStreamPlayer3D] = []
 var _next_index: int = 0
+## Anti-machine-gun: identical one-shots landing within a few ms fuse into a
+## loud phasey burst. Track the last start per sound kind and skip repeats
+## inside the window (a third simultaneous knock adds nothing but mud).
+var _last_start: Dictionary = {}   # kind -> msec
+const DEDUPE_MS: int = 35
 
 func _ready() -> void:
 	_water_flow.loop = true
@@ -28,8 +33,20 @@ func _ready() -> void:
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
 		player.bus = "SFX"
+		# 3D feel: a touch more stereo panning and a gentler distance curve, so
+		# knocks across the island stay audible but clearly placed left/right.
+		player.panning_strength = 1.4
+		player.unit_size = 8.0
+		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_SQUARE_DISTANCE
 		add_child(player)
 		_pool.append(player)
+
+func _can_start(kind: String) -> bool:
+	var now: int = Time.get_ticks_msec()
+	if now - int(_last_start.get(kind, -1000)) < DEDUPE_MS:
+		return false
+	_last_start[kind] = now
+	return true
 
 func _get_free_player() -> AudioStreamPlayer3D:
 	for player in _pool:
@@ -40,6 +57,8 @@ func _get_free_player() -> AudioStreamPlayer3D:
 	return player
 
 func play_wood_hit(global_pos: Vector3) -> void:
+	if not _can_start("wood"):
+		return
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
 	player.stream = WOOD_HIT
@@ -50,6 +69,8 @@ func play_wood_hit(global_pos: Vector3) -> void:
 ## Wood knock at an exact pitch — the karakuri percussion palette is all one
 ## wood sample at different speeds (drum = slow/deep, shishi = bright "cốc").
 func play_wood_pitch(global_pos: Vector3, pitch: float, vol_db: float = 0.0) -> void:
+	if not _can_start("wood%.1f" % pitch):
+		return
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
 	player.stream = WOOD_HIT

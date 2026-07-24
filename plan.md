@@ -798,3 +798,73 @@ Verify `POLISH ALL OK`: undo place/remove + redo giữ variant, top-decor spawn 
 - Build 51MB (wasm 39 + pck 13.6), `build/` gitignore.
 - Test end-to-end qua puppeteer-core: boot OK, **menu → Chơi → đặt khối** hoạt động, **144 FPS (vsync cap) cả trên SwiftShader CPU-render** → GPU thật dư sức. 0 JS error (chỉ warning AudioContext autoplay chuẩn browser).
 - **Bug web thật tìm ra**: emoji trong nút (▶⚙✕🔊💾…) = ô vuông tofu (web không có font emoji hệ thống) → bỏ toàn bộ emoji UI text (menu + pause), "～" → "-".
+
+## PHẦN 50: Final mile — camera feel, click juice, render polish, tooltips, icon
+
+User: 4 mục cuối, TẬP TRUNG click-feel + render polish.
+
+**Camera feel** (`orbit_camera.gd` viết lại): quán tính xoay (giữ vận tốc sau nhả chuột, damp exp 6.0) + zoom LERP mượt (không step) + touch: 1 ngón xoay, 2 ngón pinch-zoom.
+
+**Click juice** (`placement_controller.gd`):
+- Ghost "thở" (scale sin 5Hz ±2%).
+- Đặt khối: RING shockwave đất (torus unshaded kem, scale 0.5→1.5 + fade 0.38s) kèm particles/sound sẵn.
+- XÓA khối (trước đây im lặng): knock trầm 0.72 + dust puff + ring — không còn "biến mất vô hồn".
+
+**Render polish**:
+- `water.gdshader`: **sky sheen** — fresnel mix về màu chân trời hồng (`sky_tint`, mạnh trên mặt phẳng) = phản chiếu trời giả kiểu Townscaper; ROUGHNESS 0.02 khi lặng + SPECULAR 0.65 → glint nắng nhảy trên sóng.
+- `main.tscn` env: **tonemap FILMIC** + contrast 1.09 + saturation 1.2 (brightness 1.02 — thử 1.06 bị washed, hạ lại); glow bloom 0.15.
+- **FillLight** mới: directional lạnh #B8CCE8 energy 0.22 từ sau-trên (no shadow) → mặt khuất có ánh xanh, khối tách nền.
+- Menu backdrop đồng bộ filmic.
+
+**Tooltips onboarding** (`material_ui.gd`): hover icon → card theme (tên + 1 dòng "khối này làm gì") — dict `HINTS` 14 loại, lộ các cặp luật ẩn (gầu cần hồ+gear, hộp nhạc cần gear quay…).
+
+**Icon + splash**: `icon.svg` mới (ống tre nghiêng + giọt nước + bánh răng gỗ + gợn sóng, nền kem bo tròn); boot splash màu kem phẳng (không logo Godot).
+
+Verify ảnh: nước sheen hồng mép + glint, fill light tách khối, jelly drop squash. Fix `expf`→`exp` (GDScript). Boot sạch.
+
+## PHẦN 51: Full regression suite + fix noise + web final PASS
+
+**Test suite chính thức `tests/regression.tscn`** (giữ lâu dài, chạy: `godot --path . tests/regression.tscn`) — 9 section:
+1. MỌI type × MỌI variant (31 combo) place + clear sạch
+2. Save → clear → load: variant gỗ/nốt chime/trục gear sống sót
+3. Undo×10 → redo×10 → over-undo 15/over-redo 20 (không crash, state đúng)
+4. Chuỗi karakuri live: shishi lật + scoop múc + hộp nhạc powered + pinwheel/drum/chime
+5. Gear 6 trục đặt đủ 6 mặt
+6. Pipe cross/T/dọc + open, refresh không crash
+7. Xóa GIỮA hoạt động: shishi đang đổ (orphan prune ✓), source đang chảy, nước có koi/lily (pond decor dọn ✓)
+8. Đổi 4 theme liên tiếp: scenery node count ổn định (không leak)
+9. Photo mode + nắng 360° + pause save GIỮ music_volume
+
+**Kết quả: REGRESS ALL OK — 0 error 0 warning toàn bộ run.**
+
+**Fix trong quá trình:**
+- Gear double-build (ready dựng "gear" rồi apply đè "mill"): `_model_name` skip-same + default DEFERRED → không bao giờ dựng-xé thừa.
+- Truy vết "Parameter material is null" (28→16→0): noise engine 4.7 khi free node GLB có surface-override CHƯA render lần nào (chỉ tái hiện khi place+undo CÙNG frame — người chơi không thể). Test sửa lại sát thực tế (1 frame giữa place/undo).
+
+**Web final**: re-export (0 lỗi) + puppeteer smoke: menu → Chơi → đặt khối, 144 FPS, 0 JS error, filmic grade hiển thị đúng trên web.
+
+## PHẦN 52: Audio engineering pass (kỹ thuật thanh âm)
+
+Audit lộ 3 lỗi kỹ thuật + thiếu 4 kỹ thuật chuẩn. Làm lại:
+
+**Bus chain mới** (`default_bus_layout.tres`):
+- Master: **HardLimiter** (ceiling -0.5dB) — spam đặt khối không bao giờ clip.
+- SFX: **Compressor** (thr -14dB, ratio 3:1, attack 30µs — glue các knock chồng nhau) → **Reverb** (chuyển TỪ Master về đây — trước đây reverb đè cả nhạc nền vốn đã có không gian trong recording = double-reverb đục; giờ chỉ SFX có không gian, bed giữ KHÔ).
+- Music: **LowPassFilter 900Hz disabled** — bật khi PAUSE = muffle "lặn xuống nước" (`pause_menu._set_music_muffle`; tắt khi resume + khi về menu).
+
+**Humanize** (`stream_manager`): impacts mỗi tick 0.55s trước đây nổ ĐỒNG LOẠT cùng frame (chord phasey) → giờ mỗi impact delay ngẫu nhiên 0–120ms = nhịp tay người chơi thật. Timer nổ sau khi block bị xóa vẫn an toàn (`_node_of` null-safe — verify).
+
+**Anti-machine-gun** (`audio_manager`): `_can_start(kind)` dedupe 35ms cho wood_hit/wood_pitch (nguồn spam chính); CHIME cố ý không dedupe (nốt chồng = hợp âm mong muốn).
+
+**3D tuning**: pool players `panning_strength 1.4` (stereo rõ trái/phải) + `unit_size 8` + inverse-square attenuation.
+
+**Theme ambience mix** (`ambient_music.apply_theme_mix`): mưa tween 1.2s theo map — Thu -18dB (rõ, ấm cúng), Đêm -24, Xuân -28 (thoảng), Tuyết -44 (tuyết "nuốt" âm). Gọi khi đổi card menu + vào game.
+
+Verify runner: bus topology đúng 5 effect, muffle toggle, rain tween, staggered impacts + xóa giữa chừng — **AUDIO ALL OK**; full regression vẫn **REGRESS ALL OK, 0 error**.
+
+## PHẦN 53: Tắt tiếng hệ ống (user feedback)
+
+Tiếng trong ống tre (nguồn + ống dẫn) quá to → tắt TẠM:
+- `_refresh_source_audio`: disable — không spawn water-trickle loop per source nữa (dọn player cũ). Bật lại sau với loop nhỏ + filtered nếu muốn.
+- `_play_impact`: PIPE/PIPE_BEND/SOURCE → IM LẶNG (nước đi TRONG hệ ống không kêu; chỉ đích cuối cùng kêu — wood/gear/bell/trống/chime...).
+Boot + REGRESS ALL OK.

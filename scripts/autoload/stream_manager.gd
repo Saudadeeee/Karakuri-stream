@@ -85,13 +85,17 @@ func _process(delta: float) -> void:
 			_rebuild_timer = 0.0
 			_dirty = false
 			_rebuild()
-	# Repeating impact sounds — a steady water-and-wood rhythm.
+	# Repeating impact sounds — a steady water-and-wood rhythm. Each impact is
+	# HUMANIZED with a small random delay so simultaneous strikes roll like a
+	# hand-played pattern instead of one loud phasey chord every tick.
 	if not _impacts.is_empty():
 		_impact_timer += delta
 		if _impact_timer >= IMPACT_INTERVAL:
 			_impact_timer = 0.0
 			for cell in _impacts:
-				_play_impact(cell, _impacts[cell])
+				var wait: float = randf_range(0.0, 0.12)
+				get_tree().create_timer(wait).timeout.connect(
+					_play_impact.bind(cell, _impacts[cell]))
 
 # ---------------------------------------------------------------- tracing
 func _rebuild() -> void:
@@ -227,33 +231,25 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 			var pin: Node3D = _node_of(cell)
 			if pin:
 				pin.splash()
-		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.PIPE, \
-		BlockData.Type.PIPE_BEND, BlockData.Type.SOURCE, BlockData.Type.MUSIC_BOX, \
+		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.MUSIC_BOX, \
 		BlockData.Type.SCOOP:
 			AudioManager.play_wood_hit(pos)
 		_:
-			pass  # water: splash only
+			# Water: splash only. PIPE/SOURCE deliberately SILENT — water moving
+			# through the bamboo system shouldn't knock; only what it finally
+			# lands on sings (the constant in-pipe noise was overwhelming).
+			pass
 	_spawn_splash(pos)
 
-## A continuous water-trickle loop plays from every SOURCE spout — the steady
-## babbling brook under all the knocks and chimes.
-func _refresh_source_audio(sources: Array) -> void:
-	var want: Dictionary = {}
-	for c in sources:
-		want[c] = true
+## TEMPORARILY DISABLED (user feedback): the per-spout water-trickle loop was
+## far too loud and constant. Any existing players are cleaned up; nothing new
+## spawns. Re-enable later with a much quieter, filtered loop if wanted.
+func _refresh_source_audio(_sources: Array) -> void:
 	for c in _source_audio.keys():
-		if not want.has(c):
-			var old: AudioStreamPlayer3D = _source_audio[c]
-			if is_instance_valid(old):
-				old.queue_free()
-			_source_audio.erase(c)
-	for c in sources:
-		if not _source_audio.has(c):
-			var p: AudioStreamPlayer3D = AudioManager.make_water_loop_player()
-			p.position = GridManager.cell_to_world(c)
-			add_child(p)
-			p.play()
-			_source_audio[c] = p
+		var old: AudioStreamPlayer3D = _source_audio[c]
+		if is_instance_valid(old):
+			old.queue_free()
+	_source_audio.clear()
 
 func _node_of(cell: Vector3i) -> Node3D:
 	var b: BlockData = GridManager.get_block(cell)

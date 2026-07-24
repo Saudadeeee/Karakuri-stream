@@ -23,18 +23,19 @@ sky = SubResource("Sky_main")
 ambient_light_source = 2
 ambient_light_color = Color(0.7, 0.72, 0.7, 1)
 ambient_light_energy = 0.45
+tonemap_mode = 2
 glow_enabled = true
-glow_intensity = 0.35
-glow_bloom = 0.1
+glow_intensity = 0.4
+glow_bloom = 0.15
 fog_enabled = true
 fog_light_color = Color(0.9, 0.82, 0.85, 1)
 fog_sun_scatter = 0.1
 fog_density = 0.006
 fog_sky_affect = 0.0
 adjustment_enabled = true
-adjustment_brightness = 1.03
-adjustment_contrast = 1.06
-adjustment_saturation = 1.15
+adjustment_brightness = 1.02
+adjustment_contrast = 1.09
+adjustment_saturation = 1.2
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_island_top"]
 top_radius = 9.0
@@ -75,6 +76,12 @@ light_energy = 0.9
 shadow_enabled = true
 shadow_blur = 2.5
 directional_shadow_blend_splits = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="." unique_id=22621466]
+transform = Transform3D(-0.766, 0.321, -0.556, 0, 0.866, 0.5, 0.643, 0.383, -0.663, 0, 8, 0)
+light_color = Color(0.72, 0.8, 0.91, 1)
+light_energy = 0.22
+shadow_enabled = false
 
 [node name="Ground" type="StaticBody3D" parent="." unique_id=1985878747]
 

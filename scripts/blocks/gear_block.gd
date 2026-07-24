@@ -19,16 +19,28 @@ const MODELS: Dictionary = {
 ## neighbour and they visibly MESH, without the hubs merging.
 const WHEEL_DIAMETER: float = 1.1
 
+var _model_name: String = ""
+
 func _ready() -> void:
-	# Only build the default if a variant hasn't already been applied (the icon /
-	# ghost calls apply_variant before the block enters the tree).
-	if $MeshInstance3D.get_child_count() == 0:
+	# Deferred default: apply_variant (placement/save/icons) lands right after
+	# add_child — waiting one tick means we never build "gear" only to tear it
+	# down for "mill" a moment later.
+	_ensure_default.call_deferred()
+
+func _ensure_default() -> void:
+	if _model_name == "":
 		_build("gear")
 
 func apply_variant(v: Dictionary) -> void:
 	_build(v.get("model", "gear"))
 
 func _build(model_name: String) -> void:
+	# apply_variant always fires right after _ready on placement — skip the
+	# wasteful tear-down/rebuild when the model wouldn't change (it also spams
+	# renderer noise when the overridden-material model is freed).
+	if model_name == _model_name:
+		return
+	_model_name = model_name
 	var pivot: Node3D = $MeshInstance3D
 	for c in pivot.get_children():
 		c.queue_free()

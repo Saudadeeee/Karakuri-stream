@@ -20,14 +20,28 @@ const RAIN_LAYER: AudioStream = preload("res://assets/sounds/rain_loop.ogg")
 
 var _timer: float = 0.0
 var _next_gap: float = 1.5   # first note comes in soon after start
+var _rain: AudioStreamPlayer
+
+## Rain sits differently in each map's soundscape: cosy and present in autumn,
+## a whisper in spring/night, muted under snow (snow "absorbs" the world).
+const RAIN_DB_BY_THEME: Array[float] = [-28.0, -18.0, -44.0, -24.0]
 
 func _ready() -> void:
 	_start_bed(CHILL_BEDS.pick_random(), -17.0)   # chill music, under the notes
-	_start_bed(RAIN_LAYER, -25.0)                 # faint rain texture
+	_rain = _start_bed(RAIN_LAYER, -25.0)         # faint rain texture
+	apply_theme_mix()
+
+## Retune the ambience mix to the current map theme (menu calls this when the
+## player switches cards; the game scene applies it on load).
+func apply_theme_mix() -> void:
+	if is_instance_valid(_rain):
+		var tw := create_tween()
+		tw.tween_property(_rain, "volume_db",
+			RAIN_DB_BY_THEME[clampi(MapThemes.current, 0, RAIN_DB_BY_THEME.size() - 1)], 1.2)
 
 ## Start one looping ambience layer on the Music bus. Loops the stream in place
 ## (ogg/mp3 both expose `loop`) so it never gaps.
-func _start_bed(stream: AudioStream, vol: float) -> void:
+func _start_bed(stream: AudioStream, vol: float) -> AudioStreamPlayer:
 	if stream is AudioStreamOggVorbis or stream is AudioStreamMP3:
 		stream.loop = true
 	var player := AudioStreamPlayer.new()
@@ -36,6 +50,7 @@ func _start_bed(stream: AudioStream, vol: float) -> void:
 	player.volume_db = vol
 	add_child(player)
 	player.play()
+	return player
 
 func _process(delta: float) -> void:
 	_timer += delta

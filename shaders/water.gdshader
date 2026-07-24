@@ -29,6 +29,11 @@ uniform float fresnel_power : hint_range(0.5, 6.0) = 3.2;
 uniform float foam_amount : hint_range(0.0, 1.0) = 0.08;
 uniform float caustic_strength : hint_range(0.0, 1.0) = 0.18;
 uniform float sparkle_strength : hint_range(0.0, 2.0) = 0.35;
+// Fake sky reflection: at grazing angles the surface mixes toward the sky's
+// warm horizon colour (matches the ProceduralSky), reading as a reflective
+// sheen without any actual reflection probe — the cheap Townscaper trick.
+uniform vec4 sky_tint : source_color = vec4(0.95, 0.84, 0.84, 1.0);
+uniform float sky_reflect : hint_range(0.0, 1.0) = 0.30;
 
 varying vec3 v_world_pos;
 varying vec3 v_world_normal;
@@ -77,6 +82,9 @@ void fragment() {
 
 	vec3 albedo = mix(base, foam_color.rgb, foam);
 	albedo += vec3(0.9, 1.0, 0.98) * caustic * 0.4;
+	// Sky sheen at grazing angles — strongest on the flat top, so a pond
+	// mirrors the pink horizon like glass while the body stays cyan.
+	albedo = mix(albedo, sky_tint.rgb, fresnel * sky_reflect * (0.35 + 0.65 * up));
 	// Baked fixed-sun shade so a water block reads as a solid convex jelly from
 	// any angle, not a hollow shell (same fix as wood — kills the concave/
 	// see-through illusion).
@@ -89,9 +97,10 @@ void fragment() {
 
 	ALBEDO = albedo;
 	ALPHA = alpha;
-	ROUGHNESS = mix(0.04, 0.5, foam);
-	METALLIC = 0.1;
-	SPECULAR = 0.5;
+	// Glassier when calm → tighter, brighter sun glint dancing on the waves.
+	ROUGHNESS = mix(0.02, 0.5, foam);
+	METALLIC = 0.12;
+	SPECULAR = 0.65;
 	// A faint self-glow of the water colour keeps the pond as lively/fresh as the
 	// emissive stream cylinders, plus the foam/caustic/sparkle highlights.
 	EMISSION = water_color.rgb * 0.08 + foam_color.rgb * (foam * 0.15 + caustic * 0.3 + sparkle * 0.5);

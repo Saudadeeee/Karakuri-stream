@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bdevregress01"]
+
+[ext_resource type="Script" path="res://tests/regression.gd" id="1"]
+
+[node name="DevRegress" type="Node"]
+script = ExtResource("1")
