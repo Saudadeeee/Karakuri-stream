@@ -874,3 +874,7 @@ Boot + REGRESS ALL OK.
 - **Nhạc**: bỏ track chill_loop.mp3 (có percussion, "sôi động" — đè tiếng nước/chuông vốn LÀ game); bed chỉ còn pad tĩnh chill_ambient.ogg, hạ -17→-24dB; generative notes hạ -4dB nữa. Tiếng game (nước, chuông, gõ) giờ là lớp chính.
 - **English toàn bộ** (77 strings): menu (Play/Settings/Quit/Map/Audio settings), map names (Spring/Autumn/Snow/Night), pause (Paused/Resume/Save build/…/Main menu + dialogs + statuses), 32 tên variant khối, 14 hint hotbar, title sub "- a water garden toy -".
 - Boot + REGRESS ALL OK; re-export đè `build/web` — tunnel giữ nguyên URL serve bản mới.
+
+## PHẦN 55: Khu vườn mẫu (starter garden)
+
+Lần đầu chơi (`not SaveManager.has_save()`) → `main_scene._build_starter_garden` dựng máy nhỏ ĐANG CHẠY ở góc -X/-Z (~11 khối): tháp source→shishi→TRỐNG (cốc…tùm mỗi chu kỳ) + chime cạnh, hồ + GEAR & MILL quay, đèn đá + jelly. Giữa đảo trống cho người chơi. Một lần duy nhất — session sau auto-load build riêng (không dựng đè, guard has_block + has_save; verify không duplicate). Test `STARTER ALL OK` + REGRESS ALL OK.
