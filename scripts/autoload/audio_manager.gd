@@ -47,6 +47,35 @@ func play_wood_hit(global_pos: Vector3) -> void:
 	player.volume_db = randf_range(-3.0, 0.0)
 	player.play()
 
+## Wood knock at an exact pitch — the karakuri percussion palette is all one
+## wood sample at different speeds (drum = slow/deep, shishi = bright "cốc").
+func play_wood_pitch(global_pos: Vector3, pitch: float, vol_db: float = 0.0) -> void:
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = WOOD_HIT
+	player.pitch_scale = pitch * randf_range(0.97, 1.03)
+	player.volume_db = vol_db + randf_range(-1.5, 0.0)
+	player.play()
+
+## Deep taiko boom.
+func play_drum(global_pos: Vector3) -> void:
+	play_wood_pitch(global_pos, 0.52, 2.5)
+
+## Shishi-odoshi tipping back: the classic double knock — "cộc… cốc!".
+func play_shishi_knock(global_pos: Vector3) -> void:
+	play_wood_pitch(global_pos, 1.45, 0.5)
+	get_tree().create_timer(0.16).timeout.connect(
+		play_wood_pitch.bind(global_pos, 0.85, 2.0))
+
+## Music-box tinkle: the chime an octave up, quiet and delicate.
+func play_music_box_note(global_pos: Vector3, note_index: int) -> void:
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = CHIME
+	player.pitch_scale = PENTATONIC_RATIOS[note_index % PENTATONIC_RATIOS.size()] * 2.0
+	player.volume_db = -9.0
+	player.play()
+
 ## A soft, springy "boing" for the jelly block — on placement and whenever a
 ## water stream lands on it. Wide pitch jitter keeps it playful, never annoying.
 func play_jelly_bounce(global_pos: Vector3) -> void:

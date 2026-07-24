@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/blocks/stone_lantern_block.gd" id="1_stone_lantern"]
+
+[sub_resource type="BoxShape3D" id="Shape_stone_lantern"]
+size = Vector3(1, 1, 1)
+
+[node name="StoneLanternBlock" type="StaticBody3D"]
+script = ExtResource("1_stone_lantern")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_stone_lantern")

@@ -92,6 +92,29 @@ static func tint(root: Node, from: Color, to: Color, threshold: float = 0.18) ->
 				d.albedo_color = to
 				mi.set_surface_override_material(s, d)
 
+## Recolours FOLIAGE — every surface whose albedo is green-dominant — toward
+## `target` (lerp 0.85 keeps a hint of shading variation). Trunks/rocks/snow are
+## untouched, so one prop set serves every seasonal map theme (autumn orange,
+## frosted winter, moonlit night). No-op when `target` is the zero Color().
+static func recolor_foliage(root: Node, target: Color) -> void:
+	if root == null or target == Color():
+		return
+	for node in root.get_children():
+		recolor_foliage(node, target)
+	if not (root is MeshInstance3D):
+		return
+	var mi: MeshInstance3D = root
+	if mi.mesh == null:
+		return
+	for s in range(mi.mesh.get_surface_count()):
+		var m: Material = mi.get_active_material(s)
+		if m is StandardMaterial3D:
+			var a: Color = (m as StandardMaterial3D).albedo_color
+			if a.g > a.r and a.g > a.b:
+				var d: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
+				d.albedo_color = a.lerp(target, 0.85)
+				mi.set_surface_override_material(s, d)
+
 ## Scale to `target_height` tall, centre in X/Z, and rest the model's BASE on
 ## `floor_y` (cell bottom = -0.5 in local block space). For standing props (bell).
 static func fit_bottom(model: Node3D, target_height: float, floor_y: float) -> void:

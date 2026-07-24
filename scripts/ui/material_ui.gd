@@ -9,8 +9,8 @@ extends Control
 const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
 const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
-const ICON_SIZE: int = 72
-const ICON_GAP: int = 14
+const ICON_SIZE: int = 44   # 14 entries must fit a ~700px-tall window
+const ICON_GAP: int = 6
 const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 const FADE_MIN_ALPHA: float = 0.18
 const SPIN_SPEED: float = 0.9
@@ -23,6 +23,13 @@ const ENTRIES: Array = [
 	BlockData.Type.GEAR,
 	BlockData.Type.BELL,
 	BlockData.Type.JELLY,
+	BlockData.Type.SHISHI,
+	BlockData.Type.DRUM,
+	BlockData.Type.CHIME,
+	BlockData.Type.MUSIC_BOX,
+	BlockData.Type.SCOOP,
+	BlockData.Type.STONE_LANTERN,
+	BlockData.Type.PINWHEEL,
 ]
 
 @export var placement_controller_path: NodePath
@@ -32,6 +39,10 @@ const ENTRIES: Array = [
 var _buttons: Dictionary = {}      # BlockData.Type -> Button
 var _pivots: Array[Node3D] = []    # spinning block roots, animated in _process
 var _pivot_by_type: Dictionary = {} # BlockData.Type -> pivot (to restyle for variant)
+var _viewport_by_type: Dictionary = {} # BlockData.Type -> SubViewport
+var _selected_type: int = BlockData.Type.WOOD
+var _hovered_type: int = -1
+var _faded: bool = false
 
 func _ready() -> void:
 	var vbox := VBoxContainer.new()
@@ -59,12 +70,20 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	sub_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	button.add_child(sub_container)
 
+	# Perf: 7 live 3D viewports re-rendering every frame is the single biggest
+	# constant GPU cost (each is its own world + 2 lights) — brutal on the
+	# gl_compatibility web/mobile targets. Icons render ONCE and freeze; only
+	# the selected / hovered icon spins (see _refresh_viewport_modes), so the
+	# animation stays exactly where the player is looking.
 	var viewport := SubViewport.new()
 	viewport.size = Vector2i(ICON_SIZE, ICON_SIZE)
 	viewport.transparent_bg = true
 	viewport.own_world_3d = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	sub_container.add_child(viewport)
+	_viewport_by_type[type] = viewport
+	button.mouse_entered.connect(_on_icon_hover.bind(type, true))
+	button.mouse_exited.connect(_on_icon_hover.bind(type, false))
 
 	var pivot := Node3D.new()
 	viewport.add_child(pivot)
@@ -130,17 +149,42 @@ func _build_icon_visual(type: BlockData.Type, variant: int) -> Node3D:
 	return mi
 
 func _process(delta: float) -> void:
-	for pivot in _pivots:
-		if is_instance_valid(pivot):
-			pivot.rotate_y(SPIN_SPEED * delta)
+	# Spin only the pivots whose viewport is live (selected/hovered) — the
+	# frozen ones would be wasted math AND look torn when they wake.
+	for type in _viewport_by_type:
+		if _viewport_by_type[type].render_target_update_mode == SubViewport.UPDATE_ALWAYS:
+			var pivot: Node3D = _pivot_by_type[type]
+			if is_instance_valid(pivot):
+				pivot.rotate_y(SPIN_SPEED * delta)
 
 	var mouse_x: float = get_viewport().get_mouse_position().x
 	var target_alpha: float = 1.0 if mouse_x <= REVEAL_ZONE else FADE_MIN_ALPHA
 	modulate.a = lerpf(modulate.a, target_alpha, clampf(delta * 6.0, 0.0, 1.0))
+	# When the strip fades out, freeze even the selected icon's viewport.
+	var faded: bool = target_alpha < 1.0
+	if faded != _faded:
+		_faded = faded
+		_refresh_viewport_modes()
+
+func _on_icon_hover(type: int, entered: bool) -> void:
+	_hovered_type = type if entered else -1
+	_refresh_viewport_modes()
+
+## One live (UPDATE_ALWAYS) viewport at a time — selected, or hovered — the
+## rest frozen on their last frame (UPDATE_ONCE keeps the image).
+func _refresh_viewport_modes() -> void:
+	for type in _viewport_by_type:
+		var live: bool = not _faded and (type == _hovered_type or (type == _selected_type and _hovered_type == -1))
+		var vp: SubViewport = _viewport_by_type[type]
+		var mode := SubViewport.UPDATE_ALWAYS if live else SubViewport.UPDATE_ONCE
+		if vp.render_target_update_mode != mode:
+			vp.render_target_update_mode = mode
 
 func _on_material_changed(type: BlockData.Type, variant: int = 0) -> void:
 	for button_type in _buttons:
 		_buttons[button_type].set_pressed_no_signal(button_type == type)
+	_selected_type = type
+	_refresh_viewport_modes()
 	# Rebuild the selected type's icon so it SHOWS the current variant
 	# (open pipe, dirt block, pink water, mill wheel, …).
 	var pivot: Node3D = _pivot_by_type.get(type)

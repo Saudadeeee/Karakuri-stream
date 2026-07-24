@@ -37,7 +37,7 @@ theme_override_constants/separation = 10
 
 [node name="VolumeLabel" type="Label" parent="Panel/VBoxContainer/VolumeRow"]
 layout_mode = 2
-text = "🔊 Âm lượng"
+text = "Âm lượng"
 
 [node name="VolumeSlider" type="HSlider" parent="Panel/VBoxContainer/VolumeRow"]
 custom_minimum_size = Vector2(140, 0)
@@ -50,27 +50,27 @@ value = 0.8
 [node name="ResumeButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "▶️ Tiếp tục"
+text = "Tiếp tục"
 
 [node name="SaveButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "💾 Lưu công trình"
+text = "Lưu công trình"
 
 [node name="LoadButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "📂 Tải công trình"
+text = "Tải công trình"
 
 [node name="ClearButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "🗑️ Xoá toàn bộ"
+text = "Xoá toàn bộ"
 
 [node name="MenuButton" type="Button" parent="Panel/VBoxContainer"]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "🏠 Về menu chính"
+text = "Về menu chính"
 
 [node name="StatusLabel" type="Label" parent="Panel/VBoxContainer"]
 layout_mode = 2

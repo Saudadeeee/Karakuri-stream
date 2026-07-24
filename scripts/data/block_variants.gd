@@ -39,6 +39,27 @@ const V: Dictionary = {
 	BlockData.Type.BELL: [{"name": "Chuông"}],
 	BlockData.Type.SOURCE: [{"name": "Vòi tre"}],
 	BlockData.Type.PIPE_BEND: [{"name": "Ống cong"}],
+	# Phong linh: each variant is a FIXED pentatonic note (C D E G A) so a row
+	# of chimes becomes a playable melody. note = index into PENTATONIC_RATIOS.
+	# Saturated, clearly-separated note colours — pastel versions washed out to
+	# near-white under the game sun, losing the "read the melody by colour" idea.
+	BlockData.Type.CHIME: [
+		{"name": "Linh Đô", "note": 0, "color": "#2FA89A"},
+		{"name": "Linh Rê", "note": 1, "color": "#3E7EC6"},
+		{"name": "Linh Mi", "note": 2, "color": "#7C5BBF"},
+		{"name": "Linh Sol", "note": 3, "color": "#D14E8A"},
+		{"name": "Linh La", "note": 4, "color": "#E08A2E"},
+	],
+	BlockData.Type.SHISHI: [{"name": "Ống gõ đá"}],
+	BlockData.Type.STONE_LANTERN: [{"name": "Đèn đá"}],
+	BlockData.Type.PINWHEEL: [
+		{"name": "Chong chóng hồng", "color": "#F49CC4"},
+		{"name": "Chong chóng cam", "color": "#F2A65E"},
+		{"name": "Chong chóng xanh", "color": "#7BD1E8"},
+	],
+	BlockData.Type.DRUM: [{"name": "Trống gỗ"}],
+	BlockData.Type.MUSIC_BOX: [{"name": "Hộp nhạc"}],
+	BlockData.Type.SCOOP: [{"name": "Gầu múc"}],
 }
 
 static func list_for(type: int) -> Array:

@@ -18,6 +18,10 @@ const MAIN_MENU := "res://scenes/main_menu.tscn"
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
+	# Seamless continue: "Về menu chính" auto-saves, so entering the game
+	# restores the last build automatically (first run has no save → skipped).
+	if SaveManager.has_save():
+		SaveManager.load_game.call_deferred()
 
 	resume_button.pressed.connect(_on_resume_pressed)
 	save_button.pressed.connect(_on_save_pressed)
@@ -65,9 +69,16 @@ func _on_load_confirmed() -> void:
 func _on_clear_confirmed() -> void:
 	GridManager.clear_all()
 
-## Back to the start menu. Unpause first (the tree stays paused across a scene
-## change otherwise) so the menu is responsive.
+## Back to the start menu. Auto-save, then CLEAR THE GRID before leaving:
+## the block nodes die with this scene, but GridManager and the visual
+## managers (VoxelSurface/PondDecor/Stream) are autoloads that survive the
+## scene change — without clear_all() their merged surfaces, koi ponds and
+## streams keep rendering on top of the menu and pollute the next session.
+## clear_all() emits grid_cleared, which every manager already listens to.
+## Unpause first (the tree stays paused across a scene change otherwise).
 func _on_menu_pressed() -> void:
+	SaveManager.save_game()
+	GridManager.clear_all()
 	get_tree().paused = false
 	get_tree().change_scene_to_file(MAIN_MENU)
 
@@ -92,5 +103,8 @@ func _load_settings() -> void:
 
 func _save_settings(volume: float) -> void:
 	var config := ConfigFile.new()
+	# Load first so the other keys the main-menu settings panel wrote
+	# (music_volume / sfx_volume) survive — a fresh ConfigFile would wipe them.
+	config.load(SETTINGS_PATH)
 	config.set_value("audio", "master_volume", volume)
 	config.save(SETTINGS_PATH)

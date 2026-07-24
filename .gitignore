@@ -22,3 +22,4 @@ mono_crash.*.json
 
 # Claude Code session-local state (not project content)
 /.claude/
+build/

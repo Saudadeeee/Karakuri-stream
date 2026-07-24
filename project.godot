@@ -28,6 +28,7 @@ PondDecorManager="*res://scripts/autoload/pond_decor_manager.gd"
 FireflyManager="*res://scripts/autoload/firefly_manager.gd"
 GearManager="*res://scripts/autoload/gear_manager.gd"
 SaveManager="*res://scripts/autoload/save_manager.gd"
+UndoManager="*res://scripts/autoload/undo_manager.gd"
 AmbientLeaves="*res://scripts/autoload/ambient_leaves.gd"
 SceneryManager="*res://scripts/autoload/scenery_manager.gd"
 
@@ -49,3 +50,6 @@ theme/custom="res://ui/karakuri_theme.tres"
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+lights_and_shadows/directional_shadow/size=2048
+lights_and_shadows/directional_shadow/size.mobile=1024
+textures/vram_compression/import_etc2_astc=true

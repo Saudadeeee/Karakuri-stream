@@ -688,3 +688,113 @@ User: thêm toàn bộ UI game — menu bắt đầu, button, khung lựa chọn
 **Pause menu**: theme tự áp (giấy kem + nút gỗ + slider) + thêm nút "🏠 Về menu chính" (unpause → về menu).
 
 Verify ảnh `_menu`/`_menu_settings`/`_game_pause`: title gỗ, nút thẻ gỗ, panel giấy, slider tre+salmon, hotbar có khung gỗ quanh icon 3D. Boot sạch từ menu, dev dọn.
+
+## PHẦN 42: System sweep + fix 2 bug (settings wipe, stale grid qua scene)
+
+Full check: boot menu+game sạch; refs GLB/sound đã xóa = 0 dangling; preload toàn bộ tồn tại; flow test tự động (menu→game→build→save→clear→load→variants giữ) = ALL OK.
+
+**Bug 1 — pause volume xoá settings menu**: `pause_menu._save_settings` tạo ConfigFile MỚI chỉ ghi `master_volume` → wipe `music_volume`/`sfx_volume` (panel menu ghi). Fix: `config.load()` trước khi set+save.
+
+**Bug 2 — stale grid ám menu**: `_on_menu_pressed` chỉ đổi scene. Block nodes chết theo main.tscn nhưng GridManager + VoxelSurface/PondDecor/Stream (autoload, vẽ vào chính mình) SỐNG xuyên scene → isosurface gỗ/nước + koi + stream đè lên menu, state bẩn khi chơi lại. Fix: rời game = `SaveManager.save_game()` → `GridManager.clear_all()` (emit `grid_cleared`, mọi manager tự dọn — verify `get_child_count()==0`/`_ponds`/`_segments` rỗng) → đổi scene. Vào game (`pause_menu._ready`): `has_save()` → auto `load_game()` deferred = seamless continue, không mất công trình.
+
+## PHẦN 43: Hệ MAP THEME — 4 bản đồ, mỗi map một theme nhìn phát biết
+
+User: nhiều map, mỗi map theme riêng RÕ RÀNG, gameplay thư giãn giữ nguyên.
+
+**`scripts/data/map_themes.gd`** (class_name MapThemes, static registry + `current` persist `settings.cfg [map] theme`):
+| # | Map | Nhận diện |
+|---|---|---|
+| 0 | Vườn Xuân | trời hồng pastel, sakura, cánh hoa hồng bay (bản gốc) |
+| 1 | Rừng Thu | trời hổ phách, lá cây CAM (recolor), đảo vàng nâu, lá phong rơi |
+| 2 | Đồi Tuyết | trời xanh băng, đảo TRẮNG, cây phủ sương, tuyết rơi |
+| 3 | Đêm Đom Đóm | trời chàm, đảo tối, thông teal ánh trăng, ĐOM ĐÓM vàng phát sáng bay LÊN (emissive→bloom) |
+
+Mỗi theme: sky top/horizon, fog màu+đậm, sun màu/energy, ambient, island top/base, mountain_tint, foliage target, drift {màu, size, gravity, amount, glow}.
+
+- **`MeshFit.recolor_foliage(root, target)`**: surface albedo XANH-trội (g>r,g>b) lerp 0.85 → target; thân/đá/tuyết giữ nguyên → 1 bộ prop phục vụ 4 mùa.
+- **`main_scene.gd`** (script MỚI gắn root main.tscn): `_ready` → `MapThemes.apply_environment(env, sun)` + repaint 2 material đảo.
+- **`scenery_manager.gd`**: PROPS đổi key string + slot "feature" (sakura/maple=pine cam/pine tuyết/pine teal); `rebuild()` wipe+đặt lại (gọi khi đổi theme); mountain `_tint_all` multiply; **fix lantern nằm đổ**: GLB authored nằm ngang → heuristic AABB (rộng>cao=đổ) xoay đứng qua WRAPPER (local_aabb bỏ transform root nên rotation phải nằm ở con, fit trên wrapper).
+- **`ambient_leaves.gd`**: hạt drift THEO THEME (petals/lá/tuyết/đom đóm — đom đóm gravity dương bay lên + emissive 2.2 ăn bloom); `rebuild()`.
+- **Menu picker**: hàng 4 CARD màu trời theme (nền = sky_horizon, viền salmon khi chọn, chữ trắng nếu trời tối); bấm → set+save current, repaint backdrop LIVE + SceneryManager/AmbientLeaves rebuild.
+
+Gameplay 0 đổi (block/nước/gear y nguyên). Verify ảnh 4 theme + menu picker: khác biệt rõ. Boot sạch, dev dọn.
+
+## PHẦN 44: Tối ưu hiệu năng (giữ nguyên animation)
+
+Bench thật (vsync off, 1280x720, máy dev): empty 2.47ms / 250 khối+12 gear 3.51ms → sau tối ưu **1.61ms / 2.58ms (−35%/−26%)** — tiết kiệm GPU-side nên web/mobile (gl_compatibility, yếu 10-20×) lợi hơn nhiều.
+
+1. **Hotbar SubViewports** (nặng nhất): 7 viewport `UPDATE_ALWAYS` = 7 world 3D + 14 đèn re-render MỌI frame. → mặc định `UPDATE_ONCE` (đóng băng frame đầu); chỉ icon ĐANG CHỌN hoặc HOVER = `UPDATE_ALWAYS` + quay (`_refresh_viewport_modes`); strip fade mờ → đóng băng cả selected. Animation giữ đúng chỗ mắt nhìn.
+2. **GearManager**: BFS drive-train + probe wetness mỗi frame → `_recompute_power()` theo timer `POWER_RECHECK=0.2s`, cache `_powered`/`_gears_cache`; XOAY vẫn per-frame từ cache → spin mượt y cũ. Guard block null (cache stale 0.2s). Clear cache khi grid_cleared.
+3. **Shadow map**: directional 4096→2048 (mobile 1024) — blur 2.5 sẵn, không khác biệt nhìn thấy.
+
+Đã kiểm: voxel isosurface có throttle 0.05s ✓, water_flow queue 0.09s ✓, stream chỉ rebuild khi dirty ✓, particles amount nhỏ ✓. Visual verify ảnh: hotbar đủ icon, shadow mềm, gear khớp. Boot sạch.
+
+## PHẦN 45: 5 KHỐI KARAKURI MỚI (chất automata Nhật — nước→cơ→âm)
+
+User: game chưa đủ chất karakuri — thêm object/mechanic thể loại cần; placeholder block đơn giản, polygon sau.
+
+| Khối | Phím | Mechanic |
+|---|---|---|
+| **Ống gõ đá** (Shishi-odoshi) | 8 | Stream rót vào → `fill()` mỗi tick (0.55s), đầy 2 tick → LẬT: đổ nước TIẾP xuống dưới (`StreamManager.add_temp_source(cell, 0.9s)`) + "cộc…cốc!" (double knock) + bật lại ELASTIC |
+| **Trống gỗ** (taiko) | 9 | Stream rơi trúng HOẶC gear kề mỗi vòng quay → `hit()`: "tùm" trầm (wood pitch 0.52) + squash |
+| **Phong linh** (chime) | 0 | 5 VARIANT = 5 nốt pentatonic C-D-E-G-A cố định (màu ống theo nốt) → xếp hàng dưới stream = GIAI ĐIỆU người chơi tự soạn |
+| **Hộp nhạc** | - | Gear kề POWERED → tay quay xoay + chơi giai điệu pentatonic 8 nốt preset (chime octave cao, nhỏ) |
+| **Gầu múc** (scoop) | = | Kề HỒ + kề GEAR powered → guồng quay + TẠO DÒNG MỚI từ ô mình (nước→cơ→nước, vòng năng lượng karakuri) |
+
+Hạ tầng:
+- `StreamManager`: `_temp_sources` (expire msec, prune trong `_process`), `add_temp_source()`, `is_scoop_active()` (kề WATER + kề gear `GearManager.is_powered`); `_rebuild` trace thêm temp+scoop; `_play_impact` route SHISHI→fill/CHIME→ring/DRUM→hit.
+- `GearManager`: `is_powered`/`is_powered_neighbor` (đọc cache `_powered`); `_recompute_power` đổi kết quả → `StreamManager._on_changed()` (scoop retrace); `_strike_adjacent_bells` thêm DRUM.
+- `AudioManager`: `play_wood_pitch` (1 sample gỗ nhiều tốc độ = cả bộ gõ), `play_drum`, `play_shishi_knock` (double), `play_music_box_note` (chime ×2 pitch).
+- Hotbar 12 icon (ICON_SIZE 72→54, gap 8); phím 8/9/0/-/=. Save/load generic tự work (type+variant).
+- Placeholder visual = primitives matte đúng palette artstyle (tre/gỗ/đá/chu sa) — sculpt Blockbench sau.
+
+Verify tự động `KARAKURI ALL OK`: shishi lật (temp source xuất hiện), scoop active, music box thấy gear. Ảnh: shishi nghiêng đổ + scoop phun dòng mới cạnh gear quay. Boot sạch.
+
+## PHẦN 46: Sculpt Blockbench 7 model karakuri (đúng mechanic)
+
+User: vẽ lại toàn bộ bằng Blockbench hợp mechanic nhất. 10 GLB mới (phần ĐỘNG tách file riêng để script animate = đúng mechanic):
+
+| Model | GLB | Ghi chú |
+|---|---|---|
+| Chuông | `bell.glb` | Khung 2 cột + xà + mái torii; chuông ĐỒNG ấm #D9B36C (hết "xô trắng") + vành đậm + quả lắc đỏ |
+| Cối xay | `mill.glb` | 6 cánh DÀY + đĩa + hub đậm + băng accent (hết cánh gầy) |
+| Shishi | `shishi_base.glb` (đá+rêu+cột+chạc) + `shishi_arm.glb` (ống tre+đốt+band đỏ) — arm instance dưới pivot `_arm` → tip animation | 
+| Trống | `drum.glb` | Taiko: thùng phình + da kem + đai + đinh đỏ + chân xoạc — squash cả model khi hit |
+| Phong linh | `chime_frame.glb` (cột+arm+hook) + `chime_tube.glb` (ống+cap+lắc+giấy gió) — tube dưới pivot `_swing`, TINT theo nốt (`MeshFit.tint` từ base #9BD4CE); fatten ×1.7 ngang (fit uniform quá mảnh) |
+| Hộp nhạc | `music_box.glb` | Hộp chạm + nắp inlay đỏ + TRỤC NHẠC lộ pin + trục quay; knob tay quay giữ procedural (xoay) |
+| Gầu múc | `scoop_mast.glb` (cột+chân+ổ trục) + `scoop_wheel.glb` (hub+4 arm+4 cup đỏ, mặt XY trục Z) — wheel dưới pivot `_wheel` quay |
+
+Pipeline như cũ (OBJ → bb_bridge + cmap → GLB). 5 script đổi primitives → GLB, MECHANIC GIỮ NGUYÊN (fill/dump/hit/ring/tint/melody/spin). Verify: `KARA2 ALL OK` (shishi tip + scoop active với art mới) + ảnh lineup/close/in-game. Boot sạch.
+
+## PHẦN 47: Audit toàn bộ 3D art
+
+Render lưới MỌI type × variant + decor, 3 góc. Kết quả:
+- **1 vấn đề thật**: 5 màu nốt phong linh pastel (#9BD4CE…#F2D3A8) washed TRẮNG dưới nắng game → không phân biệt nốt, mất mechanic "nhìn màu biết nốt". Fix: bảng saturated `block_variants` — Đô #2FA89A / Rê #3E7EC6 / Mi #7C5BBF / Sol #D14E8A / La #E08A2E. Verify: 5 ống phân biệt rõ.
+- Pass: bell đồng, drum taiko, shishi (đá+tre band đỏ), musicbox, scoop wheel, jelly ×4 mặt, koi, lily, mill đứng `apply_axis(±X)` = guồng nước cánh dày ✓, sakura/núi/lantern (đã dựng thẳng PHẦN 43).
+- Minor chấp nhận: jelly tím pastel hơi nhạt (chủ ý pastel); gear/mill mặc định nằm phẳng (đúng behavior mặt đặt).
+
+## PHẦN 48: 4 nâng cấp "magic per click" (chạm bar Townscaper)
+
+1. **Undo/redo** — autoload `UndoManager` (stack 200): placement record place/remove (type+variant+gear axis); Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z). Undo remove RESTORE đầy đủ (đường recreate giống SaveManager load: variant, axis, refresh pipe/source). `clear()` khi cần.
+2. **Auto-decor mặt gỗ trống** — `decor_manager`: MỌI wood có mặt trên trống, sau 5-13s roll 45% mọc 1 trong {hoa (thân+đầu ấm), cặp đá cuội, mầm 2 lá} — grow-in tween BACK; đặt block đè lên → decor xóa ngay (roll null = không re-roll). Con của block node → clear_all tự dọn.
+3. **Click feedback** — `_play_place_sound`: MỖI loại 1 giọng khi đặt (gỗ=knock, nước/jelly=plop, bell=chime, phong linh=NỐT CỦA NÓ, trống=tùm, shishi=cộc-cốc, hộp nhạc=nốt đầu, gear=clack cao, tre=knock 1.1); đặt khối CẠNH NƯỚC → ripple splash trên mặt pond (`StreamManager._spawn_splash`).
+4. **Photo mode** — `main_scene`: phím **H** ẩn UI+ghost (placement.photo_mode), **U** xoay nắng 30°/lần (golden hour). 
+
+Verify `POLISH ALL OK`: undo place/remove + redo giữ variant, top-decor spawn đúng parent + xóa khi bị che, photo toggle UI. Ảnh: photo mode sạch + sprouts mọc + nắng xoay. Boot sạch.
+
+## PHẦN 49: 2 khối mới + edge fixes + WEB TEST THẬT
+
+**2 khối mới:**
+- **Đèn đá** (STONE_LANTERN): lantern.glb dựng thẳng (heuristic AABB chọn trục xoay theo CHIỀU DÀI — model nằm dọc Z nên xoay quanh X; fix cả scenery ring), panel sáng emissive "thở" (sin 1.7Hz) → ăn bloom, map Đêm lung linh.
+- **Chong chóng nước** (PINWHEEL, 3 màu variant): stream chạm → `splash()` spin burst +6 (max 14) + flutter giấy nhẹ, ma sát wind-down. StreamManager impact case mới.
+- Hotbar 14 icon (ICON_SIZE 44/gap 6).
+
+**Edge fixes:**
+- Placement CLAMP bán kính 12 + y 0..24 — trước đó đặt xa trên collider 50×50 → AABB voxel-grid nổ (2 khối cách 40 ô = 4M+ samples, freeze).
+- Shishi bị XÓA giữa lúc đổ → temp source mồ côi phun nước từ ô trống 0.9s — prune theo type ngay trong `_process`.
+
+**WEB EXPORT + TEST THẬT (Chrome headless + puppeteer):**
+- Steam Godot export lỗi câm "configuration errors:" → nguyên nhân THẬT: `for_mobile=true` đòi ETC2/ASTC chưa import (message bị nuốt). Fix chuẩn: `textures/vram_compression/import_etc2_astc=true` + dùng official Godot 4.7.1 binary + templates 4.7.1.stable (tải tpz, extract web zips). Preset `web_nothreads` (không SharedArrayBuffer → host tĩnh nào cũng chạy, không cần COOP/COEP).
+- Build 51MB (wasm 39 + pck 13.6), `build/` gitignore.
+- Test end-to-end qua puppeteer-core: boot OK, **menu → Chơi → đặt khối** hoạt động, **144 FPS (vsync cap) cả trên SwiftShader CPU-render** → GPU thật dư sức. 0 JS error (chỉ warning AudioContext autoplay chuẩn browser).
+- **Bug web thật tìm ra**: emoji trong nút (▶⚙✕🔊💾…) = ô vuông tofu (web không có font emoji hệ thống) → bỏ toàn bộ emoji UI text (menu + pause), "～" → "-".

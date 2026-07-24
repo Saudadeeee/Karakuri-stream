@@ -18,6 +18,7 @@ const STREAM_RADIUS := 0.09
 var _segments: Array = []            # [{a:Vector3, b:Vector3}] world-space
 var _impacts: Dictionary = {}        # Vector3i target cell -> BlockData.Type
 var _driven_gears: Dictionary = {}   # Vector3i gear cell struck by a stream
+var _temp_sources: Dictionary = {}   # Vector3i -> expire msec (shishi dumps)
 var _visual_root: Node3D
 var _stream_mat: StandardMaterial3D
 var _source_audio: Dictionary = {}   # Vector3i (source cell) -> AudioStreamPlayer3D (trickle loop)
@@ -44,7 +45,40 @@ func _ready() -> void:
 func _on_changed(_cell: Vector3i = Vector3i.ZERO) -> void:
 	_dirty = true
 
+## A karakuri block (shishi-odoshi) dumping its load becomes a short-lived
+## stream source at `cell` — the water visibly continues on below it.
+func add_temp_source(cell: Vector3i, duration_s: float) -> void:
+	_temp_sources[cell] = Time.get_ticks_msec() + int(duration_s * 1000.0)
+	_dirty = true
+
+## A scoop is ladling when it borders a pond AND a powered gear (the gear
+## lifts, the pond supplies) — then this cell pours a new stream.
+func is_scoop_active(cell: Vector3i) -> bool:
+	var b: BlockData = GridManager.get_block(cell)
+	if b == null or b.type != BlockData.Type.SCOOP:
+		return false
+	var has_water := false
+	var has_power := false
+	for dir in GridManager.DIRECTIONS:
+		var nb: BlockData = GridManager.get_block(cell + dir)
+		if nb == null:
+			continue
+		if nb.type == BlockData.Type.WATER:
+			has_water = true
+		elif nb.type == BlockData.Type.GEAR and GearManager.is_powered(cell + dir):
+			has_power = true
+	return has_water and has_power
+
 func _process(delta: float) -> void:
+	# Expire finished shishi dumps (and retrace without them). Also drop a dump
+	# whose shishi was REMOVED mid-pour — otherwise water keeps streaming out
+	# of the empty cell until the timer runs out.
+	var now: int = Time.get_ticks_msec()
+	for cell in _temp_sources.keys():
+		var b: BlockData = GridManager.get_block(cell)
+		if _temp_sources[cell] <= now or b == null or b.type != BlockData.Type.SHISHI:
+			_temp_sources.erase(cell)
+			_dirty = true
 	if _dirty:
 		_rebuild_timer += delta
 		if _rebuild_timer >= REBUILD_INTERVAL:
@@ -67,6 +101,12 @@ func _rebuild() -> void:
 	var sources: Array = GridManager.get_all_cells_of_type(BlockData.Type.SOURCE)
 	for cell in sources:
 		_trace(cell)
+	# Karakuri-made water: tipping shishi tubes + ladling scoops pour too.
+	for cell in _temp_sources:
+		_trace(cell)
+	for cell in GridManager.get_all_cells_of_type(BlockData.Type.SCOOP):
+		if is_scoop_active(cell):
+			_trace(cell)
 	_refresh_source_audio(sources)
 	_render()
 
@@ -170,8 +210,26 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 					node.ring()
 		BlockData.Type.JELLY:
 			AudioManager.play_jelly_bounce(pos)
+		# Karakuri targets: the stream OPERATES them instead of just splashing.
+		BlockData.Type.SHISHI:
+			var shishi: Node3D = _node_of(cell)
+			if shishi:
+				shishi.fill()
+		BlockData.Type.CHIME:
+			var chime: Node3D = _node_of(cell)
+			if chime:
+				chime.ring()
+		BlockData.Type.DRUM:
+			var drum: Node3D = _node_of(cell)
+			if drum:
+				drum.hit()
+		BlockData.Type.PINWHEEL:
+			var pin: Node3D = _node_of(cell)
+			if pin:
+				pin.splash()
 		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.PIPE, \
-		BlockData.Type.PIPE_BEND, BlockData.Type.SOURCE:
+		BlockData.Type.PIPE_BEND, BlockData.Type.SOURCE, BlockData.Type.MUSIC_BOX, \
+		BlockData.Type.SCOOP:
 			AudioManager.play_wood_hit(pos)
 		_:
 			pass  # water: splash only

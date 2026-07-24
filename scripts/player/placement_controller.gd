@@ -57,6 +57,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			select_material(BlockData.Type.BELL)
 		elif event.keycode == KEY_7:
 			select_material(BlockData.Type.JELLY)
+		elif event.keycode == KEY_8:
+			select_material(BlockData.Type.SHISHI)
+		elif event.keycode == KEY_9:
+			select_material(BlockData.Type.DRUM)
+		elif event.keycode == KEY_0:
+			select_material(BlockData.Type.CHIME)
+		elif event.keycode == KEY_MINUS:
+			select_material(BlockData.Type.MUSIC_BOX)
+		elif event.keycode == KEY_EQUAL:
+			select_material(BlockData.Type.SCOOP)
 	elif event is InputEventMouseButton and event.pressed:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -76,7 +86,13 @@ func _raycast_from_mouse() -> Dictionary:
 	query.collision_mask = collision_mask
 	return space_state.intersect_ray(query)
 
+## Photo mode (main_scene toggles this): hide the ghost for clean screenshots.
+var photo_mode: bool = false
+
 func _update_ghost() -> void:
+	if photo_mode:
+		_ghost_root.visible = false
+		return
 	var hit: Dictionary = _raycast_from_mouse()
 	if hit.is_empty():
 		_ghost_valid = false
@@ -87,7 +103,13 @@ func _update_ghost() -> void:
 	var place_cell: Vector3i = hit_cell + Vector3i(round(normal.x), round(normal.y), round(normal.z))
 	_ghost_cell = place_cell
 	_ghost_normal = normal
-	_ghost_valid = not GridManager.has_block(place_cell)
+	# Keep builds on/near the island: the ground collider is a big 50×50 plane,
+	# and a block placed way out would also blow up the merged-surface rebuild
+	# (its sample grid spans the AABB of ALL cells). Radius 12 covers the
+	# island (r=9) plus a small ledge.
+	var on_island: bool = Vector2(place_cell.x, place_cell.z).length() <= 12.0 \
+		and place_cell.y >= 0 and place_cell.y <= 24
+	_ghost_valid = on_island and not GridManager.has_block(place_cell)
 	_ghost_root.visible = _ghost_valid
 	if _ghost_valid:
 		_ghost_root.position = GridManager.cell_to_world(place_cell)
@@ -181,14 +203,45 @@ func _place_block() -> void:
 		instance.grid_cell = _ghost_cell
 	_animate_drop(instance, final_pos, _current_type)
 	GridManager.set_block(_ghost_cell, block)
+	UndoManager.record_place(_ghost_cell, block)
 	if _current_type == BlockData.Type.PIPE:
 		instance.refresh_shape()
 	elif _current_type == BlockData.Type.SOURCE:
 		instance.face_adjacent_water()
-	if _current_type == BlockData.Type.WOOD:
-		AudioManager.play_wood_hit(final_pos)
-	elif _current_type == BlockData.Type.JELLY:
-		AudioManager.play_jelly_bounce(final_pos)
+	_play_place_sound(_current_type, final_pos)
+	# Placing water — or landing a block right beside water — sends a ripple
+	# splash through the pond surface.
+	if _current_type != BlockData.Type.WATER:
+		for dir in GridManager.DIRECTIONS:
+			var nb: BlockData = GridManager.get_block(_ghost_cell + dir)
+			if nb != null and nb.type == BlockData.Type.WATER:
+				StreamManager._spawn_splash(GridManager.cell_to_world(_ghost_cell + dir) + Vector3(0, 0.55, 0))
+				break
+
+## Every material lands with its OWN voice — the placement itself is already
+## an instrument (wood knock, water plop, drum boom, this chime's note…).
+func _play_place_sound(type: BlockData.Type, pos: Vector3) -> void:
+	match type:
+		BlockData.Type.WOOD:
+			AudioManager.play_wood_hit(pos)
+		BlockData.Type.WATER:
+			AudioManager.play_jelly_bounce(pos)          # soft wet plop
+		BlockData.Type.JELLY:
+			AudioManager.play_jelly_bounce(pos)
+		BlockData.Type.BELL:
+			AudioManager.play_chime(pos)
+		BlockData.Type.CHIME:
+			AudioManager.play_chime(pos, int(BlockVariants.get_variant(type, _current_variant).get("note", 0)))
+		BlockData.Type.DRUM:
+			AudioManager.play_drum(pos)
+		BlockData.Type.SHISHI:
+			AudioManager.play_shishi_knock(pos)
+		BlockData.Type.MUSIC_BOX:
+			AudioManager.play_music_box_note(pos, 0)
+		BlockData.Type.GEAR:
+			AudioManager.play_wood_pitch(pos, 1.25, -1.0)  # lighter clack
+		_:  # pipe, source, scoop… bamboo-ish knock
+			AudioManager.play_wood_pitch(pos, 1.1, -1.0)
 
 func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type) -> void:
 	instance.position = final_pos + Vector3(0.0, 3.0, 0.0)
@@ -292,4 +345,7 @@ func _remove_block() -> void:
 		return
 	var normal: Vector3 = hit["normal"]
 	var hit_cell: Vector3i = GridManager.world_to_cell(hit["position"] - normal * 0.5)
+	var block: BlockData = GridManager.get_block(hit_cell)
+	if block != null:
+		UndoManager.record_remove(hit_cell, block)
 	GridManager.remove_block(hit_cell)

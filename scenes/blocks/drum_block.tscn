@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/blocks/drum_block.gd" id="1_drum"]
+
+[sub_resource type="BoxShape3D" id="Shape_drum"]
+size = Vector3(1, 1, 1)
+
+[node name="DrumBlock" type="StaticBody3D"]
+script = ExtResource("1_drum")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_drum")

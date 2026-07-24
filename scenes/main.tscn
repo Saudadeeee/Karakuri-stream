@@ -1,5 +1,6 @@
 [gd_scene format=3 uid="uid://dgmvsvwvlehld"]
 
+[ext_resource type="Script" path="res://scripts/main_scene.gd" id="0_main"]
 [ext_resource type="Script" uid="uid://bybu66xluifsg" path="res://scripts/player/orbit_camera.gd" id="1_orbit"]
 [ext_resource type="Script" uid="uid://nu3rxfdrnej8" path="res://scripts/player/placement_controller.gd" id="2_place"]
 [ext_resource type="Script" uid="uid://b5tuiy2eslwi8" path="res://scripts/ui/material_ui.gd" id="3_ui"]
@@ -63,6 +64,7 @@ transparency = 1
 albedo_color = Color(1, 1, 1, 0.35)
 
 [node name="Main" type="Node3D" unique_id=503274657]
+script = ExtResource("0_main")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1629617291]
 environment = SubResource("Environment_main")

@@ -8,10 +8,20 @@ const TOOTH_COUNT: int = 8        # must match the gear model's tooth count
 # real meshing gears.
 const HALF_TOOTH: float = TAU / (2.0 * TOOTH_COUNT)
 
+## Recomputing the drive train (flood fill + wetness probes over every gear)
+## each frame is O(gears × neighbours) of pure dictionary churn. Power state
+## only changes when the grid or the streams change, so it's recomputed on a
+## short timer instead; ROTATION still advances every frame from the cached
+## result, so the spin animation stays perfectly smooth.
+const POWER_RECHECK: float = 0.2
+
 var _rotation_progress: Dictionary = {} # Vector3i -> float, radians since last full turn
 var _sparkles: Dictionary = {} # Vector3i -> GPUParticles3D
 var _creaks: Dictionary = {}   # Vector3i -> AudioStreamPlayer3D (wooden rattle loop)
 var _phased: Dictionary = {}   # Vector3i -> true, gears whose mesh phase is set
+var _powered: Dictionary = {}  # Vector3i -> bool, cached drive-train result
+var _gears_cache: Array[Vector3i] = []
+var _power_timer: float = POWER_RECHECK  # recompute on first frame
 
 func _ready() -> void:
 	GridManager.block_removed.connect(_on_block_removed)
@@ -32,6 +42,8 @@ func _on_grid_cleared() -> void:
 		_remove_creak(c)
 	_rotation_progress.clear()
 	_phased.clear()
+	_gears_cache = []
+	_powered.clear()
 
 func _is_wet(cell: Vector3i) -> bool:
 	var block: BlockData = GridManager.get_block(cell)
@@ -57,38 +69,15 @@ func _is_driver(cell: Vector3i) -> bool:
 ## consistent 2-colouring for free, so adjacent gears always counter-rotate
 ## without any per-gear direction search.
 func _process(delta: float) -> void:
-	var gears: Array[Vector3i] = GridManager.get_all_cells_of_type(BlockData.Type.GEAR)
-	var gear_set: Dictionary = {}
-	for g in gears:
-		gear_set[g] = true
+	_power_timer += delta
+	if _power_timer >= POWER_RECHECK:
+		_power_timer = 0.0
+		_recompute_power()
+	var powered: Dictionary = _powered
 
-	# Flood each connected component once; a component is powered if ANY gear
-	# in it is a driver.
-	var powered: Dictionary = {} # cell -> bool
-	var seen: Dictionary = {}
-	for g in gears:
-		if seen.has(g):
-			continue
-		var component: Array[Vector3i] = []
-		var queue: Array[Vector3i] = [g]
-		seen[g] = true
-		var is_powered := false
-		while queue.size() > 0:
-			var c: Vector3i = queue.pop_back()
-			component.append(c)
-			if _is_driver(c):
-				is_powered = true
-			for dir in GridManager.DIRECTIONS:
-				var nb: Vector3i = c + dir
-				if gear_set.has(nb) and not seen.has(nb):
-					seen[nb] = true
-					queue.append(nb)
-		for c in component:
-			powered[c] = is_powered
-
-	for cell in gears:
+	for cell in _gears_cache:
 		var block: BlockData = GridManager.get_block(cell)
-		if not is_instance_valid(block.node):
+		if block == null or not is_instance_valid(block.node):
 			continue
 		var mesh_instance: Node3D = block.node.get_node_or_null("MeshInstance3D")
 		if mesh_instance == null:
@@ -116,14 +105,63 @@ func _process(delta: float) -> void:
 			_remove_sparkle(cell)
 			_remove_creak(cell)
 
+## Cached drive-train state — the karakuri blocks read these to know whether
+## the machine next to them is turning (music box crank, scoop wheel…).
+func is_powered(cell: Vector3i) -> bool:
+	return _powered.get(cell, false)
+
+func is_powered_neighbor(cell: Vector3i) -> bool:
+	for dir in GridManager.DIRECTIONS:
+		if _powered.get(cell + dir, false):
+			return true
+	return false
+
+## Flood each connected component once; a component is powered if ANY gear in
+## it is a driver. Result cached in _powered until the next recheck tick.
+func _recompute_power() -> void:
+	var old: Dictionary = _powered
+	_gears_cache = GridManager.get_all_cells_of_type(BlockData.Type.GEAR)
+	var gear_set: Dictionary = {}
+	for g in _gears_cache:
+		gear_set[g] = true
+	_powered = {}
+	var seen: Dictionary = {}
+	for g in _gears_cache:
+		if seen.has(g):
+			continue
+		var component: Array[Vector3i] = []
+		var queue: Array[Vector3i] = [g]
+		seen[g] = true
+		var is_powered := false
+		while queue.size() > 0:
+			var c: Vector3i = queue.pop_back()
+			component.append(c)
+			if _is_driver(c):
+				is_powered = true
+			for dir in GridManager.DIRECTIONS:
+				var nb: Vector3i = c + dir
+				if gear_set.has(nb) and not seen.has(nb):
+					seen[nb] = true
+					queue.append(nb)
+		for c in component:
+			_powered[c] = is_powered
+	# A scoop's activity depends on gear power — retrace streams on any change.
+	if _powered != old:
+		StreamManager._on_changed()
+
+## Every full turn, a gear strikes its neighbours: bells chime, drums boom.
 func _strike_adjacent_bells(cell: Vector3i) -> void:
 	for dir in GridManager.DIRECTIONS:
 		var neighbor: BlockData = GridManager.get_block(cell + dir)
-		if neighbor != null and neighbor.type == BlockData.Type.BELL and is_instance_valid(neighbor.node):
+		if neighbor == null or not is_instance_valid(neighbor.node):
+			continue
+		if neighbor.type == BlockData.Type.BELL:
 			AudioManager.play_chime(neighbor.node.global_position)
 			FireflyManager.burst_at(neighbor.node.global_position)
 			if neighbor.node.has_method("ring"):
 				neighbor.node.ring()
+		elif neighbor.type == BlockData.Type.DRUM and neighbor.node.has_method("hit"):
+			neighbor.node.hit()
 
 func _ensure_sparkle(cell: Vector3i, parent: Node3D) -> void:
 	if _sparkles.has(cell):

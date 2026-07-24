@@ -17,11 +17,18 @@ const GREEN := Color("8cb369")
 
 var _cam_rig: Node3D
 var _settings_panel: Panel
+var _env: Environment
+var _sun: DirectionalLight3D
+var _island_top: MeshInstance3D
+var _island_base: MeshInstance3D
+var _map_cards: Array[Button] = []
 
 func _ready() -> void:
+	MapThemes.load_current()
 	_build_backdrop()
 	_build_ui()
 	_load_audio()
+	_apply_theme()
 
 func _process(delta: float) -> void:
 	if is_instance_valid(_cam_rig):
@@ -54,6 +61,7 @@ func _build_backdrop() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	_env = env
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-50.0), deg_to_rad(-30.0), 0.0)
@@ -61,6 +69,7 @@ func _build_backdrop() -> void:
 	sun.shadow_enabled = true
 	sun.shadow_blur = 2.5
 	add_child(sun)
+	_sun = sun
 
 	_add_island()
 
@@ -83,6 +92,7 @@ func _add_island() -> void:
 	top.material_override = _matte(Color(0.55, 0.58, 0.44))
 	top.position = Vector3(0, -0.1, 0)
 	ground.add_child(top)
+	_island_top = top
 	var base := MeshInstance3D.new()
 	var base_mesh := CylinderMesh.new()
 	base_mesh.top_radius = 9.0; base_mesh.bottom_radius = 1.5; base_mesh.height = 7.0; base_mesh.radial_segments = 48
@@ -90,6 +100,7 @@ func _add_island() -> void:
 	base.material_override = _matte(Color(0.4, 0.3, 0.22))
 	base.position = Vector3(0, -3.7, 0)
 	ground.add_child(base)
+	_island_base = base
 
 func _matte(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -123,9 +134,10 @@ func _build_ui() -> void:
 	spacer.custom_minimum_size = Vector2(0, 18)
 	col.add_child(spacer)
 
-	col.add_child(_menu_button("▶  Chơi", _on_play))
-	col.add_child(_menu_button("⚙  Cài đặt", _on_settings))
-	col.add_child(_menu_button("✕  Thoát", _on_quit))
+	col.add_child(_map_picker())
+	col.add_child(_menu_button("Chơi", _on_play))
+	col.add_child(_menu_button("Cài đặt", _on_settings))
+	col.add_child(_menu_button("Thoát", _on_quit))
 
 	# Footer hint
 	var hint := Label.new()
@@ -173,12 +185,67 @@ func _title_sign() -> Panel:
 	box.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "～ Vườn Thủy Cơ ～"
+	sub.text = "- Vườn Thủy Cơ -"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 20)
 	sub.add_theme_color_override("font_color", Color("f5c4a8"))
 	box.add_child(sub)
 	return sign
+
+## A row of MAP CARDS — one per theme, tinted with that theme's sky so the
+## choice itself previews the map. The selected card gets a salmon border and
+## the live 3D backdrop behind the menu switches instantly.
+func _map_picker() -> VBoxContainer:
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", 6)
+	var cap := Label.new()
+	cap.text = "Bản đồ"
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.add_theme_font_size_override("font_size", 15)
+	cap.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.85)
+	wrap.add_child(cap)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	wrap.add_child(row)
+	for i in MapThemes.count():
+		var card := Button.new()
+		card.custom_minimum_size = Vector2(66, 58)
+		card.text = MapThemes.name_of(i).split(" ")[-1]  # Xuân/Thu/Tuyết/Đóm
+		card.add_theme_font_size_override("font_size", 14)
+		card.pressed.connect(_on_map_card.bind(i))
+		row.add_child(card)
+		_map_cards.append(card)
+	return wrap
+
+func _on_map_card(i: int) -> void:
+	MapThemes.current = i
+	MapThemes.save_current()
+	_apply_theme()
+	SceneryManager.rebuild()
+	AmbientLeaves.rebuild()
+
+## Repaint the live backdrop + restyle the cards for the current theme.
+func _apply_theme() -> void:
+	var t: Dictionary = MapThemes.theme()
+	MapThemes.apply_environment(_env, _sun)
+	if is_instance_valid(_island_top):
+		(_island_top.material_override as StandardMaterial3D).albedo_color = t["island_top"]
+		(_island_base.material_override as StandardMaterial3D).albedo_color = t["island_base"]
+	for i in _map_cards.size():
+		var ti: Dictionary = MapThemes.THEMES[i]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = ti["sky_horizon"]
+		sb.set_corner_radius_all(12)
+		sb.set_border_width_all(3 if i == MapThemes.current else 1)
+		sb.border_color = SALMON if i == MapThemes.current else Color(0.5, 0.42, 0.34, 0.6)
+		_map_cards[i].add_theme_stylebox_override("normal", sb)
+		_map_cards[i].add_theme_stylebox_override("hover", sb)
+		_map_cards[i].add_theme_stylebox_override("pressed", sb)
+		var dark_sky: bool = ti["sky_horizon"].get_luminance() < 0.45
+		_map_cards[i].add_theme_color_override("font_color", Color("f4efe2") if dark_sky else TEXT)
+		_map_cards[i].add_theme_color_override("font_hover_color", Color("f4efe2") if dark_sky else TEXT)
 
 func _menu_button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
