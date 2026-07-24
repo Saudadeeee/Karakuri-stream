@@ -72,6 +72,7 @@ const V: Dictionary = {
 	],
 	BlockData.Type.DRUM: [{"name": "Wooden drum"}],
 	BlockData.Type.MUSIC_BOX: [{"name": "Music box"}],
+	BlockData.Type.GATE: [{"name": "Sluice gate"}],
 	BlockData.Type.SCOOP: [{"name": "Water scoop"}],
 }
 

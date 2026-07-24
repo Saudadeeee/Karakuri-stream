@@ -66,7 +66,7 @@ func _rebuild_all() -> void:
 			add_child(mi)
 			_groups[key] = mi
 		var iso: float = WATER_ISO if key.begins_with("water") else ISO
-		_build(mi, groups[key], iso)
+		_build(mi, groups[key], iso, key.begins_with("wood"))
 	for key in _groups.keys():
 		if not groups.has(key):
 			_groups[key].queue_free()
@@ -105,7 +105,7 @@ func _material_for(key: String) -> ShaderMaterial:
 	return mat
 
 # ------------------------------------------------------------- isosurface
-func _build(mi: MeshInstance3D, centers: Array, iso: float) -> void:
+func _build(mi: MeshInstance3D, centers: Array, iso: float, bake_ao: bool = false) -> void:
 	if centers.is_empty():
 		mi.mesh = null
 		return
@@ -147,5 +147,37 @@ func _build(mi: MeshInstance3D, centers: Array, iso: float) -> void:
 					d += minf(ax, minf(ay, az))
 				samples[x + y * dims.x + z * dims.x * dims.y] = d
 
-	mi.mesh = IsoSurface.build(samples, dims, spacing, iso)
+	var mesh: ArrayMesh = IsoSurface.build(samples, dims, spacing, iso)
+	if bake_ao and mesh != null and mesh.get_surface_count() > 0:
+		mesh = _bake_vertex_ao(mesh, region_min)
+	mi.mesh = mesh
 	mi.position = region_min
+
+## Cheap baked AO: for each vertex, count occupied grid cells at a handful of
+## probe offsets around/above it — more neighbours = deeper crevice = darker
+## vertex colour (the wood shader multiplies it in). Grid-dict lookups only,
+## no field re-sampling, so a few thousand verts stay well under the rebuild
+## throttle.
+const AO_PROBES: Array[Vector3] = [
+	Vector3(0, 0.7, 0),
+	Vector3(0.7, 0.35, 0), Vector3(-0.7, 0.35, 0),
+	Vector3(0, 0.35, 0.7), Vector3(0, 0.35, -0.7),
+]
+
+func _bake_vertex_ao(mesh: ArrayMesh, origin: Vector3) -> ArrayMesh:
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var colors := PackedColorArray()
+	colors.resize(verts.size())
+	for i in verts.size():
+		var wp: Vector3 = origin + verts[i]
+		var occ := 0
+		for p in AO_PROBES:
+			if GridManager.has_block(GridManager.world_to_cell(wp + p)):
+				occ += 1
+		var ao: float = 1.0 - 0.16 * float(occ)
+		colors[i] = Color(ao, ao, ao)
+	arrays[Mesh.ARRAY_COLOR] = colors
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return out

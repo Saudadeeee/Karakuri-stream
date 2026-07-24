@@ -9,8 +9,8 @@ extends Control
 const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
 const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
-const ICON_SIZE: int = 44   # 14 entries must fit a ~700px-tall window
-const ICON_GAP: int = 6
+const ICON_SIZE: int = 40   # 15 entries must fit a ~700px-tall window
+const ICON_GAP: int = 5
 const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 const FADE_MIN_ALPHA: float = 0.18
 const SPIN_SPEED: float = 0.9
@@ -32,6 +32,7 @@ const HINTS: Dictionary = {
 	BlockData.Type.SCOOP: "Beside a POND + spinning gear → ladles a new stream",
 	BlockData.Type.STONE_LANTERN: "Glowing lantern — prettiest on the Night map",
 	BlockData.Type.PINWHEEL: "Pinwheel — spins when a stream hits it",
+	BlockData.Type.GATE: "Sluice gate — CLICK it in the world to open/close the flow",
 }
 
 const ENTRIES: Array = [
@@ -49,6 +50,7 @@ const ENTRIES: Array = [
 	BlockData.Type.SCOOP,
 	BlockData.Type.STONE_LANTERN,
 	BlockData.Type.PINWHEEL,
+	BlockData.Type.GATE,
 ]
 
 @export var placement_controller_path: NodePath

@@ -71,7 +71,8 @@ void fragment() {
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), rim_power);
 	albedo = mix(albedo, rim_color, fresnel * rim_strength);
 
-	ALBEDO = albedo;
+	// Baked vertex AO from the isosurface builder (crevices darken).
+	ALBEDO = albedo * mix(0.55, 1.0, COLOR.r);
 	ROUGHNESS = 0.85;
 	SPECULAR = 0.15;
 }

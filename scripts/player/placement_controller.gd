@@ -246,6 +246,16 @@ func _tint_ghost(node: Node) -> void:
 		_tint_ghost(c)
 
 func _place_block() -> void:
+	# Clicking a GATE that already exists TOGGLES it (the conductor's gesture)
+	# instead of placing a new block on its face.
+	var hit: Dictionary = _raycast_from_mouse()
+	if not hit.is_empty():
+		var hn: Vector3 = hit["normal"]
+		var hcell: Vector3i = GridManager.world_to_cell(hit["position"] - hn * 0.5)
+		var hblock: BlockData = GridManager.get_block(hcell)
+		if hblock != null and hblock.type == BlockData.Type.GATE and is_instance_valid(hblock.node):
+			hblock.node.toggle()
+			return
 	if not _ghost_valid:
 		return
 	var instance: Node3D = BlockFactory.instantiate(_current_type)

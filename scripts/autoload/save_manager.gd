@@ -20,6 +20,8 @@ func save_game() -> void:
 			entry["variant"] = int(block.state["variant"])
 		# Gears remember which face they were placed on so orientation survives
 		# a save/load round-trip. Old saves without "axis" default to +Y (flat).
+		if block.state.has("open"):
+			entry["open"] = bool(block.state["open"])
 		if block.state.has("axis"):
 			var axis: Vector3i = block.state["axis"]
 			entry["axis"] = [axis.x, axis.y, axis.z]
@@ -62,6 +64,10 @@ func load_game() -> bool:
 		block.state["variant"] = variant
 		if instance.has_method("apply_variant"):
 			instance.apply_variant(BlockVariants.get_variant(type, variant))
+		if entry.has("open"):
+			block.state["open"] = bool(entry["open"])
+			if instance.has_method("set_open"):
+				instance.set_open(bool(entry["open"]), true)
 		if type == BlockData.Type.GEAR and entry.has("axis"):
 			var raw: Array = entry["axis"]
 			var axis := Vector3i(int(raw[0]), int(raw[1]), int(raw[2]))

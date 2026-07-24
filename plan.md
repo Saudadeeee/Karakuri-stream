@@ -947,3 +947,12 @@ User: web bị chê lag → web = bản rút gọn tối ưu; full game = app An
 **iOS**: KHÔNG build được từ Windows (toolchain sign Apple = macOS-only). Đã chuẩn bị: ios.zip template + preset "iOS" (bundle id, export_project_only). BUILD.md hướng dẫn build trên Mac (Godot macOS → Team ID → Xcode Archive). Touch controls sẵn.
 
 `BUILD.md` MỚI: toàn bộ quy trình 3 nền tảng + ghi chú bẫy (scaling_3d, steam-binary lỗi câm, ETC2). Regress + boot sạch; tunnel serve bản LITE.
+
+## PHẦN 60: 4 cải tiến tự chọn (từ rejected-list panel + ý riêng)
+
+1. **SLUICE GATE (van tre)** — block điều khiển TRỰC TIẾP đầu tiên: CLICK van trong thế giới = tấm chắn trượt lên/xuống (tween BACK) + knock; MỞ = nước xuyên qua, ĐÓNG = chặn đứng (knock gỗ trên tấm). Nhạc trưởng: mute/unmute cả nhánh máy live. Click-lên-van = toggle (placement phân biệt, không đặt block mới); state "open" persist save/load generic (`set_open(open, silent)`); StreamManager branch GATE; hotbar 15 icon (40px), hint.
+2. **Baked vertex AO** cho isosurface GỖ ("best visual not taken"): sau IsoSurface.build, mỗi vertex đếm block chiếm tại 5 probe (trên + 4 chéo ngang) qua GridManager dict lookup (rẻ) → vertex color tối dần khe kẹt; wood.gdshader `ALBEDO *= mix(0.55, 1, COLOR.r)` (mesh không color → trắng, an toàn). Khối chồng nhau giờ có chiều sâu khe.
+3. **KOI LEAP** — koi hiếm khi (~14s) phóng vọt arc 0.6 lên khỏi nước + splash khi tái nhập — khoảnh khắc showpiece của hồ.
+4. **CONFLUENCE** — 2 dòng cùng đổ 1 ô trong 1 trace pass → weight 2-3 → đánh TO hơn (+2.5dB/nguồn) — hợp lưu có trọng lượng thật.
+
+Verify T4 ALL OK (gate chặn/mở/click/persist, AO colors tồn tại, confluence weight 2 qua jelly-arc + source) + REGRESS ALL OK + boot sạch.

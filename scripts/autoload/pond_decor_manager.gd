@@ -116,6 +116,8 @@ func _add_koi(root: Node3D) -> void:
 		"angle": randf_range(0.0, TAU),
 		"boost": 0.0,
 		"cooldown_ms": 0,
+		"leap": 0.0,          # >0 while mid-jump (1 → 0)
+		"splashed": false,
 	})
 
 func _remove_pond(cell: Vector3i) -> void:
@@ -155,7 +157,20 @@ func _process(delta: float) -> void:
 		var r: float = fish["radius"] * (1.0 + fish["boost"] * 0.3)
 		# Swim right at the (now opaque) surface — backs breaking the water — plus
 		# a gentle bob, so the koi are actually visible.
-		var swim_y: float = 0.5 + sin(t * 1.6 + fish["phase"]) * 0.03
+		# Rare LEAP: the koi arcs clean out of the water and re-enters with a
+		# little splash — the pond's showpiece moment.
+		if fish["leap"] <= 0.0 and randf() < delta / 14.0:
+			fish["leap"] = 1.0
+			fish["splashed"] = false
+		var leap_y := 0.0
+		if fish["leap"] > 0.0:
+			var p: float = 1.0 - fish["leap"]
+			leap_y = sin(p * PI) * 0.6
+			fish["leap"] = maxf(0.0, fish["leap"] - delta / 0.8)
+			if p > 0.85 and not fish["splashed"]:
+				fish["splashed"] = true
+				StreamManager._spawn_splash(fish["node"].global_position, Color(0.8, 0.93, 0.96))
+		var swim_y: float = 0.5 + sin(t * 1.6 + fish["phase"]) * 0.03 + leap_y
 		fish["node"].position = Vector3(cos(angle) * r, swim_y, sin(angle) * r)
 		# Aim the model's head (+X) along the velocity tangent (-sin, 0, cos).
 		fish["node"].rotation.y = atan2(-cos(angle), -sin(angle))

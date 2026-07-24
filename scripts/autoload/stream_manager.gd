@@ -261,6 +261,16 @@ func _trace(src: Vector3i, interval: float = BASE_BEAT, color: Color = CYAN) -> 
 				_add_seg(pos, nxt, st["color"])
 				_impact(nxt, block.type, st["interval"], st["phase"], st["color"])
 			continue
+		# SLUICE GATE: open → water passes straight through; closed → blocked
+		# (a wood knock on the paddle). Click the gate in the world to toggle.
+		if block.type == BlockData.Type.GATE:
+			if bool(block.state.get("open", false)):
+				_add_seg(pos, nxt, st["color"])
+				stack.append(_entry(st, nxt, dir, carried_h))
+			else:
+				_add_seg(pos, nxt, st["color"])
+				_impact(nxt, BlockData.Type.WOOD, st["interval"], st["phase"], st["color"])
+			continue
 		# JELLY TRAMPOLINE: falling water bounces up-and-over in the last
 		# horizontal direction — the stream hops sideways off the jelly.
 		if block.type == BlockData.Type.JELLY and dir == DOWN and int(st["hops"]) < 6:
@@ -296,11 +306,16 @@ func _impact(cell: Vector3i, type: int, interval: float = BASE_BEAT, phase: floa
 	# running groove — but ONLY when both interval AND phase match (alternator
 	# branches differ by phase alone).
 	var next: float = phase + ceil((_clock - phase) / interval) * interval
-	if _impacts.has(cell) \
-			and absf(float(_impacts[cell]["interval"]) - interval) < 0.001 \
-			and absf(float(_impacts[cell]["phase"]) - phase) < 0.001:
-		next = float(_impacts[cell]["next"])
-	_impacts[cell] = {"type": type, "interval": interval, "phase": phase, "next": next, "color": color}
+	# CONFLUENCE: _impacts is cleared at the top of each rebuild, so an entry
+	# already present means a SECOND stream feeds this cell in this very pass —
+	# merged water strikes harder (accented voice, see _play_impact).
+	var weight: int = 1
+	if _impacts.has(cell):
+		weight = mini(int(_impacts[cell].get("weight", 1)) + 1, 3)
+		if absf(float(_impacts[cell]["interval"]) - interval) < 0.001 \
+				and absf(float(_impacts[cell]["phase"]) - phase) < 0.001:
+			next = float(_impacts[cell]["next"])
+	_impacts[cell] = {"type": type, "interval": interval, "phase": phase, "next": next, "color": color, "weight": weight}
 	if type == BlockData.Type.GEAR:
 		_driven_gears[cell] = true
 
@@ -343,7 +358,9 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 		color = _impacts[cell]["color"]
 	var dye: Dictionary = DYE_VOICE.get(color.to_html(false), {})
 	var pitch_mul: float = float(dye.get("pitch", 1.0))
-	var vol: float = float(dye.get("vol", 0.0))
+	# Confluence accent: merged streams strike louder.
+	var weight: int = int(_impacts[cell].get("weight", 1)) if _impacts.has(cell) else 1
+	var vol: float = float(dye.get("vol", 0.0)) + float(weight - 1) * 2.5
 	match type:
 		BlockData.Type.BELL:
 			var node: Node3D = _node_of(cell)
