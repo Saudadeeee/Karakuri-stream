@@ -16,7 +16,7 @@ func rebuild() -> void:
 	var d: Dictionary = MapThemes.theme()["drift"]
 
 	_particles = GPUParticles3D.new()
-	_particles.amount = d["amount"]
+	_particles.amount = QualityManager.particles(d["amount"])
 	_particles.lifetime = 10.0
 	_particles.preprocess = 7.0
 	_particles.position = Vector3(0.0, 7.0, 0.0)

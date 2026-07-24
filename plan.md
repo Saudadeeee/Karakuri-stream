@@ -930,3 +930,20 @@ Workflow panel (environment/mechanic/player lens + judge) → 9 rank, implement 
 Rejected giữ ghi chú: confluence, gear ratios, sluice gate, baked AO, critters, koi leap (đều lý do scope/rủi ro).
 
 Verify: OVERHAUL ALL OK (trampoline segment bay lên, alternator interval ×2 + phase lệch >0.4, shishi quick tip 1 fill + dump giữ hồng, scoop đọc màu hồ, cloud+island sống) + REGRESS ALL OK + boot sạch. Ảnh: đảo bay overhang + shard + 2 dòng nước hồng/cyan xuyên mây; arc jelly nhìn thấy được.
+
+## PHẦN 59: Chia 2 bản — WEB LITE + APP FULL (Android APK, iOS chuẩn bị)
+
+User: web bị chê lag → web = bản rút gọn tối ưu; full game = app Android + iOS.
+
+**QualityManager** (autoload, `OS.has_feature("web")`):
+- LITE (web): shadow OFF (đắt nhất WebGL), glow OFF (fullscreen pass), FillLight OFF (mỗi directional light re-draw mọi mesh), particles ÷2, cloud-sea subdiv ÷2.
+- Phát hiện đo được: `scaling_3d 0.85` trên WebGL compat CHẬM HƠN native-res (ép offscreen target + upscale, phá fast-path canvas): full 65fps vs scaled 44fps → KHÔNG dùng scaling. Ghi chú trong code + BUILD.md.
+- Đo headless Chrome (GPU d3d11): FULL 127.8/65 fps → LITE **139.8/86.4 fps** (+33% in-game).
+
+**Android APP (full quality)**: 
+- Setup 1 lần: cmdline-tools + `sdkmanager build-tools;34.0.0 platform-tools`; debug keystore keytool (androiddebugkey/android); editor settings `java_sdk_path` = jdk-21 (thiếu nó → lỗi export CÂM).
+- Preset "Android": arm64-v8a, com.saudade.karakuristream, immersive. `--export-debug` → **karakuri-stream.apk 41.4MB signed + verified** — cài trực tiếp lên máy.
+
+**iOS**: KHÔNG build được từ Windows (toolchain sign Apple = macOS-only). Đã chuẩn bị: ios.zip template + preset "iOS" (bundle id, export_project_only). BUILD.md hướng dẫn build trên Mac (Godot macOS → Team ID → Xcode Archive). Touch controls sẵn.
+
+`BUILD.md` MỚI: toàn bộ quy trình 3 nền tảng + ghi chú bẫy (scaling_3d, steam-binary lỗi câm, ETC2). Regress + boot sạch; tunnel serve bản LITE.

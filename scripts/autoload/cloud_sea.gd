@@ -13,8 +13,9 @@ var _mesh: MeshInstance3D
 func _ready() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(120, 120)
-	plane.subdivide_width = 40
-	plane.subdivide_depth = 40
+	var subdiv: int = 20 if QualityManager.lite else 40
+	plane.subdivide_width = subdiv
+	plane.subdivide_depth = subdiv
 	_mat = ShaderMaterial.new()
 	_mat.shader = SHADER
 	_mat.render_priority = -1   # transparent streams must sort above the sea

@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GridManager="*res://scripts/autoload/grid_manager.gd"
+QualityManager="*res://scripts/autoload/quality_manager.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
 AmbientMusic="*res://scripts/autoload/ambient_music.gd"
 WaterFlowManager="*res://scripts/autoload/water_flow_manager.gd"

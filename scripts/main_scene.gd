@@ -12,6 +12,7 @@ func _ready() -> void:
 	MapThemes.load_current()
 	var env: Environment = $WorldEnvironment.environment
 	MapThemes.apply_environment(env, $DirectionalLight3D)
+	QualityManager.apply(self, env, $DirectionalLight3D, $FillLight)
 	# The sculpted island (IslandBuilder autoload) replaces the old cylinders;
 	# the flat collision box in this scene still handles raycasts.
 	$Ground/IslandTop.visible = false

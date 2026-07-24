@@ -71,6 +71,7 @@ func _build_backdrop() -> void:
 	sun.shadow_blur = 2.5
 	add_child(sun)
 	_sun = sun
+	QualityManager.apply(self, env, sun)
 
 	# Island visual comes from the IslandBuilder autoload (sculpted mesh).
 	IslandBuilder.rebuild()
