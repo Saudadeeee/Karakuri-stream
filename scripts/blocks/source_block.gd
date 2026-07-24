@@ -8,17 +8,30 @@ extends StaticBody3D
 ## symmetric, so facing a neighbouring pond is now purely cosmetic.
 
 const MODEL: PackedScene = preload("res://assets/3DModel/generated/source.glb")
+const LEAF_BASE := Color("#A7C957")   # authored leaf colour tint() matches on
 
 var grid_cell: Vector3i
 var _model: Node3D
+var _pending_variant: Dictionary = {}
 
 func _ready() -> void:
 	_model = MODEL.instantiate()
 	add_child(_model)
 	MeshFit.fit_bottom(_model, 0.92, -0.5)
 	MeshFit.matte(_model)
+	if not _pending_variant.is_empty():
+		apply_variant(_pending_variant)
 	GridManager.block_placed.connect(_on_grid_changed)
 	GridManager.block_removed.connect(_on_grid_changed)
+
+## Tempo variant: recolour the little leaves so the pace is readable at a
+## glance (green steady / blue slow / salmon quick). The actual beat interval
+## lives in StreamManager, read from the block's variant state.
+func apply_variant(v: Dictionary) -> void:
+	if _model == null:
+		_pending_variant = v   # icons/ghost apply before _ready
+		return
+	MeshFit.tint(_model, LEAF_BASE, Color(v.get("color", "#A7C957")))
 
 func _on_grid_changed(cell: Vector3i) -> void:
 	if cell == grid_cell or (cell - grid_cell) in GridManager.DIRECTIONS:

@@ -878,3 +878,17 @@ Boot + REGRESS ALL OK.
 ## PHẦN 55: Khu vườn mẫu (starter garden)
 
 Lần đầu chơi (`not SaveManager.has_save()`) → `main_scene._build_starter_garden` dựng máy nhỏ ĐANG CHẠY ở góc -X/-Z (~11 khối): tháp source→shishi→TRỐNG (cốc…tùm mỗi chu kỳ) + chime cạnh, hồ + GEAR & MILL quay, đèn đá + jelly. Giữa đảo trống cho người chơi. Một lần duy nhất — session sau auto-load build riêng (không dựng đè, guard has_block + has_save; verify không duplicate). Test `STARTER ALL OK` + REGRESS ALL OK.
+
+## PHẦN 56: NHỊP điều khiển được + controls overlay + screenshot P
+
+Ba mục cuối từ review phê bình:
+
+**1. Hệ NHỊP (biến toy thành nhạc cụ)** — vấn đề lớn nhất review chỉ ra: tick global 0.55s + stagger 120ms = chỉ tạo texture, không tạo rhythm.
+- SOURCE giờ 3 TEMPO variant (click lại icon đổi): Steady ×1 (lá xanh), Slow ×2 half-time (lá xanh dương), Quick ×0.5 double-time (lá salmon) — lá tint theo tempo (`source_block.apply_variant` + MeshFit.tint từ #A7C957).
+- `StreamManager`: BEAT GRID — clock chung, mỗi impact snap vào bội của interval NGUỒN của nó (`e.next = clock - fmod(clock,interval) + interval`) → mọi máy chơi CÙNG NHỊP; tempo lồng nhau = polyrhythm thật. Retrace GIỮ phase (không reset nhịp khi grid đổi). Micro-humanize còn ±25ms (đủ "on beat"). Shishi dump/scoop = base beat.
+
+**2. Controls overlay lần đầu** (`_maybe_show_controls`): card theme "How to play" (chuột trái/phải/giữa/lăn, click-lại-icon, Ctrl+Z/H/U/P) + nút Got it → lưu `settings.cfg [ui] seen_controls`.
+
+**3. Screenshot P** (`_take_screenshot`): ẩn UI+ghost 1 frame → chụp sạch → desktop lưu `user://screenshots/karakuri-<ms>.png`, WEB `JavaScriptBridge.download_buffer` tải PNG về máy + toast "Screenshot saved".
+
+Test `T3 ALL OK` (card hiện + Got it persist, interval 0.55 vs 0.275 đúng per-source, screenshot ra file) + REGRESS ALL OK + boot sạch.

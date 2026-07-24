@@ -37,7 +37,15 @@ const V: Dictionary = {
 		{"name": "Water mill", "model": "mill"},
 	],
 	BlockData.Type.BELL: [{"name": "Bell"}],
-	BlockData.Type.SOURCE: [{"name": "Bamboo spout"}],
+	# Spout TEMPO variants — the rhythm section. tempo multiplies the base beat
+	# (0.55s): steady = every beat, slow = half-time, quick = double-time. All
+	# spouts snap to one shared beat grid, so machines stay in time with each
+	# other and layered tempos become real polyrhythm. Leaf tint marks the pace.
+	BlockData.Type.SOURCE: [
+		{"name": "Spout — steady", "tempo": 1.0, "color": "#A7C957"},
+		{"name": "Spout — slow", "tempo": 2.0, "color": "#7BAFD4"},
+		{"name": "Spout — quick", "tempo": 0.5, "color": "#E07A5F"},
+	],
 	BlockData.Type.PIPE_BEND: [{"name": "Bend pipe"}],
 	# Phong linh: each variant is a FIXED pentatonic note (C D E G A) so a row
 	# of chimes becomes a playable melody. note = index into PENTATONIC_RATIOS.

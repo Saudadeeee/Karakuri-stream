@@ -12,19 +12,23 @@ const DOWN := Vector3i(0, -1, 0)
 const MAX_STEPS := 80
 const MAP_RADIUS := 8.5
 const REBUILD_INTERVAL := 0.05
-const IMPACT_INTERVAL := 0.55        # seconds between repeated impact sounds
+## One shared musical beat (~109 BPM). Every impact snaps to multiples of its
+## source's interval on this one clock, so all machines play IN TIME with each
+## other — steady spouts land on the beat, slow ones half-time, quick ones
+## double-time: layered tempos become polyrhythm, not mush.
+const BASE_BEAT := 0.55
 const STREAM_RADIUS := 0.09
 
 var _segments: Array = []            # [{a:Vector3, b:Vector3}] world-space
-var _impacts: Dictionary = {}        # Vector3i target cell -> BlockData.Type
+var _impacts: Dictionary = {}        # cell -> {type:int, interval:float, next:float}
 var _driven_gears: Dictionary = {}   # Vector3i gear cell struck by a stream
 var _temp_sources: Dictionary = {}   # Vector3i -> expire msec (shishi dumps)
+var _clock: float = 0.0              # the beat-grid clock
 var _visual_root: Node3D
 var _stream_mat: StandardMaterial3D
 var _source_audio: Dictionary = {}   # Vector3i (source cell) -> AudioStreamPlayer3D (trickle loop)
 var _dirty := true
 var _rebuild_timer := 0.0
-var _impact_timer := 0.0
 
 func _ready() -> void:
 	_visual_root = Node3D.new()
@@ -85,17 +89,16 @@ func _process(delta: float) -> void:
 			_rebuild_timer = 0.0
 			_dirty = false
 			_rebuild()
-	# Repeating impact sounds — a steady water-and-wood rhythm. Each impact is
-	# HUMANIZED with a small random delay so simultaneous strikes roll like a
-	# hand-played pattern instead of one loud phasey chord every tick.
-	if not _impacts.is_empty():
-		_impact_timer += delta
-		if _impact_timer >= IMPACT_INTERVAL:
-			_impact_timer = 0.0
-			for cell in _impacts:
-				var wait: float = randf_range(0.0, 0.12)
-				get_tree().create_timer(wait).timeout.connect(
-					_play_impact.bind(cell, _impacts[cell]))
+	# Beat-grid scheduler: each impact fires on multiples of ITS interval on the
+	# shared clock, plus a ±25ms micro-humanization — tight enough to read as
+	# "on the beat", loose enough to not phase into one harsh chord.
+	_clock += delta
+	for cell in _impacts:
+		var e: Dictionary = _impacts[cell]
+		if _clock >= e["next"]:
+			e["next"] = _clock - fmod(_clock, e["interval"]) + e["interval"]
+			get_tree().create_timer(randf_range(0.0, 0.025)).timeout.connect(
+				_play_impact.bind(cell, e["type"]))
 
 # ---------------------------------------------------------------- tracing
 func _rebuild() -> void:
@@ -104,19 +107,27 @@ func _rebuild() -> void:
 	_driven_gears.clear()
 	var sources: Array = GridManager.get_all_cells_of_type(BlockData.Type.SOURCE)
 	for cell in sources:
-		_trace(cell)
+		_trace(cell, _interval_for_source(cell))
 	# Karakuri-made water: tipping shishi tubes + ladling scoops pour too.
 	for cell in _temp_sources:
-		_trace(cell)
+		_trace(cell, BASE_BEAT)
 	for cell in GridManager.get_all_cells_of_type(BlockData.Type.SCOOP):
 		if is_scoop_active(cell):
-			_trace(cell)
+			_trace(cell, BASE_BEAT)
 	_refresh_source_audio(sources)
 	_render()
 
+## The spout's TEMPO variant scales the beat: steady ×1, slow ×2, quick ×0.5.
+func _interval_for_source(cell: Vector3i) -> float:
+	var b: BlockData = GridManager.get_block(cell)
+	if b != null and b.type == BlockData.Type.SOURCE:
+		var v: Dictionary = BlockVariants.get_variant(BlockData.Type.SOURCE, int(b.state.get("variant", 0)))
+		return BASE_BEAT * float(v.get("tempo", 1.0))
+	return BASE_BEAT
+
 ## Stack-based tracer that BRANCHES at pipe junctions (T/cross split the water),
 ## with a visited guard so cross-connected loops can't spin forever.
-func _trace(src: Vector3i) -> void:
+func _trace(src: Vector3i, interval: float = BASE_BEAT) -> void:
 	var stack: Array = [[src, DOWN]]
 	var seen: Dictionary = {}
 	var guard := 0
@@ -158,17 +169,22 @@ func _trace(src: Vector3i) -> void:
 			else:
 				# hit the pipe body from a closed side → splashes on the bamboo
 				_add_seg(pos, nxt)
-				_impact(nxt, block.type)
+				_impact(nxt, block.type, interval)
 			continue
 		# solid target (wood / gear / bell / water / source)
 		_add_seg(pos, nxt)
-		_impact(nxt, block.type)
+		_impact(nxt, block.type, interval)
 
 func _add_seg(a: Vector3i, b: Vector3i) -> void:
 	_segments.append({"a": GridManager.cell_to_world(a), "b": GridManager.cell_to_world(b)})
 
-func _impact(cell: Vector3i, type: int) -> void:
-	_impacts[cell] = type
+func _impact(cell: Vector3i, type: int, interval: float = BASE_BEAT) -> void:
+	# Keep an existing entry's phase (next) so retraces don't reset the rhythm;
+	# snap NEW impacts onto this interval's next grid point.
+	var next: float = _clock - fmod(_clock, interval) + interval
+	if _impacts.has(cell) and absf(float(_impacts[cell]["interval"]) - interval) < 0.001:
+		next = float(_impacts[cell]["next"])
+	_impacts[cell] = {"type": type, "interval": interval, "next": next}
 	if type == BlockData.Type.GEAR:
 		_driven_gears[cell] = true
 
