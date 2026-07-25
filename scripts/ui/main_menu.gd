@@ -143,7 +143,7 @@ func _build_title_3d() -> void:
 			0.0, Color("fdf3e3"), 0.16))
 
 	# Salmon subtitle under the wordmark.
-	var sub := _letter_mesh("- a water garden toy -", 0.46, -1.62, 0.0, Color("d96a4e"), 0.05)
+	var sub := _letter_mesh("- A WATER GARDEN TOY -", 0.42, -1.62, 0.0, Color("f5c4a8"), 0.05)
 	_title_root.add_child(sub)
 
 func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
