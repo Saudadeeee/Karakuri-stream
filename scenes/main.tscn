@@ -131,11 +131,34 @@ placement_controller_path = NodePath("../../PlacementController")
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -76.0
+offset_left = -68.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = 64.0
-text = "⏸"
+offset_bottom = 68.0
+
+[node name="Bars" type="HBoxContainer" parent="UI/PauseButton"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -11.0
+offset_right = 8.0
+offset_bottom = 11.0
+theme_override_constants/separation = 5
+mouse_filter = 2
+
+[node name="L" type="ColorRect" parent="UI/PauseButton/Bars"]
+custom_minimum_size = Vector2(5, 22)
+layout_mode = 2
+color = Color(0.29, 0.247, 0.208, 1)
+
+[node name="R" type="ColorRect" parent="UI/PauseButton/Bars"]
+custom_minimum_size = Vector2(5, 22)
+layout_mode = 2
+color = Color(0.29, 0.247, 0.208, 1)
 
 [node name="PauseMenu" parent="UI" unique_id=362230094 instance=ExtResource("4_pause")]
 layout_mode = 3
