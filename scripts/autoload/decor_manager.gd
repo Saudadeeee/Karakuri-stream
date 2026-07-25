@@ -73,6 +73,7 @@ func _check_wood_cell(cell: Vector3i) -> void:
 		if _top_decor.has(cell):
 			var d = _top_decor[cell]
 			if d != null and is_instance_valid(d):
+				SceneryManager.burst(d.global_position + Vector3(0, 0.1, 0), Color(0.6, 0.75, 0.4))
 				d.queue_free()
 			_top_decor.erase(cell)
 

@@ -969,3 +969,13 @@ REGRESS ALL OK + boot sạch. Ảnh web: wordmark nổi rõ trên trời, layout
 ## PHẦN 62: Font Baloo2 — button hết vô hồn
 
 User: font mặc định vô hồn → tìm font hợp chủ đề. Tải 4 OFL (Baloo2/Fredoka/Quicksand/Nunito), render so sánh → **Baloo2** (tròn + chunky, khớp clay-toy nhất; Fredoka nhì, Quicksand/Nunito mảnh). Set `gui/theme/custom_font` toàn cục → mọi button/label + TextMesh wordmark (qua ThemeDB.fallback_font) dùng chung. OFL — ship thương mại OK, README ghi license. Bẫy: lowercase tròn Baloo2 tự-cắt trong TextMesh convex-decompose → wordmark + subtitle để CHỮ HOA (caps decompose sạch, 0 lỗi). Verify ảnh menu+pause: cả game ấm/tròn nhất quán. Xoá 3 font thừa. REGRESS ALL OK + boot sạch.
+
+## PHẦN 63: Phá hủy prop môi trường khi đè block
+
+User: đặt block đè prop (cây/bụi/đá) → prop bị phá hủy có hiệu ứng.
+
+- `SceneryManager`: `_prop_cells` map cell→{root,kind} (chỉ prop RING trên đảo, không núi backdrop); nghe `GridManager.block_placed` → nếu đặt trúng cell prop → `_shatter`: topple (xoay z + scale→0 TRANS_BACK 0.28s) + `burst` puff hạt màu theo loại (lá xanh / đá xám / gỗ) + knock nhẹ, rồi free.
+- `burst()` public → `DecorManager` tái dùng: hoa/mầm mọc trên gỗ bị block đè cũng poof (thay vì biến mất câm).
+- Particles qua `QualityManager.particles()` (web lite ÷2).
+
+Verify SHAT ALL OK (prop đăng ký cell, đè block → deregister + shatter + free) + REGRESS ALL OK + boot sạch.
