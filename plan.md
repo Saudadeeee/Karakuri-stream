@@ -956,3 +956,12 @@ User: web bị chê lag → web = bản rút gọn tối ưu; full game = app An
 4. **CONFLUENCE** — 2 dòng cùng đổ 1 ô trong 1 trace pass → weight 2-3 → đánh TO hơn (+2.5dB/nguồn) — hợp lưu có trọng lượng thật.
 
 Verify T4 ALL OK (gate chặn/mở/click/persist, AO colors tồn tại, confluence weight 2 qua jelly-arc + source) + REGRESS ALL OK + boot sạch.
+
+## PHẦN 61: Menu redesign — wordmark 3D thật
+
+User: menu khung/phông lệch, quá cơ bản → muốn 3D model tên game.
+
+- **Wordmark 3D**: "KARAKURI / STREAM" bằng TextMesh extrude (depth 0.16) LƠ LỬNG trên đảo (y 5.6, trong vùng trời) — mặt KEM unshaded + bản sao NÂU GỖ phía sau lệch (drop shadow 3D thật); subtitle salmon TextMesh nhỏ. Bob nhẹ sin 0.8Hz + xoay THEO camera drift (luôn đối diện nhưng vẫn sống trong scene). `cast_shadow OFF` (fix chữ ma đổ bóng lên đảo — lần render đầu lộ). Unshaded fix chữ bị filmic/fog wash nhạt.
+- **Layout hết lệch**: bỏ mọi position pixel hack → anchors chuẩn `PRESET_CENTER_BOTTOM` + grow flags. Dải tương tác đáy: Map cards → hàng [Settings nhỏ | **PLAY salmon to 240×62 shadow** | Quit nhỏ] → hint. Biển gỗ 2D cũ xoá.
+- Web verify: FPS còn tăng (117 game vs 86 trước — panel-shadow 2D cũ đắt hơn TextMesh); click PLAY tọa độ mới hoạt động, webtest cập nhật.
+REGRESS ALL OK + boot sạch. Ảnh web: wordmark nổi rõ trên trời, layout cân.

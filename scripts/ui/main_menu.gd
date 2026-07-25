@@ -26,6 +26,7 @@ var _map_cards: Array[Button] = []
 func _ready() -> void:
 	MapThemes.load_current()
 	_build_backdrop()
+	_build_title_3d()
 	_build_ui()
 	_load_audio()
 	_apply_theme()
@@ -33,6 +34,12 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_instance_valid(_cam_rig):
 		_cam_rig.rotate_y(delta * 0.045)   # slow drift so the diorama breathes
+	if is_instance_valid(_title_root):
+		# Bob gently and turn WITH the drifting camera so the wordmark always
+		# faces the player while still living inside the 3D scene.
+		var t: float = Time.get_ticks_msec() / 1000.0
+		_title_root.position.y = 5.6 + sin(t * 0.8) * 0.12
+		_title_root.rotation.y = _cam_rig.rotation.y
 
 # ----------------------------------------------------------------- 3D backdrop
 func _build_backdrop() -> void:
@@ -112,7 +119,54 @@ func _matte(c: Color) -> StandardMaterial3D:
 	m.metallic = 0.0
 	return m
 
+# -------------------------------------------------------------- 3D title
+## The game's name as REAL 3D lettering floating over the island — extruded
+## wooden TextMesh with a cream back-copy as a soft drop shadow, gently
+## bobbing. Part of the diorama, not a flat sign pasted on top.
+var _title_root: Node3D
+
+func _build_title_3d() -> void:
+	_title_root = Node3D.new()
+	_title_root.position = Vector3(0, 5.6, 0)
+	add_child(_title_root)
+
+	var lines := [
+		{"text": "KARAKURI", "size": 1.35, "y": 0.75},
+		{"text": "STREAM", "size": 1.35, "y": -0.55},
+	]
+	for l in lines:
+		# Deep-wood drop copy behind + cream face in front — flat unshaded
+		# colours so the wordmark stays bold against the pastel sky.
+		_title_root.add_child(_letter_mesh(l["text"], l["size"] * 1.05, l["y"] - 0.07,
+			-0.12, Color("6b4a30"), 0.1))
+		_title_root.add_child(_letter_mesh(l["text"], l["size"], l["y"],
+			0.0, Color("fdf3e3"), 0.16))
+
+	# Salmon subtitle under the wordmark.
+	var sub := _letter_mesh("- a water garden toy -", 0.46, -1.62, 0.0, Color("d96a4e"), 0.05)
+	_title_root.add_child(sub)
+
+func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
+	var tm := TextMesh.new()
+	tm.text = text
+	tm.font = ThemeDB.fallback_font
+	tm.font_size = 64
+	tm.pixel_size = size / 64.0
+	tm.depth = depth
+	var mi := MeshInstance3D.new()
+	mi.mesh = tm
+	mi.position = Vector3(0, y, z)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # no ghost text on the lawn
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED   # bold flat read
+	mi.material_override = m
+	return mi
+
 # ----------------------------------------------------------------------- UI
+## Layout: everything ANCHORED (no magic pixel offsets) — the 3D wordmark owns
+## the top of the screen; the interactive strip sits along the bottom:
+## map cards → a big salmon PLAY with small Settings/Quit wings → hint line.
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -122,78 +176,57 @@ func _build_ui() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(root)
 
-	# Centre column
 	var col := VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 16)
-	col.set_anchors_preset(Control.PRESET_CENTER)
-	col.position = Vector2(-150, -170)
-	col.custom_minimum_size = Vector2(300, 0)
+	col.add_theme_constant_override("separation", 14)
+	col.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 24)
+	col.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	col.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(col)
 
-	col.add_child(_title_sign())
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 18)
-	col.add_child(spacer)
-
 	col.add_child(_map_picker())
-	col.add_child(_menu_button("Play", _on_play))
-	col.add_child(_menu_button("Settings", _on_settings))
-	col.add_child(_menu_button("Quit", _on_quit))
 
-	# Footer hint
+	# PLAY front and centre, Settings/Quit as quiet wings.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	col.add_child(row)
+	var settings_b := _menu_button("Settings", _on_settings)
+	settings_b.custom_minimum_size = Vector2(130, 48)
+	row.add_child(settings_b)
+	var play := _menu_button("P L A Y", _on_play)
+	play.custom_minimum_size = Vector2(240, 62)
+	play.add_theme_font_size_override("font_size", 26)
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = SALMON
+	psb.set_corner_radius_all(18)
+	psb.set_border_width_all(3)
+	psb.border_color = Color("c96a52")
+	psb.shadow_color = Color(0.2, 0.1, 0.06, 0.3)
+	psb.shadow_size = 8
+	psb.shadow_offset = Vector2(0, 4)
+	play.add_theme_stylebox_override("normal", psb)
+	var psb_h: StyleBoxFlat = psb.duplicate()
+	psb_h.bg_color = SALMON.lightened(0.08)
+	play.add_theme_stylebox_override("hover", psb_h)
+	var psb_p: StyleBoxFlat = psb.duplicate()
+	psb_p.bg_color = SALMON.darkened(0.1)
+	play.add_theme_stylebox_override("pressed", psb_p)
+	play.add_theme_color_override("font_color", Color("fff6ee"))
+	play.add_theme_color_override("font_hover_color", Color.WHITE)
+	row.add_child(play)
+	var quit_b := _menu_button("Quit", _on_quit)
+	quit_b.custom_minimum_size = Vector2(130, 48)
+	row.add_child(quit_b)
+
 	var hint := Label.new()
-	hint.text = "Drop blocks · hear the stream · relax"
+	hint.text = "drop blocks · hear the stream · relax"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.7)
-	hint.add_theme_font_size_override("font_size", 15)
-	var foot := Control.new()
-	foot.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	foot.position = Vector2(0, -46)
-	foot.add_child(hint)
-	hint.set_anchors_preset(Control.PRESET_CENTER)
-	hint.position = Vector2(-140, 0)
-	hint.custom_minimum_size = Vector2(280, 0)
-	root.add_child(foot)
+	hint.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.65)
+	hint.add_theme_font_size_override("font_size", 14)
+	col.add_child(hint)
 
 	_build_settings_panel(root)
-
-## A carved wooden sign holding the title.
-func _title_sign() -> Panel:
-	var sign := Panel.new()
-	sign.custom_minimum_size = Vector2(300, 118)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = WOOD_SIGN
-	sb.set_corner_radius_all(22)
-	sb.set_border_width_all(5)
-	sb.border_color = WOOD_SIGN_EDGE
-	sb.shadow_color = Color(0.2, 0.16, 0.12, 0.28)
-	sb.shadow_size = 12
-	sb.shadow_offset = Vector2(0, 6)
-	sb.content_margin_left = 10; sb.content_margin_right = 10
-	sign.add_theme_stylebox_override("panel", sb)
-
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 0)
-	sign.add_child(box)
-
-	var title := Label.new()
-	title.text = "KARAKURI STREAM"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 40)
-	title.add_theme_color_override("font_color", Color("fdf3e3"))
-	box.add_child(title)
-
-	var sub := Label.new()
-	sub.text = "- a water garden toy -"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 20)
-	sub.add_theme_color_override("font_color", Color("f5c4a8"))
-	box.add_child(sub)
-	return sign
 
 ## A row of MAP CARDS — one per theme, tinted with that theme's sky so the
 ## choice itself previews the map. The selected card gets a salmon border and
