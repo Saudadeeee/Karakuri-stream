@@ -20,6 +20,7 @@ func _ready() -> void:
 	AmbientMusic.apply_theme_mix()
 	CloudSea.apply_theme()
 	IslandBuilder.rebuild()
+	KarakuriClock.rebuild()
 	# First run ever (no save yet): a small STARTER GARDEN machine already
 	# running in one corner — spout → shishi-odoshi → drum, a pond turning a
 	# gear — so the blank island never stares back at a new player. One-time:

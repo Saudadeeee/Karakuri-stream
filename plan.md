@@ -994,3 +994,10 @@ User: nhìn ĐÂU cũng thấy chất karakuri (automata gỗ cơ khí Edo). Pan
 - **R9 búp bê dâng trà** (chahakobi ningyō, `tea_doll.gd`): mascot automata — thân robe côn + obi salmon + mặt kem má hồng + búi tóc + khay trà; loop glide tới "dâng" rồi lùi + wobble cam. Đặt ở rìa đảo (off-grid).
 
 Còn (follow-up): R8 escapement (verge-foliot đếm beat), R6 ghost cog-jig. Verify ảnh menu (cog+pendulum+wheel), in-game (hotbar cog + răng đảo), doll close, 4 theme. REGRESS ALL OK + boot sạch.
+
+## PHẦN 65: Karakuri hoàn tất — R8 escapement + R6 ghost cog-jig
+
+- **R8 Escapement** (`karakuri_clock.gd` autoload): verge-and-foliot — thanh foliot (bar + 2 quả tạ salmon) lắc theo `StreamManager.beat_phase()` mỗi beat; bánh thoát BƯỚC 1 răng mỗi nửa-beat (lerp ease bắt gọn, KHÔNG quay trơn — "escape") — nhịp nhạc thành cơ khí nhìn thấy. Đặt plinth ở rìa đảo (radius 8.2, off-grid) → hiện cả menu + game. rebuild() theo theme (màu gỗ). Dùng StreamManager._clock (luôn chạy).
+- **R6 Ghost cog-jig** (`placement_controller`): con trỏ đặt block thêm vòng răng cog kem mờ (alpha 0.28) làm "ổ" + 1 crank cog nhỏ quay idle — đặt block = lắp bộ phận karakuri. Build 1 lần _ready, ẩn/hiện + follow theo ghost, tôn trọng photo_mode.
+
+Verify ảnh escapement (foliot + tạ + bánh thoát ở rìa) + REGRESS ALL OK + boot sạch. Toàn bộ 9 rank karakuri XONG.

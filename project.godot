@@ -36,6 +36,7 @@ AmbientLeaves="*res://scripts/autoload/ambient_leaves.gd"
 SceneryManager="*res://scripts/autoload/scenery_manager.gd"
 CloudSea="*res://scripts/autoload/cloud_sea.gd"
 IslandBuilder="*res://scripts/autoload/island_builder.gd"
+KarakuriClock="*res://scripts/autoload/karakuri_clock.gd"
 
 [display]
 

@@ -34,6 +34,8 @@ var _brackets: Node3D
 var _bracket_mat: StandardMaterial3D
 var _last_bracket_cell := Vector3i(9999, 9999, 9999)
 var _bracket_tween: Tween
+var _jig: Node3D
+var _jig_crank: MeshInstance3D
 
 func _ready() -> void:
 	ghost.visible = false   # old boxmesh ghost retired in favour of _ghost_root
@@ -72,6 +74,31 @@ func _ready() -> void:
 			_brackets.add_child(bar)
 	_brackets.visible = false
 	add_child(_brackets)
+
+	# Karakuri cog-jig: a faint translucent cog-ring seat under the cursor + a
+	# tiny idle crank cog, so placing a block feels like fitting a clockwork part.
+	_jig = Node3D.new()
+	var ring := MeshInstance3D.new()
+	ring.mesh = GearMesh.build(12, 0.62, 0.5, 0.0, 0.04, Color("caa878"), Color("caa878"))
+	var rm := StandardMaterial3D.new()
+	rm.albedo_color = Color(0.98, 0.94, 0.86, 0.28)
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring.material_override = rm
+	ring.rotation.x = -PI / 2.0
+	_jig.add_child(ring)
+	_jig_crank = MeshInstance3D.new()
+	_jig_crank.mesh = GearMesh.build(8, 0.16, 0.12, 0.05, 0.05, Color("a9764a"), Color("caa878"))
+	var cm := StandardMaterial3D.new()
+	cm.albedo_color = Color(0.66, 0.46, 0.29, 0.55)
+	cm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_jig_crank.material_override = cm
+	_jig_crank.rotation.x = -PI / 2.0
+	_jig_crank.position = Vector3(0.42, -0.44, 0.42)
+	_jig.add_child(_jig_crank)
+	_jig.visible = false
+	add_child(_jig)
 
 ## Selecting the material already in hand CYCLES its variant (click the icon /
 ## press its key again to flip a pipe open, change wood→dirt, recolour water …).
@@ -136,6 +163,7 @@ func _update_ghost() -> void:
 		_ghost_root.visible = false
 		_ghost_shadow.visible = false
 		_brackets.visible = false
+		_jig.visible = false
 		return
 	var hit: Dictionary = _raycast_from_mouse()
 	if hit.is_empty():
@@ -143,6 +171,7 @@ func _update_ghost() -> void:
 		_ghost_root.visible = false
 		_ghost_shadow.visible = false
 		_brackets.visible = false
+		_jig.visible = false
 		return
 	var normal: Vector3 = hit["normal"]
 	var hit_cell: Vector3i = GridManager.world_to_cell(hit["position"] - normal * 0.5)
@@ -159,6 +188,7 @@ func _update_ghost() -> void:
 	_ghost_root.visible = _ghost_valid
 	_ghost_shadow.visible = _ghost_valid
 	_brackets.visible = _ghost_valid
+	_jig.visible = _ghost_valid
 	if _ghost_valid:
 		var world := GridManager.cell_to_world(place_cell)
 		_ghost_root.position = world
@@ -168,6 +198,8 @@ func _update_ghost() -> void:
 		# Contact shadow rests on the support surface; brackets frame the cell.
 		_ghost_shadow.position = world + Vector3(0, -0.48, 0)
 		_brackets.position = world
+		_jig.position = world + Vector3(0, -0.46, 0)
+		_jig_crank.rotate_z(get_process_delta_time() * 1.6)
 		# Snap-pop ONLY when the hovered cell changes (same-cell hover is calm).
 		if place_cell != _last_bracket_cell:
 			_last_bracket_cell = place_cell

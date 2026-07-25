@@ -312,6 +312,7 @@ func _on_map_card(i: int) -> void:
 	AmbientMusic.apply_theme_mix()
 	CloudSea.apply_theme()
 	IslandBuilder.rebuild()
+	KarakuriClock.rebuild()
 
 ## Repaint the live backdrop + restyle the cards for the current theme.
 func _apply_theme() -> void:
