@@ -16,6 +16,14 @@ const LANTERN := preload("res://assets/3DModel/generated/lantern.glb")
 const BONSAI := preload("res://assets/3DModel/generated/bonsai.glb")
 const SAKURA := preload("res://assets/3DModel/generated/sakura_tree.glb")
 const MOUNTAIN := preload("res://assets/3DModel/generated/mountain.glb")
+const MILL := preload("res://assets/3DModel/generated/mill.glb")
+const TEA_DOLL := preload("res://scripts/blocks/tea_doll.gd")
+
+## Giant slow water-wheels among the backdrop mountains — the whole WORLD reads
+## as karakuri, not just the island. (angle°, radius, height, y).
+const MECHS: Array = [
+	[70.0, 37.0, 17.0, -10.5], [200.0, 40.0, 15.0, -10.0], [300.0, 35.0, 18.0, -11.0],
+]
 
 ## (scene_key, angle°, radius, height). "feature" resolves per theme.
 const PROPS: Array = [
@@ -44,6 +52,30 @@ const MOUNTAINS: Array = [
 ## a prop's cell, the prop SHATTERS (a puff of its own leaves/wood) instead of
 ## clipping through the new block.
 var _prop_cells: Dictionary = {}   # Vector3i -> {root:Node3D, kind:String}
+var _mech_wheels: Array[Node3D] = []   # far horizon water-wheels, slowly turning
+
+func _process(delta: float) -> void:
+	for w in _mech_wheels:
+		if is_instance_valid(w):
+			w.rotate_z(delta * 0.08)   # imperceptibly slow — distant machinery
+
+## A distant water-wheel on the horizon: the mill model, tinted into the fog
+## like the mountains, its wheel plane facing roughly the island so it reads as
+## a turning wheel (not edge-on).
+func _place_mech(ang: float, radius: float, height: float, y: float, t: Dictionary) -> void:
+	var root := Node3D.new()
+	add_child(root)
+	root.position = Vector3(cos(ang) * radius, y, sin(ang) * radius)
+	root.rotation.y = ang + PI / 2.0   # wheel face toward the centre
+	var wheel := Node3D.new()
+	root.add_child(wheel)
+	var model: Node3D = MILL.instantiate()
+	wheel.add_child(model)
+	MeshFit.fit_centered(model, height)
+	MeshFit.matte(model)
+	var mech: Dictionary = MapThemes.mechanism()
+	_tint_all(model, t["mountain_tint"] * Color(0.9, 0.9, 0.9))
+	_mech_wheels.append(wheel)
 
 func _ready() -> void:
 	MapThemes.load_current()
@@ -61,6 +93,15 @@ func rebuild() -> void:
 		_place_ring_model(_scene_for(p[0], t), deg_to_rad(p[1]), p[2], p[3], 0.0, t, false, p[0])
 	for m in MOUNTAINS:
 		_place_ring_model(MOUNTAIN, deg_to_rad(m[0]), m[1], m[2], m[3], t, true)
+	_mech_wheels.clear()
+	for mc in MECHS:
+		_place_mech(deg_to_rad(mc[0]), mc[1], mc[2], mc[3], t)
+	# The hero automaton greets from the island's edge (off the build grid).
+	var doll := TEA_DOLL.new()
+	add_child(doll)
+	var da := deg_to_rad(160.0)
+	doll.position = Vector3(cos(da) * 8.3, 0.0, sin(da) * 8.3)
+	doll.rotation.y = da + PI     # face inward
 
 ## A block was placed — if it lands on a rim prop's cell, shatter that prop.
 func _on_block_placed(cell: Vector3i) -> void:

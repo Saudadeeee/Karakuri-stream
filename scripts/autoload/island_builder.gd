@@ -13,6 +13,7 @@ const SEGS := 48
 
 var _root: Node3D
 var _shards: Array[Node3D] = []
+var _heart_gear: MeshInstance3D          # the clockwork heart under the island
 var _time := 0.0
 
 func _ready() -> void:
@@ -26,6 +27,8 @@ func _process(delta: float) -> void:
 		var s: Node3D = _shards[i]
 		if is_instance_valid(s):
 			s.position.y = s.get_meta("base_y") + sin(_time * 0.3 + i * 2.1) * 0.3
+	if is_instance_valid(_heart_gear):
+		_heart_gear.rotate_y(delta * 0.03)   # glacial ~35s/rev
 
 ## Wipe + rebuild for the current theme's island colours.
 func rebuild() -> void:
@@ -37,6 +40,26 @@ func rebuild() -> void:
 	var base_col: Color = t["island_base"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
+
+	# THE CLOCKWORK HEART: one giant wooden cog turning under the island, wider
+	# than the rim so its tooth-tips peek past the silhouette from every angle —
+	# the karakuri soul, always visible. Wood colour per theme mechanism.
+	var mech: Dictionary = MapThemes.mechanism()
+	var wood: Color = mech["wood"]
+	# Sized WIDER than the belly at this depth so the tooth-tips poke past the
+	# island's silhouette all the way round (belly radius ≈ 7.6 at y=-1.2).
+	_heart_gear = MeshInstance3D.new()
+	_heart_gear.mesh = GearMesh.build(int(mech["teeth"]), 8.8, 7.7, 2.0, 0.8,
+		wood.darkened(0.08), wood.darkened(0.22))
+	_heart_gear.material_override = GearMesh.material()
+	_heart_gear.rotation.x = -PI / 2.0   # lay the cog flat (axis = world Y)
+	_heart_gear.position.y = -1.2
+	_root.add_child(_heart_gear)
+	if float(mech["glow"]) > 0.0:
+		var gm: StandardMaterial3D = _heart_gear.material_override
+		gm.emission_enabled = true
+		gm.emission = wood
+		gm.emission_energy_multiplier = float(mech["glow"]) * 0.5
 
 	# Main body + root rocks + shards.
 	_root.add_child(_island_mesh(top_col, base_col, rng, 9.0, Vector3(0.8, -7.0, 0.5)))

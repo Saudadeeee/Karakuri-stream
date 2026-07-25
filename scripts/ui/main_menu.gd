@@ -40,6 +40,11 @@ func _process(delta: float) -> void:
 		var t: float = Time.get_ticks_msec() / 1000.0
 		_title_root.position.y = 5.6 + sin(t * 0.8) * 0.12
 		_title_root.rotation.y = _cam_rig.rotation.y
+		if is_instance_valid(_cog_l):
+			_cog_l.rotate_z(delta * 0.6)
+			_cog_r.rotate_z(-delta * 0.6)   # meshing = opposite spin
+		if is_instance_valid(_pendulum):
+			_pendulum.rotation.z = sin(t * PI) * 0.18
 
 # ----------------------------------------------------------------- 3D backdrop
 func _build_backdrop() -> void:
@@ -124,6 +129,9 @@ func _matte(c: Color) -> StandardMaterial3D:
 ## wooden TextMesh with a cream back-copy as a soft drop shadow, gently
 ## bobbing. Part of the diorama, not a flat sign pasted on top.
 var _title_root: Node3D
+var _cog_l: MeshInstance3D
+var _cog_r: MeshInstance3D
+var _pendulum: Node3D
 
 func _build_title_3d() -> void:
 	_title_root = Node3D.new()
@@ -145,6 +153,46 @@ func _build_title_3d() -> void:
 	# Salmon subtitle under the wordmark.
 	var sub := _letter_mesh("- A WATER GARDEN TOY -", 0.42, -1.62, 0.0, Color("f5c4a8"), 0.05)
 	_title_root.add_child(sub)
+
+	# The wordmark hangs on a running MOVEMENT: two meshing wooden cogs flank it
+	# and a weight-pendulum keeps time — the karakuri soul at first glance.
+	var cw := Color("6b4a30")
+	_cog_l = _cog_face(0.95, 12, cw)
+	_cog_l.position = Vector3(-3.7, 0.1, -0.18)
+	_title_root.add_child(_cog_l)
+	_cog_r = _cog_face(0.95, 12, cw)
+	_cog_r.position = Vector3(3.7, 0.1, -0.18)
+	_cog_r.rotation.z = PI / 12.0   # half-tooth offset → reads as meshing
+	_title_root.add_child(_cog_r)
+	# Pendulum under the subtitle: a thin dowel + weight bob, pivots at top.
+	_pendulum = Node3D.new()
+	_pendulum.position = Vector3(0, -2.05, 0)
+	_title_root.add_child(_pendulum)
+	var rod := MeshInstance3D.new()
+	var rm := BoxMesh.new(); rm.size = Vector3(0.05, 0.7, 0.05)
+	rod.mesh = rm; rod.position = Vector3(0, -0.35, 0)
+	rod.material_override = _flat3(cw)
+	_pendulum.add_child(rod)
+	var bob := MeshInstance3D.new()
+	var bm := SphereMesh.new(); bm.radius = 0.13; bm.height = 0.2
+	bob.mesh = bm; bob.position = Vector3(0, -0.72, 0)
+	bob.material_override = _flat3(Color("e07a5f"))
+	_pendulum.add_child(bob)
+
+## A flat cog facing +Z (toward the camera), spinning about +Z.
+func _cog_face(diameter: float, teeth: int, col: Color) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = GearMesh.build(teeth, diameter * 0.5, diameter * 0.4, diameter * 0.18, 0.12,
+		col, col.lightened(0.08))
+	mi.material_override = GearMesh.material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+func _flat3(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = c
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return m
 
 func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
 	var tm := TextMesh.new()

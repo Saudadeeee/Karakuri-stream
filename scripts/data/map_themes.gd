@@ -27,6 +27,7 @@ const THEMES: Array = [
 		"drift": {"color": Color(0.96, 0.72, 0.84), "size": Vector2(0.13, 0.09),
 			"gravity": -0.22, "amount": 22, "glow": false},
 		"cloud_sea": Color(0.96, 0.85, 0.88),
+		"mechanism": {"wood": Color("d4a373"), "glow": 0.0, "teeth": 20, "mech_strength": 0.55},
 	},
 	{
 		"name": "Autumn",
@@ -40,6 +41,7 @@ const THEMES: Array = [
 		"drift": {"color": Color(0.85, 0.42, 0.14), "size": Vector2(0.18, 0.18),
 			"gravity": -0.35, "amount": 26, "glow": false},
 		"cloud_sea": Color(0.95, 0.82, 0.58),
+		"mechanism": {"wood": Color("6e4a2e"), "glow": 0.0, "teeth": 20, "mech_strength": 0.7},
 	},
 	{
 		"name": "Snow",
@@ -53,6 +55,7 @@ const THEMES: Array = [
 		"drift": {"color": Color(0.98, 0.99, 1.0), "size": Vector2(0.10, 0.10),
 			"gravity": -0.28, "amount": 34, "glow": false},
 		"cloud_sea": Color(0.95, 0.97, 1.0),
+		"mechanism": {"wood": Color("bdbdbd"), "glow": 0.0, "teeth": 22, "mech_strength": 0.0},
 	},
 	{
 		"name": "Night",
@@ -66,11 +69,16 @@ const THEMES: Array = [
 		"drift": {"color": Color(1.0, 0.92, 0.45), "size": Vector2(0.07, 0.07),
 			"gravity": 0.05, "amount": 30, "glow": true},
 		"cloud_sea": Color(0.20, 0.20, 0.34),
+		"mechanism": {"wood": Color("b08d57"), "glow": 0.35, "teeth": 18, "mech_strength": 0.5},
 	},
 ]
 
 static func theme() -> Dictionary:
 	return THEMES[clampi(current, 0, THEMES.size() - 1)]
+
+static func mechanism() -> Dictionary:
+	return THEMES[clampi(current, 0, THEMES.size() - 1)].get("mechanism",
+		{"wood": Color("d4a373"), "glow": 0.0, "teeth": 20, "mech_strength": 0.5})
 
 static func count() -> int:
 	return THEMES.size()

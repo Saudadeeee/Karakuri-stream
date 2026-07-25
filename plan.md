@@ -979,3 +979,18 @@ User: đặt block đè prop (cây/bụi/đá) → prop bị phá hủy có hi�
 - Particles qua `QualityManager.particles()` (web lite ÷2).
 
 Verify SHAT ALL OK (prop đăng ký cell, đè block → deregister + shatter + free) + REGRESS ALL OK + boot sạch.
+
+## PHẦN 64: "Karakuri ở mọi nơi" (panel 3 lens — 6/9 rank)
+
+User: nhìn ĐÂU cũng thấy chất karakuri (automata gỗ cơ khí Edo). Panel authenticity/framing/cohesion → build list 9, implement 6 mạnh nhất (một NGÔN NGỮ cog gỗ dùng mọi scale):
+
+- **`GearMesh`** (class_name, SurfaceTool): bánh răng gỗ đặc procedural (đĩa 2 mặt + vách răng + hub boss, vertex-color rim đậm) — util tái dùng mọi rank.
+- **R2 mechanism spine** (`map_themes`): mỗi map 1 sub-dict {wood, glow, teeth, mech_strength} → mỗi theme là 1 cỗ máy riêng (Xuân gỗ sáng, Thu gỗ dầu đậm, Tuyết sắt-lạnh mech 0 giữ trắng tinh, Đêm đồng đèn glow). `mechanism()` accessor.
+- **R1 trái tim đồng hồ** (`island_builder`): 1 bánh răng gỗ KHỔNG LỒ (r_out 8.8, teeth theo theme) quay chậm dưới đảo — răng thò qua rìa từ MỌI góc; đảo ngồi trên cog. Night phát sáng ember.
+- **R3 wordmark trên bộ máy** (`main_menu`): 2 cog gỗ ăn khớp (quay ngược chiều + lệch nửa răng) 2 bên "KARAKURI STREAM" + con lắc quả tạ đếm nhịp dưới subtitle.
+- **R7 máy chân trời** (`scenery_manager`): 2-3 guồng nước gỗ (mill.glb) quay chậm giữa dãy núi backdrop, chìm trong sương → cả THẾ GIỚI là karakuri.
+- **R5 bánh răng bóng trong mây** (`cloudsea.gdshader`): imprint cog mờ (răng từ cos, gate 2 vành đồng tâm, quay chậm) trong biển mây — near-subliminal, tắt hẳn ở Tuyết.
+- **R4 hotbar dãy cog** (`cog_bezel.gd` + `material_ui`): vành răng gỗ 2D vẽ sau mỗi icon; chỉ icon chọn/hover quay (giữ quy tắc perf 1-viewport), vành chọn màu salmon.
+- **R9 búp bê dâng trà** (chahakobi ningyō, `tea_doll.gd`): mascot automata — thân robe côn + obi salmon + mặt kem má hồng + búi tóc + khay trà; loop glide tới "dâng" rồi lùi + wobble cam. Đặt ở rìa đảo (off-grid).
+
+Còn (follow-up): R8 escapement (verge-foliot đếm beat), R6 ghost cog-jig. Verify ảnh menu (cog+pendulum+wheel), in-game (hotbar cog + răng đảo), doll close, 4 theme. REGRESS ALL OK + boot sạch.

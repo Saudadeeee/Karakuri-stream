@@ -6,6 +6,11 @@ render_mode blend_mix, cull_back, unshaded;
 // of it like a woodblock print. Theme-tinted via cloud_color.
 
 uniform vec4 cloud_color : source_color = vec4(0.96, 0.85, 0.88, 1.0);
+// Faint giant cog-wheels turning in the mist (karakuri everywhere). Near-
+// subliminal; off entirely on Snow (mech_strength 0).
+uniform float mech_strength = 0.0;
+uniform float mech_teeth = 24.0;
+uniform float mech_speed = 0.03;
 
 varying float v_n;
 varying vec3 v_world_pos;
@@ -36,6 +41,21 @@ void fragment() {
 	// Strong swell shading so the sea reads as ROLLING CLOUDS, not a flat tint
 	// lost against the sky; edges dissolve into the fog.
 	float rim = 0.80 + 0.32 * v_n;
-	ALBEDO = cloud_color.rgb * rim + vec3(0.06) * smoothstep(0.75, 1.0, v_n);
+	vec3 col = cloud_color.rgb * rim + vec3(0.06) * smoothstep(0.75, 1.0, v_n);
+
+	// Two huge slow cog imprints in concentric radial bands — teeth from a
+	// rotating cosine, gated so they read as WHEELS not a starburst, blurred by
+	// the swell noise, and gone well before the fog edge.
+	if (mech_strength > 0.001) {
+		vec2 xz = v_world_pos.xz;
+		float rad = length(xz);
+		float ang = atan(xz.y, xz.x) + TIME * mech_speed;
+		float teeth = 0.5 + 0.5 * cos(ang * mech_teeth);
+		float band = smoothstep(16.0, 20.0, rad) * (1.0 - smoothstep(30.0, 36.0, rad));
+		float g = (teeth - 0.5) * band * mech_strength * (0.7 + 0.6 * v_n);
+		col += vec3(0.045) * g;
+	}
+
+	ALBEDO = col;
 	ALPHA = smoothstep(60.0, 40.0, length(v_world_pos.xz));
 }

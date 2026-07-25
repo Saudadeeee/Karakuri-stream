@@ -64,6 +64,8 @@ var _viewport_by_type: Dictionary = {} # BlockData.Type -> SubViewport
 var _selected_type: int = BlockData.Type.WOOD
 var _hovered_type: int = -1
 var _faded: bool = false
+const COG_BEZEL := preload("res://scripts/ui/cog_bezel.gd")
+var _bezel_by_type: Dictionary = {}
 var _hint_panel: PanelContainer
 var _hint_label: Label
 
@@ -98,6 +100,12 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
 	button.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 	button.toggle_mode = true
+
+	# Wooden cog bezel behind the icon (2D draw, no 3D cost).
+	var bezel := COG_BEZEL.new()
+	bezel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	button.add_child(bezel)
+	_bezel_by_type[type] = bezel
 
 	var sub_container := SubViewportContainer.new()
 	sub_container.stretch = true
@@ -191,6 +199,10 @@ func _process(delta: float) -> void:
 			var pivot: Node3D = _pivot_by_type[type]
 			if is_instance_valid(pivot):
 				pivot.rotate_y(SPIN_SPEED * delta)
+			var bz = _bezel_by_type.get(type)
+			if bz != null:
+				bz.rot += delta * 0.7
+				bz.queue_redraw()
 
 	var mouse_x: float = get_viewport().get_mouse_position().x
 	var target_alpha: float = 1.0 if mouse_x <= REVEAL_ZONE else FADE_MIN_ALPHA
@@ -228,6 +240,11 @@ func _on_material_changed(type: BlockData.Type, variant: int = 0) -> void:
 	for button_type in _buttons:
 		_buttons[button_type].set_pressed_no_signal(button_type == type)
 	_selected_type = type
+	for bt in _bezel_by_type:
+		var b = _bezel_by_type[bt]
+		if b.selected != (bt == type):
+			b.selected = (bt == type)
+			b.queue_redraw()
 	_refresh_viewport_modes()
 	# Rebuild the selected type's icon so it SHOWS the current variant
 	# (open pipe, dirt block, pink water, mill wheel, …).

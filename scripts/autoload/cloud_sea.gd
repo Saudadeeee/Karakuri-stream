@@ -31,3 +31,6 @@ func _ready() -> void:
 func apply_theme() -> void:
 	var t: Dictionary = MapThemes.theme()
 	_mat.set_shader_parameter("cloud_color", t.get("cloud_sea", Color(0.96, 0.85, 0.88)))
+	var mech: Dictionary = MapThemes.mechanism()
+	_mat.set_shader_parameter("mech_strength", float(mech.get("mech_strength", 0.0)))
+	_mat.set_shader_parameter("mech_teeth", float(mech.get("teeth", 24)))
