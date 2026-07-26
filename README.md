@@ -106,6 +106,6 @@ per-platform setup, keystores, and the measured performance traps:
 
 ## Third-party assets
 
-Every third-party asset is **CC0 (public domain)** except the font, which is
+Every third-party asset is **CC0 (public domain)** except the font (Fredoka), which is
 **SIL OFL 1.1** and ships its licence in `assets/fonts/OFL.txt`. All 3D models are
 original. Full list with sources and licences: **[CREDITS.md](CREDITS.md)**.

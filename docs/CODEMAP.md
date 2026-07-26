@@ -20,7 +20,12 @@ scenes/
   main.tscn             Scene sandbox — camera, ground, PlacementController, UI
   pause_menu.tscn       Instance con trong main.tscn/UI — pause, save/load/xoá, âm lượng, "Về menu chính"
 ui/
-  karakuri_theme.tres   Theme project-wide (`gui/theme/custom`): panel giấy kem, button thẻ gỗ (hover salmon), slider tre+grabber salmon. Mọi Control tự áp. Gen 1 lần bằng script.
+  karakuri_theme.tres   Theme project-wide (`gui/theme/custom`) — **FILE SINH RA, ĐỪNG SỬA TAY**.
+                        Nguồn: `tools/gen_theme.gd` (`godot --headless --path . --script tools/gen_theme.gd`).
+                        Sửa tay 200 dòng StyleBox là cách 4 trạng thái button lệch nhau.
+                        Button bo góc 20, viền 3, bóng đổ LỆCH và **xẹp khi nhấn** (đó là thứ tạo cảm
+                        giác nút lún xuống). 4 state chỉ khác fill/viền/bóng, **content_margin GIỐNG HỆT
+                        nhau** — khác margin thì chữ bị reflow và nhảy khi rê chuột qua.
 tests/
   regression.tscn       FULL REGRESSION 12 section (mọi type×variant, save/load, undo chains, chuỗi karakuri live, gear 6 trục, pipe shapes, xóa giữa hoạt động, **NHÀ ghép theo ngữ cảnh + gộp mái cả toà nhà**, **wildlife gating**, **save hỏng không được xoá công trình**, 4 theme leak-check, photo/settings). Chạy: `godot --path . tests/regression.tscn` → mong "REGRESS ALL OK" + 0 error. Chạy sau MỌI thay đổi lớn.
   blocks/
@@ -57,7 +62,16 @@ shaders/
 
 assets/
   sounds/                7 file audio, TẤT CẢ đang dùng thật (xem Audio bên dưới). Không giữ file thừa ở đây
-  fonts/                 Baloo2.ttf (OFL) — font project-wide, cũng là ThemeDB.fallback_font cho TextMesh
+  fonts/                 **Fredoka.ttf** (OFL) + `fredoka_chunky.tres` + `OFL.txt`. `gui/theme/custom_font`
+                         trỏ vào **.tres CHỨ KHÔNG PHẢI .ttf**: Fredoka là VARIABLE font, Godot nạp nó ở
+                         vị trí trục mặc định = **Light** → chữ mảnh như dây, đúng ngược lại lý do chọn nó.
+                         `FontVariation` ghim trục weight=600. **Key của `variation_opentype` là OpenType
+                         TAG dạng SỐ NGUYÊN, không phải chuỗi `"wght"`** — ghi chuỗi vào .tres thì parse
+                         vẫn qua nhưng KHÔNG có tác dụng gì, rất dễ tưởng đã sửa rồi mà vẫn ship bản Light.
+                         `tools/gen_theme.gd` sinh file này VÀ đo bề rộng chuỗi light-vs-600 để chứng minh
+                         trục đã đổi thật. Cũng là `ThemeDB.fallback_font` → wordmark TextMesh dùng chung.
+                         **Wordmark PHẢI toàn chữ HOA** — TextMesh convex-decompose lỗi ở descender chữ
+                         thường (`g`,`y`). Đây là giới hạn của TextMesh, không phải của font (Baloo 2 cũ y hệt).
   3DModel/               CHỈ còn `generated/` + `blockbench/` (source authoring). Mọi model legacy tải về đã xoá — in-game 100% dùng `generated/*.glb`
   3DModel/generated/     Bộ asset Blender sinh (`stylekit.py` + `gen_assets.py` + `gen_fix.py`, chạy `blender --background --python`). Theo artstyle.md: chunky+bevel, matte flat, palette hex. **LƯU Ý Z-up**: Blender Z-up → Godot Y-up (glTF đổi (x,y,z)→(x,z,-y)); author "cao" theo Blender Z, wheel phẳng trong Blender X-Y. DÙNG in-game: gear (Gear), bell (Bell), source/pipe_straight/pipe_elbow (Source/Pipe/Pipe_bend), grass_tuft (Decor), lily_pad (Pond), pine_tree/bush/reeds/rock_cluster/lantern/bonsai (SceneryManager)
   3DModel/blockbench/    Source authoring cho pipeline Blockbench→GLB: `*.obj` + `*_cmap.json` + `bb_bridge.py` + README. GLB thành phẩm được copy sang `generated/`, KHÔNG giữ bản trung gian ở đây
@@ -173,6 +187,9 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
   **CỬA/ỐNG KHÓI cần điều ngược lại với tính cục bộ**: đúng 1 cái mỗi toà nhà, bất kể hình dạng. Nên `_component()` flood-fill toà nhà (3D, để tháp + tầng trệt là một), **cache theo `GridManager.version`** — mọi ô của một toà nhà đều rebuild trong cùng 1 lần đổi lưới nên chúng dùng chung 1 lần flood. Cửa = ô nhỏ nhất theo thứ tự lexicographic (y trước → luôn ở tầng thấp nhất), ống khói = ô lớn nhất. Luật "góc gần/góc xa" cũ cho **2 cửa** trên hình chữ thập.
   **DETERMINISTIC tuyệt đối**: `_h(cell, salt)` hash toạ độ ô, KHÔNG dùng `randf()` — thay bằng randf thì mỗi lần rebuild/reload cả khu phố tự sắp xếp lại cửa sổ. `lone_context()` = nhà đứng một mình, dùng cho icon hotbar + ghost (chúng chưa có ô trong lưới, không có nó sẽ đọc nhầm thứ nằm ở (0,0,0)).
 - **`mesh_batch.gd`** (`class_name MeshBatch`) — gom nhiều hộp nhỏ thành MỘT `ArrayMesh`, 1 surface / 1 MÀU. **Lý do tồn tại**: 1 ô nhà là ~37 mảnh rời (tường, khung cửa sổ, kính, chậu hoa, cửa, bậc, mái, sống mái, ống khói). Để rời = ~37 draw call MỖI Ô → làng 20 nhà là 700+ draw call, và ĐÓ mới là con số giết hiệu năng trên gl_compatibility/web, chứ không phải số tam giác. Gom theo màu còn **3.9 draw call/ô** (đo thật: làng 12 ô = 47 draw call, 2090 tri). Hệ quả thiết kế: **thêm màu = thêm draw call** — 3 sắc `darkened()` gần giống nhau đã được gộp làm 1 (`_dark()`) vì mắt không phân biệt được ở khoảng cách chơi. Normal phẳng/tam giác, khớp art style.
+- **`cute_button.gd`** (`class_name CuteButton`, static) — biến Button thường thành thứ bấm vào thấy đàn hồi: hover phồng + nghiêng, nhấn thì BẸT ra và lún, thả thì nảy quá đà rồi mới về (`TRANS_BACK` — bật thẳng về 1.0 là mất hết cảm giác đồ chơi). `apply_all(root)` quét cả cây, `wire(b, quiet_hover)` cho từng cái.
+  **CHỈ ĐỘNG VÀO `scale`/`rotation`, TUYỆT ĐỐI KHÔNG `position`/`size`** — nút nằm trong `VBoxContainer`, mà container ghi đè position/size mỗi lần layout → animate 2 thứ đó là đánh nhau với container và giật. `pivot_offset` phải bám theo size (nối `resized`), không thì nút phóng từ góc trên-trái và trượt ngang.
+  `quiet_hover=true` cho hotbar: rê chuột qua 16 icon mà kêu 16 tiếng thì hết dễ thương ngay.
 - **`critter_mesh.gd`** (`class_name CritterMesh`) — chim/mèo/vịt/hươu dựng bằng code (cầu + hộp, flat matte) thay vì .glb: tint được theo map theme, ~vài trăm tri mỗi con. Quy ước MỌI con: **+X là HƯỚNG TRƯỚC (đầu)**, gốc toạ độ nằm SÁT ĐẤT giữa 2 chân → `WildlifeManager` chỉ việc quay +X theo hướng đi và thả gốc lên mặt, không cần offset riêng từng loài.
 - **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi". Dùng chung bởi `PlacementController` và `SaveManager`.
 
