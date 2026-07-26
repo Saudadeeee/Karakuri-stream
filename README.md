@@ -27,12 +27,37 @@ Use an **official** Godot 4.7.1 binary. The Steam build swallows export error te
 | Middle drag | orbit camera |
 | Scroll | zoom |
 | `1`–`0`, `-`, `=` | pick material (Wood, Water, Source, Pipe, Gear, Bell, Jelly, Shishi, Drum, Chime, Music box, Scoop) |
+| `Q` | houses |
 | Same key / icon again | cycle that material's variant (pipe open↔closed, wood→dirt→moss→stone, chime note …) |
 | `Ctrl+Z` | undo |
 | `H` | hide UI · `U` move the sun · `P` screenshot |
 
-16 block types, 4 map themes (Spring / Autumn / Snow / Night). Progress saves to
+17 block types, 4 map themes (Spring / Autumn / Snow / Night). Progress saves to
 `user://` — save, load, and delete from the pause menu.
+
+### Houses
+
+You don't place a house, you place a house *cell*, and the building assembles
+itself. Put two side by side and the wall between them disappears — they become
+one wide house under one long roof, with the ridge turning to follow whichever
+way the building runs. Stack one and the lower roof becomes a floor. Knock a hole
+in a terrace and the two new ends grow their own gable walls. Doors, chimneys,
+window boxes and balconies all place themselves, and they place themselves the
+*same way every time*, so a village looks identical after you reload it.
+
+### Animals
+
+Wildlife arrives because of what you built, and does something back:
+
+- **Birds** need a house. They perch on your roofs, and a bird that lands on a
+  bell, chime or drum **plays it** — the garden gets a second musician you didn't
+  program. Building near them puts them up.
+- **A cat** moves in once there are two houses. It walks the rooftops, will not
+  step on water, and on the night map goes and sits by a lit stone lantern.
+- **Ducks** need a real pond — three open water cells or more — and paddle it,
+  dipping to feed.
+- **A deer** only comes out when the machine is *quiet*, and leaves the moment
+  water starts running again. Switching your garden off is the only way to see it.
 
 ## Build
 

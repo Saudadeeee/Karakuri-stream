@@ -12,8 +12,8 @@ Godot 4.7, GDScript, renderer `gl_compatibility` (bắt buộc — quyết đị
 
 ```
 project.godot           Cấu hình engine + danh sách autoload (thứ tự load quan trọng, xem dưới)
-CODEMAP.md              File này
-plan.md                 Nhật ký thiết kế/bugfix theo phiên — lịch sử, không phải tài liệu tham chiếu
+docs/CODEMAP.md         File này
+docs/plan.md            Nhật ký thiết kế/bugfix theo phiên — lịch sử, không phải tài liệu tham chiếu
 
 scenes/
   main_menu.tscn        **MAIN SCENE** (khởi động ở đây). `main_menu.gd`: backdrop 3D vườn sống (env+đảo+camera xoay chậm, scenery autoload trang trí) + UI biển gỗ title + nút Chơi/Cài đặt/Thoát + panel volume theo bus. Chơi → main.tscn
@@ -22,7 +22,7 @@ scenes/
 ui/
   karakuri_theme.tres   Theme project-wide (`gui/theme/custom`): panel giấy kem, button thẻ gỗ (hover salmon), slider tre+grabber salmon. Mọi Control tự áp. Gen 1 lần bằng script.
 tests/
-  regression.tscn       FULL REGRESSION 9 section (mọi type×variant, save/load, undo chains, chuỗi karakuri live, gear 6 trục, pipe shapes, xóa giữa hoạt động, 4 theme leak-check, photo/settings). Chạy: `godot --path . tests/regression.tscn` → mong "REGRESS ALL OK" + 0 error. Chạy sau MỌI thay đổi lớn.
+  regression.tscn       FULL REGRESSION 11 section (mọi type×variant, save/load, undo chains, chuỗi karakuri live, gear 6 trục, pipe shapes, xóa giữa hoạt động, **NHÀ ghép theo ngữ cảnh**, **wildlife gating**, 4 theme leak-check, photo/settings). Chạy: `godot --path . tests/regression.tscn` → mong "REGRESS ALL OK" + 0 error. Chạy sau MỌI thay đổi lớn.
   blocks/
     wood_block.tscn      StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — gỗ là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
     water_block.tscn     StaticBody3D + CollisionShape3D THUẦN (KHÔNG mesh) — nước là 1 occupancy-isosurface gộp, xem VoxelSurfaceManager
@@ -30,6 +30,7 @@ tests/
     bell_block.tscn      StaticBody3D + collision. `bell_block.gd` nạp `generated/bell.glb`, `fit_bottom`. Visual — kêu khi stream rơi trúng (StreamManager) hoặc gear kề gõ
     source_block.tscn    StaticBody3D + collision. `source_block.gd` nạp `generated/source.glb` (ống tre ĐỨNG CĂN TÂM, miệng đáy-tâm, lá đối xứng ±Z → thẳng hàng ống dưới + stream tâm ô). Model đối xứng nên `face_adjacent_water()` chỉ còn trang trí. StreamManager phun dòng thẳng xuống từ tâm ô
     pipe_block.tscn      Ống tre TỰ NỐI (kín/hở variant, `pipe_block.gd`). `build_visual(dirs,open)`: run THẲNG (2 hướng đối) → 1 tube liền `_add_tube_through` (KHÔNG hub); rẽ/T/thập/xuống/lẻ → hub + 1 stub/hướng (**KÍN=SphereMesh tròn**, **HỞ=box phẳng** lấp góc máng, không dùng cầu tròn). Hở → máng U `_add_trough` (đáy+2 vách). `PipeRouting.connections(cell)`; nghe grid đổi → `refresh_shape()`. `static build_visual` dùng chung ghost. `grid_cell` do Placement/Save set
+    house_block.tscn     **NHÀ (Townscaper-style)** — người chơi đặt 1 Ô NHÀ, toà nhà tự lắp. Logic "cái gì mọc ở đâu" nằm HẾT ở `HouseShape` (data class), `house_block.gd` chỉ dựng hình — đúng cặp `PipeRouting`/`pipe_block`. Tường CHỈ mọc ở mặt không có nhà kề (tường chung biến mất → 1 dãy đọc thành MỘT toà nhà dài, không phải 3 cái lều); mái chỉ ở ô trên cùng, sống mái chạy theo trục DÀI của toà nhà; cửa ở góc gần dưới đất, ống khói ở góc xa; ban công ở tầng trên. Tất cả DETERMINISTIC (`HouseShape._h()` hash ô, KHÔNG randf) → reload ra đúng ngôi nhà cũ. Đục 1 ô giữa dãy → 2 đầu tự mọc tường + đầu hồi. Gộp mesh qua `MeshBatch` (xem dưới)
     pipe_bend_block.tscn **Khuỷu tre 90°** (type PIPE_BEND, đang dùng thật). `pipe_bend_block.gd` nạp `generated/pipe_elbow.glb`, `MeshFit.fit_centered`. Nước vào cổng TRÊN (+Y), ra 1 cổng CẠNH; `apply_ports` xoay model quanh Y (model author sẵn cổng {+Y, +X}), phím R lúc đặt để đổi cạnh
     shishi_block.tscn    **Shishi-odoshi** — stream rót → `fill()` 2 tick → LẬT đổ nước tiếp (`add_temp_source`) + "cộc-cốc". Art: `shishi_base.glb` (đá+cột) + `shishi_arm.glb` dưới pivot `_arm` (tip anim)
     drum_block.tscn      **Trống taiko** — stream/gear-vòng gõ → `hit()` "tùm" trầm + squash. Art: `drum.glb` (thùng+da+đinh+chân)
@@ -38,7 +39,7 @@ tests/
     scoop_block.tscn     **Gầu múc** — kề HỒ + gear powered → TẠO dòng mới (`is_scoop_active`). Art: `scoop_mast.glb` + `scoop_wheel.glb` dưới `_wheel` (quay trục Z)
 
 scripts/
-  autoload/              12 singleton, load theo đúng thứ tự khai báo trong project.godot
+  autoload/              19 singleton, load theo đúng thứ tự khai báo trong project.godot
   data/                  class_name thuần data/utility, KHÔNG phải autoload, KHÔNG có scene tree riêng
   player/                Script gắn trực tiếp vào node trong main.tscn (camera, đặt/gỡ khối)
   ui/                    Script UI
@@ -144,6 +145,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | 11 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — lá phong cam rơi lơ lửng lúc khởi động, cast_shadow OFF. |
 | 12 | `SceneryManager` | `autoload/scenery_manager.gd` | `rebuild()` rải prop quanh rìa THEO MAP THEME (`MapThemes`): thông/bụi/lau/đá/đèn/bonsai + slot "feature" (sakura/maple/pine tuyết); lá recolor `MeshFit.recolor_foliage`; ring 8 núi backdrop nhận `mountain_tint`; lantern GLB nằm ngang → heuristic AABB dựng đứng (xoay ở CON, fit qua wrapper). Gọi lại khi menu đổi theme. Thuần backdrop. |
 | 12b | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Hạt drift THEO THEME (`rebuild()`): cánh sakura hồng / lá phong cam / bông tuyết / đom đóm vàng (bay LÊN + emissive ăn bloom). |
+| 13 | `WildlifeManager` | `autoload/wildlife_manager.gd` | **Động vật đọc thế giới**, không chỉ đi lang thang. Mỗi loài bị GATE bởi thứ người chơi XÂY, và làm ngược lại điều gì đó — liên kết 2 chiều đó mới là trọng tâm, thiếu nó chỉ là trang trí biết nhúc nhích. **Chim**: cần ≥1 NHÀ; đậu trên mái, và khi đậu trúng BELL/CHIME/DRUM thì **GÕ THẬT** (gọi `ring()`/`hit()`) → vườn có thêm 1 nhạc công bạn không lập trình; đặt khối gần → bay tán loạn (`scatter_near`). **Mèo**: cần ≥2 nhà; đi trên mặt trên, **không bao giờ bước xuống nước** (nước không nằm trong `_walkable`, nên nó không thể "quyết định" bơi); đêm thì ra ngồi cạnh đèn đá; `look_near()` cho nó quay đầu nhìn chỗ vừa click. **Vịt**: cần hồ ≥3 ô nước hở; bơi vòng, rúc đầu kiếm ăn → `_spawn_splash`. **Hươu**: CHỈ ra khi máy IM LẶNG >12s, biến mất ngay khi có dòng chảy → tắt máy mới thấy được. Quét lưới 1 lần, dirty-flag + throttle 0.4s (như `VoxelSurfaceManager`); sĩ số có trần và **trần giảm nửa trên web LITE** qua `QualityManager.lite`. |
 | 12c | — | `data/map_themes.gd` | `MapThemes` registry 4 map theme (Xuân/Thu/Tuyết/Đêm): sky/fog/sun/island/mountain_tint/foliage/drift. `current` persist settings.cfg `[map] theme`. `apply_environment(env, sun)` dùng chung menu + `main_scene.gd` (script root main.tscn — repaint env + 2 material đảo lúc vào game). Picker = 4 card màu trời ở main menu. |
 
 **Quan trọng khi thêm autoload mới**: đăng ký trong `project.godot` [autoload] — nếu autoload mới cần đọc `GridManager`/`AudioManager`/`WaterFlowManager` trong `_ready()`, đặt SAU chúng trong danh sách (autoload load tuần tự theo thứ tự khai báo). `VoxelSurfaceManager` đặt SAU `WaterFlowManager` vì đọc `_active_flows` của nó.
@@ -158,6 +160,9 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
   **`MeshFit.flat(col)`** = bản cho geometry TỰ DỰNG BẰNG CODE: tạo StandardMaterial3D `albedo=col, roughness=1, metallic=0`. NƠI DUY NHẤT dựng material phẳng từ màu — trước đây 8 file mỗi file 1 bản y hệt (`_mat`/`_flat`/`_matte` + 2 chỗ viết inline), look dễ lệch. Cần material phẳng → gọi hàm này, ĐỪNG viết `StandardMaterial3D.new()` mới. CỐ Ý không set `metallic_specular` (roughness 1.0 đã dập highlight; giữ đúng hành vi 8 bản gốc → không đổi hình).
   **Ngoại lệ hợp lệ**, KHÔNG dùng `flat()`: `main_menu._flat3` (unshaded cho chữ 3D), `gear_mesh.material()` (vertex-color), particle/billboard/transparent material (placement_controller, water_flow, firefly, stream…) — chúng cần cờ khác.
 - **`iso_surface.gd`** (`class_name IsoSurface`) — `static func build(samples, dims, cell_size, iso) -> ArrayMesh`. Thuật toán Surface Nets (chọn thay Marching Cubes để khỏi bảng 256-entry, cho mặt blob mượt). Thuần toán, không phụ thuộc scene. Dùng bởi `VoxelSurfaceManager` để gộp CẢ gỗ + nước thành mặt liền. Density convention: "inside" khi value > iso. Sau khi dựng tam giác → `_smooth()` chạy **Taubin** (`SMOOTH_PASSES=2` × 2 bước: co +λ0.5 rồi phồng -μ0.53) dẹp scallop mà KHÔNG co thể tích — Laplacian thuần trước đây co mesh làm hở/xuyên mối nối. `VoxelSurfaceManager` dùng `ROUND_R=0.26`, `ISO=0.42` (<0.5 để phồng nhẹ, bắc cầu ô kề CHÉO → bậc thang merge liền, không hở).
+- **`house_shape.gd`** (`class_name HouseShape`) — TOÀN BỘ luật kiến trúc của nhà, tách khỏi phần dựng hình. `context(cell)` trả về dict: `open_sides` (mặt lộ), `roof`, `ridge_x` (sống mái theo trục dài — đo bằng `_run()` cả 2 trục), `floor`/`stacked`, `door_side`, `chimney`. **O(1)**, chỉ tra hàng xóm — KHÔNG flood-fill, KHÔNG quét component, nên chi phí không tăng theo kích thước công trình (giống `PipeRouting`). **DETERMINISTIC tuyệt đối**: `_h(cell, salt)` hash toạ độ ô, KHÔNG dùng `randf()` — nếu ai đó thay bằng randf thì mỗi lần rebuild/reload cả khu phố sẽ tự sắp xếp lại cửa sổ. `lone_context()` = nhà đứng một mình, dùng cho icon hotbar + ghost (chúng chưa có ô trong lưới, không có nó sẽ đọc nhầm thứ nằm ở (0,0,0)).
+- **`mesh_batch.gd`** (`class_name MeshBatch`) — gom nhiều hộp nhỏ thành MỘT `ArrayMesh`, 1 surface / 1 MÀU. **Lý do tồn tại**: 1 ô nhà là ~37 mảnh rời (tường, khung cửa sổ, kính, chậu hoa, cửa, bậc, mái, sống mái, ống khói). Để rời = ~37 draw call MỖI Ô → làng 20 nhà là 700+ draw call, và ĐÓ mới là con số giết hiệu năng trên gl_compatibility/web, chứ không phải số tam giác. Gom theo màu còn **3.9 draw call/ô** (đo thật: làng 12 ô = 47 draw call, 2090 tri). Hệ quả thiết kế: **thêm màu = thêm draw call** — 3 sắc `darkened()` gần giống nhau đã được gộp làm 1 (`_dark()`) vì mắt không phân biệt được ở khoảng cách chơi. Normal phẳng/tam giác, khớp art style.
+- **`critter_mesh.gd`** (`class_name CritterMesh`) — chim/mèo/vịt/hươu dựng bằng code (cầu + hộp, flat matte) thay vì .glb: tint được theo map theme, ~vài trăm tri mỗi con. Quy ước MỌI con: **+X là HƯỚNG TRƯỚC (đầu)**, gốc toạ độ nằm SÁT ĐẤT giữa 2 chân → `WildlifeManager` chỉ việc quay +X theo hướng đi và thả gốc lên mặt, không cần offset riêng từng loài.
 - **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi". Dùng chung bởi `PlacementController` và `SaveManager`.
 
 ## `scripts/player/` — input & tương tác

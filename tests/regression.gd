@@ -31,6 +31,10 @@ func _ready() -> void:
 	await _sec_pipe_shapes()
 	print("SECTION _sec_removal_during_activity")
 	await _sec_removal_during_activity()
+	print("SECTION _sec_houses")
+	await _sec_houses()
+	print("SECTION _sec_wildlife")
+	await _sec_wildlife()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
 	print("SECTION _sec_photo_and_misc")
@@ -202,6 +206,121 @@ func _sec_pipe_shapes() -> void:
 	_check(true, "pipe shapes rebuilt without crash")
 	_clear()
 	await get_tree().process_frame
+
+## 7b. Houses assemble contextually: shared walls vanish, the roof goes on the
+## top cell only, the ridge follows the long axis, and one door + one chimney
+## land on opposite corners. These are the rules that make a row read as ONE
+## building — if any of them regress the town silently turns back into sheds.
+func _sec_houses() -> void:
+	# 3x1 terrace along X, plus a second storey on the middle cell.
+	for x in 3:
+		_b(Vector3i(x, 0, 12), BlockData.Type.HOUSE, x)
+	_b(Vector3i(1, 1, 12), BlockData.Type.HOUSE, 0)
+	await get_tree().process_frame
+
+	var mid := HouseShape.context(Vector3i(1, 0, 12))
+	var left := HouseShape.context(Vector3i(0, 0, 12))
+	var top := HouseShape.context(Vector3i(1, 1, 12))
+
+	# Middle of the terrace: walls only front and back, no roof (storey above).
+	_check(mid["open_sides"].size() == 2, "terrace middle drops both shared walls")
+	_check(not mid["roof"], "cell under a storey grows no roof")
+	_check(left["roof"], "terrace end keeps its roof")
+	# Ridge follows the 3-long X run, not the 1-deep Z.
+	_check(left["ridge_x"], "ridge runs along the building's long axis")
+	_check(int(left["run_x"]) == 3 and int(left["run_z"]) == 1, "run measured on both axes")
+	# Door on the near corner, chimney on the far one — never the same cell here.
+	_check(left["door_side"] != Vector3i.ZERO, "ground corner cell gets the door")
+	_check(mid["door_side"] == Vector3i.ZERO, "only one door per building")
+	_check(not left["chimney"], "near corner does not also take the chimney")
+	_check(top["stacked"], "upper storey knows it is stacked")
+	_check(top["roof"] and not bool(top["floor"]), "top cell roofs, does not re-floor")
+
+	# Deterministic: the same cell must decide the same windows every time, or a
+	# reload would rearrange the whole street.
+	var w1 := HouseShape.window_offsets(Vector3i(0, 0, 12), HouseShape.SIDES[1], false)
+	var w2 := HouseShape.window_offsets(Vector3i(0, 0, 12), HouseShape.SIDES[1], false)
+	_check(w1 == w2, "window layout is deterministic")
+
+	# Knocking the middle out must regrow the two new end walls.
+	GridManager.remove_block(Vector3i(1, 0, 12))
+	await get_tree().process_frame
+	_check(HouseShape.context(Vector3i(0, 0, 12))["open_sides"].size() == 4,
+		"removing a neighbour regrows the end wall")
+
+	# Survives save/load with the palette intact.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 12), BlockData.Type.HOUSE, 2)
+	_b(Vector3i(1, 0, 12), BlockData.Type.HOUSE, 2)
+	SaveManager.save_game()
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(), "house build reloads")
+	await get_tree().process_frame
+	var hb: BlockData = GridManager.get_block(Vector3i(0, 0, 12))
+	_check(hb != null and hb.type == BlockData.Type.HOUSE, "house survives reload")
+	_check(hb != null and int(hb.state.get("variant", -1)) == 2, "house palette survives reload")
+	_check(HouseShape.context(Vector3i(0, 0, 12))["open_sides"].size() == 3,
+		"reloaded pair still shares its wall")
+	_clear()
+	await get_tree().process_frame
+
+## 7c. Wildlife is gated on what the player built, and cleans up after itself.
+## The rules under test are the ones that make the animals feel like they read
+## the world: no house means no birds, water is never walkable, and clearing
+## the grid must not leave a single orphan critter behind.
+func _sec_wildlife() -> void:
+	await _wildlife_scan()
+	_check(WildlifeManager._birds.is_empty(), "no birds without a house")
+	_check(WildlifeManager._cats.is_empty(), "no cats without a village")
+
+	# A house + a perch: birds move in.
+	_b(Vector3i(0, 0, 16), BlockData.Type.HOUSE)
+	_b(Vector3i(2, 0, 16), BlockData.Type.HOUSE)
+	_b(Vector3i(4, 0, 16), BlockData.Type.WOOD)
+	await _wildlife_scan()
+	_check(not WildlifeManager._birds.is_empty(), "houses attract birds")
+	_check(not WildlifeManager._cats.is_empty(), "a village attracts a cat")
+
+	# Water is a pond for ducks, never ground for the cat.
+	for z in 4:
+		_b(Vector3i(8, 0, 14 + z), BlockData.Type.WATER)
+	await _wildlife_scan()
+	_check(WildlifeManager._pond.size() >= 3, "open water registers as pond")
+	_check(not WildlifeManager._ducks.is_empty(), "a real pond gets ducks")
+	for cell in WildlifeManager._walkable:
+		var wb: BlockData = GridManager.get_block(cell)
+		_check(wb != null and wb.type != BlockData.Type.WATER, "cat territory excludes water")
+
+	# A buried block is not a perch — nothing may stand inside the build.
+	_b(Vector3i(4, 1, 16), BlockData.Type.WOOD)
+	await _wildlife_scan()
+	_check(not WildlifeManager._perches.has(Vector3i(4, 0, 16)), "covered cells stop being perches")
+
+	# Birds play instruments they land on: the bell must survive being rung.
+	var bell := _b(Vector3i(6, 0, 16), BlockData.Type.BELL)
+	await _wildlife_scan()
+	_check(WildlifeManager._instruments.has(Vector3i(6, 0, 16)), "bell registers as playable")
+	_check(bell.has_method("ring"), "bird landing has a ring() to call")
+	bell.ring()
+	await get_tree().process_frame
+	_check(is_instance_valid(bell), "ringing from a landing does not free the bell")
+
+	# Everything must go when the grid does.
+	_clear()
+	await _wildlife_scan()
+	_check(WildlifeManager._birds.is_empty() and WildlifeManager._cats.is_empty()
+		and WildlifeManager._ducks.is_empty(), "clear_all removes every critter")
+	_check(WildlifeManager._perches.is_empty(), "scan forgets the cleared grid")
+
+## The manager scans on a throttle, so tests must let that interval elapse
+## instead of assuming the very next frame is up to date.
+func _wildlife_scan() -> void:
+	WildlifeManager._dirty = true
+	WildlifeManager._timer = 10.0
+	for _f in range(4):
+		await get_tree().process_frame
 
 ## 7. Removing blocks mid-activity must not error or leave ghosts.
 func _sec_removal_during_activity() -> void:
