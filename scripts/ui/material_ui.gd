@@ -82,6 +82,9 @@ func _ready() -> void:
 		vbox.add_child(button)
 		_buttons[type] = button
 		button.pressed.connect(placement_controller.select_material.bind(type))
+		# Quiet hover: a mouse sweeping this 16-icon strip would otherwise fire a
+		# knock per icon. Press still clicks.
+		CuteButton.wire(button, true)
 
 	placement_controller.material_changed.connect(_on_material_changed)
 	_on_material_changed(BlockData.Type.WOOD)

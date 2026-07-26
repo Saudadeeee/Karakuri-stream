@@ -77,6 +77,7 @@ func _maybe_show_controls() -> void:
 	ok.text = "Got it"
 	ok.custom_minimum_size = Vector2(0, 42)
 	box.add_child(ok)
+	CuteButton.wire(ok)
 	ok.pressed.connect(func():
 		panel.queue_free()
 		var c := ConfigFile.new()

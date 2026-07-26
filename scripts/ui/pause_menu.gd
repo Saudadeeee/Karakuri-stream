@@ -33,6 +33,7 @@ func _ready() -> void:
 	volume_slider.value_changed.connect(_on_volume_changed)
 
 	_load_settings()
+	CuteButton.apply_all(self)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

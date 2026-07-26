@@ -25,6 +25,9 @@ func _ready() -> void:
 	_build_ui()
 	_load_audio()
 	_apply_theme()
+	# Every button in this menu is built in code above, so one sweep at the end
+	# is simpler and harder to forget than wiring each one at its call site.
+	CuteButton.apply_all(self)
 
 func _process(delta: float) -> void:
 	if is_instance_valid(_cam_rig):
@@ -110,17 +113,18 @@ func _build_title_3d() -> void:
 		{"text": "KARAKURI", "size": 1.35, "y": 0.75},
 		{"text": "STREAM", "size": 1.35, "y": -0.55},
 	]
+	# Sticker treatment: a FAT cream halo behind a warm wood face. The polarity
+	# matters and used to be the other way round — a cream face on the pale pink
+	# spring sky had almost no contrast and the title read as an outline.
+	#
+	# It has to survive all four skies, which rules out picking one colour: a dark
+	# face vanishes on the indigo night map, a light one vanishes on pink and
+	# snow. Doing both is what makes it theme-proof — the halo separates the
+	# letters from a dark sky, the face separates them from a pale one.
 	for l in lines:
-		# Deep-wood drop copy behind + cream face in front — flat unshaded
-		# colours so the wordmark stays bold against the pastel sky.
-		_title_root.add_child(_letter_mesh(l["text"], l["size"] * 1.05, l["y"] - 0.07,
-			-0.12, Color("6b4a30"), 0.1))
-		_title_root.add_child(_letter_mesh(l["text"], l["size"], l["y"],
-			0.0, Color("fdf3e3"), 0.16))
-
-	# Salmon subtitle under the wordmark.
-	var sub := _letter_mesh("- A WATER GARDEN TOY -", 0.42, -1.62, 0.0, Color("f5c4a8"), 0.05)
-	_title_root.add_child(sub)
+		_add_haloed(l["text"], l["size"], l["y"], Color("7d5533"), 0.16, 0.035)
+	# Subtitle got the same treatment — plain salmon on a pink sky was invisible.
+	_add_haloed("- A WATER GARDEN TOY -", 0.42, -1.62, Color("c2694a"), 0.05, 0.016)
 
 	# The wordmark hangs on a running MOVEMENT: two meshing wooden cogs flank it
 	# and a weight-pendulum keeps time — the karakuri soul at first glance.
@@ -161,6 +165,34 @@ func _flat3(c: Color) -> StandardMaterial3D:
 	m.albedo_color = c
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
+
+const HALO := Color("fff6e8")
+
+## Text with a cream outline around it, and the reason it is built this way.
+##
+## The obvious outline — a second copy scaled up behind — does NOT work for text:
+## scaling stretches the LETTER SPACING as well as the glyphs, so the two copies
+## drift apart and you see doubled letterforms rather than an outline. Instead,
+## four copies at the SAME size are nudged up/down/left/right behind the face, so
+## every glyph lines up exactly.
+##
+## All five instances SHARE one TextMesh. Triangulating glyphs is the expensive
+## part; five MeshInstance3D pointing at one mesh costs five draw calls and one
+## triangulation, where five TextMesh resources would pay for the outlines five
+## times over.
+func _add_haloed(text: String, size: float, y: float, col: Color, depth: float, spread: float) -> void:
+	var face := _letter_mesh(text, size, y, 0.0, col, depth)
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		var edge := MeshInstance3D.new()
+		edge.mesh = face.mesh
+		edge.position = Vector3(o.x * spread, y + o.y * spread, -0.12)
+		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var m := StandardMaterial3D.new()
+		m.albedo_color = HALO
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		edge.material_override = m
+		_title_root.add_child(edge)
+	_title_root.add_child(face)
 
 func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
 	var tm := TextMesh.new()
