@@ -379,6 +379,8 @@ func _sec_house_merging() -> void:
 		_check(doors == 1, "exactly one door on an irregular footprint")
 		_check(chimneys == 1, "exactly one chimney on an irregular footprint")
 
+	await _sec_house_vertical()
+
 	# Two buildings that do NOT touch stay two buildings, with a door each.
 	_clear()
 	await get_tree().process_frame
@@ -389,6 +391,70 @@ func _sec_house_merging() -> void:
 	_check(HouseShape.context(Vector3i(0, 0, 30))["door_side"] != Vector3i.ZERO
 		and HouseShape.context(Vector3i(4, 0, 30))["door_side"] != Vector3i.ZERO,
 		"each separate house gets its own door")
+	_clear()
+	await get_tree().process_frame
+
+## Nothing may float. A house cell with open air under it either stands on legs
+## or is braced back into the building beside it, and it must reach down to
+## whatever is actually there rather than a guessed height.
+func _sec_house_vertical() -> void:
+	# A hut in mid-air reaches the island surface.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 3, 34), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var air := HouseShape.context(Vector3i(0, 3, 34))
+	_check(int(air["support_drop"]) == 3, "airborne hut measures its drop to the ground")
+	_check(not bool(air["overhang"]), "an isolated airborne hut gets legs, not a bracket")
+
+	# Put something under it and the legs must STOP there, not carry on down.
+	_b(Vector3i(0, 1, 34), BlockData.Type.WOOD)
+	await get_tree().process_frame
+	_check(int(HouseShape.context(Vector3i(0, 3, 34))["support_drop"]) == 1,
+		"legs land on the first solid thing below, not the ground")
+
+	# A storey jutting out past the one below is a cantilever: braced sideways,
+	# not propped from the floor.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 34), BlockData.Type.HOUSE)
+	_b(Vector3i(0, 1, 34), BlockData.Type.HOUSE)
+	_b(Vector3i(1, 1, 34), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var jut := HouseShape.context(Vector3i(1, 1, 34))
+	_check(int(jut["support_drop"]) > 0, "the overhanging cell knows it is unsupported")
+	_check(bool(jut["overhang"]), "an overhang braces against its neighbour instead of stilting")
+	_check(HouseShape.corbel_sides(Vector3i(1, 1, 34)).size() == 1, "braced toward the one storey holding it")
+	_check(int(HouseShape.context(Vector3i(0, 0, 34))["support_drop"]) == 0, "the grounded storey needs nothing")
+	_check(bool(HouseShape.context(Vector3i(0, 0, 34))["has_above"]), "a storey with one above gets a belt course")
+	_check(not bool(HouseShape.context(Vector3i(0, 1, 34))["has_above"]), "the top storey has no band")
+
+	# A raised platform must not stack a post per cell in the same hole: the four
+	# cells of a 2x2 share corners, so nine posts, not sixteen.
+	_clear()
+	await get_tree().process_frame
+	var plat: Array[Vector3i] = []
+	for x in 2:
+		for z in 2:
+			var c := Vector3i(x, 2, 34 + z)
+			plat.append(c)
+			_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var posts := 0
+	for c in plat:
+		for ax in [-1, 1]:
+			for az in [-1, 1]:
+				if HouseShape.owns_corner(c, ax, az):
+					posts += 1
+	_check(posts == 9, "a raised 2x2 stands on 9 shared posts, not 16 duplicated ones")
+
+	# Legs are bounded: a cell placed absurdly high must not grow an endless pillar.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 40, 34), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(int(HouseShape.context(Vector3i(0, 40, 34))["support_drop"]) <= HouseShape.MAX_STILT,
+		"leg length is capped")
 	_clear()
 	await get_tree().process_frame
 

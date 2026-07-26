@@ -47,10 +47,18 @@ point sits inside that footprint. So a single row gets a ridge with hipped ends,
 a 2x2 gets a hip roof, a 3x3 peaks into a pyramid, and an L-shaped building grows
 a valley where its two wings meet — none of which is special-cased anywhere.
 
-Stack a cell and the lower roof becomes a floor. Knock a hole in a terrace and
-the two new ends close themselves up. Each building gets exactly one front door
-and one chimney however odd its shape, and everything places itself the *same way
-every time*, so a village looks identical after you reload it.
+Stack a cell and the lower roof becomes a floor, with a belt course marking the
+storey. Knock a hole in a terrace and the two new ends close themselves up.
+
+Nothing is allowed to float. Put a house in mid-air and it grows legs down to
+whatever is actually beneath it — the ground, or the roof of the thing you built
+under it. Jut a storey out past the one below and it braces itself sideways with
+a corbel instead, because a cantilever propped on a pillar looks wrong. A raised
+platform shares its posts between cells rather than stacking four in every hole.
+
+Each building gets exactly one front door and one chimney however odd its shape,
+and everything places itself the *same way every time*, so a village looks
+identical after you reload it.
 
 ### Animals
 

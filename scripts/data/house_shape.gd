@@ -100,6 +100,68 @@ static func _ring_is_roof(dx: int, dz: int, y: int, r: int) -> bool:
 				return false
 	return true
 
+# -------------------------------------------------------------------- support
+## Nothing sane needs a longer leg than this; it stops a house dropped at y=200
+## from growing a two-hundred-cell pillar.
+const MAX_STILT := 16
+
+## Anything solid — house, wood, stone, whatever — counts as ground to stand on.
+## A house on a wood plinth is supported; only genuinely open air is not.
+static func _solid(cell: Vector3i) -> bool:
+	return GridManager.has_block(cell)
+
+## How many cells of open air sit under this one before it reaches something
+## solid, or the island surface at y=0. Zero means it is already resting on
+## something. This is what a house needs to know to grow legs.
+static func support_drop(cell: Vector3i) -> int:
+	var n := 0
+	var c: Vector3i = cell + DOWN
+	while n < MAX_STILT and c.y >= 0 and not _solid(c):
+		n += 1
+		c += DOWN
+	return n
+
+## True when this cell hangs in the air but the building it belongs to is held up
+## somewhere alongside it — an overhanging upper storey rather than a hut on
+## stilts. The two want different things underneath: a cantilever wants a corbel
+## bracket back into the wall it juts out from, not a pillar to the ground.
+static func is_overhang(cell: Vector3i) -> bool:
+	if support_drop(cell) == 0:
+		return false
+	for d in SIDES:
+		var n: Vector3i = cell + d
+		if is_house(n) and support_drop(n) == 0:
+			return true
+	return false
+
+## The horizontal directions an overhang can brace itself against: neighbours
+## that are house cells standing on something.
+static func corbel_sides(cell: Vector3i) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for d in SIDES:
+		var n: Vector3i = cell + d
+		if is_house(n) and support_drop(n) == 0:
+			out.append(d)
+	return out
+
+## Which cell is responsible for the pillar at one shared corner. A corner is
+## touched by up to four cells; without this rule each would grow its own leg and
+## a 2x2 platform would sprout four pillars in the same spot. The lexicographic
+## first of the cells that actually need one owns it.
+static func owns_corner(cell: Vector3i, ax: int, az: int) -> bool:
+	var candidates := [
+		cell,
+		cell + Vector3i(ax, 0, 0),
+		cell + Vector3i(0, 0, az),
+		cell + Vector3i(ax, 0, az),
+	]
+	for c in candidates:
+		if c == cell:
+			continue
+		if is_house(c) and support_drop(c) > 0 and not is_overhang(c) and _less(c, cell):
+			return false
+	return true
+
 # ------------------------------------------------------------------- building
 ## The connected run of house cells this one belongs to, flooded in 3D (so a
 ## tower and its ground floor are one building). Cached on GridManager.version:
@@ -167,14 +229,20 @@ static func context(cell: Vector3i) -> Dictionary:
 	if cell == info["lo"] and not open_sides.is_empty():
 		door_side = open_sides[0]
 
+	var drop: int = support_drop(cell)
 	return {
 		"open_sides": open_sides,
 		"roof": not has_above,
+		"has_above": has_above,
 		"floor": not has_below,
 		"stacked": has_below,
 		"door_side": door_side,
 		"chimney": (not has_above) and cell == info["hi"],
 		"building_size": info["size"],
+		# Vertical situation: resting on something (0), or how far it has to
+		# reach down, and whether that reach should be legs or a bracket.
+		"support_drop": drop,
+		"overhang": drop > 0 and is_overhang(cell),
 	}
 
 ## A house standing entirely on its own: four walls, roof, front door, chimney.
@@ -184,11 +252,14 @@ static func lone_context() -> Dictionary:
 	return {
 		"open_sides": SIDES.duplicate(),
 		"roof": true,
+		"has_above": false,
 		"floor": true,
 		"stacked": false,
 		"door_side": SIDES[0],
 		"chimney": true,
 		"building_size": 1,
+		"support_drop": 0,
+		"overhang": false,
 	}
 
 # ---------------------------------------------------------------------- trim

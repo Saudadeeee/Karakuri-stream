@@ -104,6 +104,9 @@ func refresh_shape() -> void:
 	for side in ctx["open_sides"]:
 		_build_face(side, ctx, wall_col, trim_col)
 
+	_build_underside(ctx, trim_col)
+	if ctx["has_above"]:
+		_build_storey_band(ctx, trim_col)
 	if ctx["roof"]:
 		_build_roof(ctx)
 	if ctx["chimney"]:
@@ -181,6 +184,80 @@ func _material_for(col: Color) -> StandardMaterial3D:
 		m.emission_energy_multiplier = 1.0
 		_glow.append(m)
 	return m
+
+# ---------------------------------------------------------------- underneath
+## What a cell standing in mid-air does about it. Without this, a house placed on
+## the second storey with nothing under it simply floats, which reads as a bug
+## even in a game with no gravity.
+##
+## Two different situations, two different answers, because they look wrong if
+## swapped:
+##   a hut with nothing beside it     -> LEGS: posts down to whatever is below
+##   a storey jutting past the one    -> CORBEL: a diagonal brace back into the
+##   below it                            wall it grew out of, not a pillar
+func _build_underside(ctx: Dictionary, trim_col: Color) -> void:
+	var drop: int = int(ctx["support_drop"])
+	if drop <= 0:
+		return
+	if bool(ctx["overhang"]):
+		_build_corbels(trim_col)
+	else:
+		_build_stilts(drop, trim_col)
+
+## Four corner posts with a cross-brace, reaching down to the first solid thing
+## below (or the island surface). Corners shared with another airborne cell are
+## skipped by HouseShape.owns_corner, so a raised 2x2 platform stands on four
+## posts, not sixteen stacked in the same holes.
+func _build_stilts(drop: int, trim_col: Color) -> void:
+	# owns_corner walks the grid downward for four candidate cells, so resolve
+	# the four corners ONCE and reuse the answer for the pads.
+	var mine: Array[Vector2i] = []
+	for ax in [-1, 1]:
+		for az in [-1, 1]:
+			if HouseShape.owns_corner(grid_cell, ax, az):
+				mine.append(Vector2i(ax, az))
+	if mine.is_empty():
+		return
+
+	# Posts wear the plain trim colour on purpose: a slightly darker shade would
+	# be its own colour, and MeshBatch groups by colour, so it would cost an
+	# extra draw call on every raised cell for a difference nobody can see.
+	var h: float = float(drop)
+	var mid: float = -0.5 - h * 0.5
+	for c in mine:
+		_batch.box(Vector3(0.13, h, 0.13), Vector3(c.x * 0.34, mid, c.y * 0.34), trim_col)
+		# Footpad, so a post lands on something instead of stopping in mid-air.
+		_batch.box(Vector3(0.2, 0.06, 0.2), Vector3(c.x * 0.34, -0.5 - h + 0.03, c.y * 0.34), trim_col)
+	# A brace partway down: legs this long read as scaffolding without one.
+	if h >= 1.6:
+		for on_x in [true, false]:
+			var size: Vector3 = Vector3(0.78, 0.07, 0.07) if on_x else Vector3(0.07, 0.07, 0.78)
+			for s in [-1.0, 1.0]:
+				var off: Vector3 = Vector3(0, 0, 0.34 * s) if on_x else Vector3(0.34 * s, 0, 0)
+				_batch.box(size, Vector3(0, mid, 0) + off, trim_col)
+
+## Diagonal brackets under a cantilevered storey, one per supported neighbour it
+## juts out from — the joinery that makes an overhang look deliberate.
+func _build_corbels(trim_col: Color) -> void:
+	for d in HouseShape.corbel_sides(grid_cell):
+		var out := Vector3(float(d.x), 0.0, float(d.z))
+		var along := Vector3(float(d.z), 0.0, float(-d.x))
+		for s in [-0.3, 0.3]:
+			var at: Vector3 = -out * 0.34 + along * s + Vector3(0, -0.62, 0)
+			var size := Vector3(0.42, 0.1, 0.12) if absf(out.x) > 0.5 else Vector3(0.12, 0.1, 0.42)
+			var tilt := Basis(Vector3(0, 0, 1), 0.6 * signf(out.x)) if absf(out.x) > 0.5 \
+				else Basis(Vector3(1, 0, 0), -0.6 * signf(out.z))
+			_batch.box(size, at, trim_col, tilt)
+	# A sill under the overhanging floor so the corbels have something to carry.
+	_batch.box(Vector3(0.92, 0.08, 0.92), Vector3(0, -0.52, 0), trim_col)
+
+## Belt course at the top of a wall that has another storey above it. A tower
+## without one is a single tall box; with one it reads as floors stacked up.
+func _build_storey_band(ctx: Dictionary, trim_col: Color) -> void:
+	for side in ctx["open_sides"]:
+		var out := Vector3(float(side.x), 0.0, float(side.z))
+		var size := Vector3(0.08, 0.07, 1.04) if absf(out.x) > 0.5 else Vector3(1.04, 0.07, 0.08)
+		_batch.box(size, out * 0.5 + Vector3(0, 0.46, 0), trim_col)
 
 # --------------------------------------------------------------------- roof
 ## The roof is not this cell's own shape — it is this cell's PATCH of a surface
