@@ -68,6 +68,8 @@ func _maybe_show_controls() -> void:
 	body.text = "Left click — place a block        Right click — remove\n" \
 		+ "Middle drag — orbit camera      Scroll — zoom\n" \
 		+ "Click a hotbar icon again — change its style / tempo\n" \
+		+ "Q — houses. Line them up and they become one building.\n" \
+		+ "Build a village and animals move in. Birds play your bells.\n" \
 		+ "Ctrl+Z undo · H hide UI · U move the sun · P screenshot"
 	body.add_theme_font_size_override("font_size", 15)
 	box.add_child(body)
