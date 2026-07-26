@@ -5,9 +5,6 @@ extends Node
 ## data (JSON array of blocks), not engine/user preferences.
 const SAVE_PATH: String = "user://save_data.json"
 
-signal saved
-signal loaded
-
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
@@ -35,7 +32,6 @@ func save_game() -> void:
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	file.store_string(JSON.stringify(data))
 	file.close()
-	saved.emit()
 
 ## Returns false if there's nothing to load or the save file is corrupt —
 ## caller decides what to tell the player.
@@ -83,5 +79,4 @@ func load_game() -> bool:
 		elif type == BlockData.Type.SOURCE:
 			instance.face_adjacent_water()
 
-	loaded.emit()
 	return true

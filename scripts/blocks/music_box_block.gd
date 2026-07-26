@@ -34,10 +34,7 @@ func _ready() -> void:
 	b.size = Vector3(0.05, 0.16, 0.05)
 	knob.mesh = b
 	knob.position = Vector3(0.03, 0.07, 0)
-	var m := StandardMaterial3D.new()
-	m.albedo_color = ACCENT
-	m.roughness = 1.0
-	knob.material_override = m
+	knob.material_override = MeshFit.flat(ACCENT)
 	_crank.add_child(knob)
 
 func _process(delta: float) -> void:

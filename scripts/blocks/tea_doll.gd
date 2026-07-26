@@ -30,7 +30,7 @@ func _ready() -> void:
 	_body.add_child(_head)
 	var skull := MeshInstance3D.new()
 	var sm := SphereMesh.new(); sm.radius = 0.19; sm.height = 0.36
-	skull.mesh = sm; skull.material_override = _mat(CREAM)
+	skull.mesh = sm; skull.material_override = MeshFit.flat(CREAM)
 	_head.add_child(skull)
 	_head.add_child(_dot(0.028, FACE_DARK, Vector3(-0.07, 0.02, 0.17)))   # eyes
 	_head.add_child(_dot(0.028, FACE_DARK, Vector3(0.07, 0.02, 0.17)))
@@ -38,7 +38,7 @@ func _ready() -> void:
 	_head.add_child(_dot(0.03, BLUSH, Vector3(0.12, -0.05, 0.15)))
 	var topknot := MeshInstance3D.new()
 	var tk := SphereMesh.new(); tk.radius = 0.07; tk.height = 0.12
-	topknot.mesh = tk; topknot.material_override = _mat(Color("6b4a30"))
+	topknot.mesh = tk; topknot.material_override = MeshFit.flat(Color("6b4a30"))
 	topknot.position = Vector3(0, 0.19, 0)
 	_head.add_child(topknot)
 	# Arms + tray with a teacup, held forward.
@@ -71,17 +71,11 @@ func _cyl(rt: float, rb: float, h: float, col: Color, pos: Vector3) -> MeshInsta
 	var mi := MeshInstance3D.new()
 	var c := CylinderMesh.new()
 	c.top_radius = rt; c.bottom_radius = rb; c.height = h; c.radial_segments = 12
-	mi.mesh = c; mi.position = pos; mi.material_override = _mat(col)
+	mi.mesh = c; mi.position = pos; mi.material_override = MeshFit.flat(col)
 	return mi
 
 func _dot(r: float, col: Color, pos: Vector3) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var s := SphereMesh.new(); s.radius = r; s.height = r * 2.0; s.radial_segments = 7; s.rings = 4
-	mi.mesh = s; mi.position = pos; mi.material_override = _mat(col)
+	mi.mesh = s; mi.position = pos; mi.material_override = MeshFit.flat(col)
 	return mi
-
-func _mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	return m

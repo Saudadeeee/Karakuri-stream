@@ -19,7 +19,7 @@ func _ready() -> void:
 	pc.top_radius = 0.035; pc.bottom_radius = 0.05; pc.height = 0.9; pc.radial_segments = 7
 	pole.mesh = pc
 	pole.position = Vector3(0, -0.05, 0)
-	pole.material_override = _mat(BAMBOO)
+	pole.material_override = MeshFit.flat(BAMBOO)
 	add_child(pole)
 
 	_wheel = Node3D.new()
@@ -29,14 +29,14 @@ func _ready() -> void:
 	var hc := SphereMesh.new()
 	hc.radius = 0.05; hc.height = 0.1; hc.radial_segments = 7; hc.rings = 4
 	hub.mesh = hc
-	hub.material_override = _mat(ACCENT)
+	hub.material_override = MeshFit.flat(ACCENT)
 	_wheel.add_child(hub)
 	for i in 4:
 		var petal := MeshInstance3D.new()
 		var b := BoxMesh.new()
 		b.size = Vector3(0.3, 0.14, 0.02)
 		petal.mesh = b
-		var pm := _mat(Color("#F49CC4"))
+		var pm := MeshFit.flat(Color("#F49CC4"))
 		petal.material_override = pm
 		_petal_mats.append(pm)
 		var arm := Node3D.new()
@@ -61,9 +61,3 @@ func _process(delta: float) -> void:
 		return
 	_wheel.rotate_z(_speed * delta)
 	_speed = maxf(_speed - delta * 3.0, 0.0)   # wind-down friction
-
-func _mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	return m

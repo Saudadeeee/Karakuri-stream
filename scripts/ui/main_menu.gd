@@ -9,18 +9,13 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const SETTINGS_PATH := "user://settings.cfg"
 
 const CREAM := Color("f4efe2")
-const WOOD_SIGN := Color("7a5a3a")
-const WOOD_SIGN_EDGE := Color("caa878")
 const TEXT := Color("4a3f35")
 const SALMON := Color("e07a5f")
-const GREEN := Color("8cb369")
 
 var _cam_rig: Node3D
 var _settings_panel: Panel
 var _env: Environment
 var _sun: DirectionalLight3D
-var _island_top: MeshInstance3D
-var _island_base: MeshInstance3D
 var _map_cards: Array[Button] = []
 
 func _ready() -> void:
@@ -96,33 +91,6 @@ func _build_backdrop() -> void:
 	cam.fov = 58.0
 	_cam_rig.add_child(cam)
 	cam.make_current()
-
-func _add_island() -> void:
-	var ground := Node3D.new()
-	add_child(ground)
-	var top := MeshInstance3D.new()
-	var top_mesh := CylinderMesh.new()
-	top_mesh.top_radius = 9.0; top_mesh.bottom_radius = 9.0; top_mesh.height = 0.2; top_mesh.radial_segments = 48
-	top.mesh = top_mesh
-	top.material_override = _matte(Color(0.55, 0.58, 0.44))
-	top.position = Vector3(0, -0.1, 0)
-	ground.add_child(top)
-	_island_top = top
-	var base := MeshInstance3D.new()
-	var base_mesh := CylinderMesh.new()
-	base_mesh.top_radius = 9.0; base_mesh.bottom_radius = 1.5; base_mesh.height = 7.0; base_mesh.radial_segments = 48
-	base.mesh = base_mesh
-	base.material_override = _matte(Color(0.4, 0.3, 0.22))
-	base.position = Vector3(0, -3.7, 0)
-	ground.add_child(base)
-	_island_base = base
-
-func _matte(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 1.0
-	m.metallic = 0.0
-	return m
 
 # -------------------------------------------------------------- 3D title
 ## The game's name as REAL 3D lettering floating over the island — extruded

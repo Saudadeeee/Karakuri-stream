@@ -125,7 +125,7 @@ func _spawn_top_decor(cell: Vector3i) -> Node3D:
 			var s := SphereMesh.new()
 			s.radius = 0.05; s.height = 0.09; s.radial_segments = 7; s.rings = 4
 			head.mesh = s
-			head.material_override = _flat([Color(0.93, 0.55, 0.55), Color(0.95, 0.75, 0.4), Color(0.85, 0.6, 0.85)].pick_random())
+			head.material_override = MeshFit.flat([Color(0.93, 0.55, 0.55), Color(0.95, 0.75, 0.4), Color(0.85, 0.6, 0.85)].pick_random())
 			head.position = Vector3(0, 0.18, 0)
 			root.add_child(head)
 			stem.rotation.z = randf_range(-0.12, 0.12)
@@ -136,7 +136,7 @@ func _spawn_top_decor(cell: Vector3i) -> Node3D:
 				var r: float = randf_range(0.05, 0.09)
 				ps.radius = r; ps.height = r * 1.2; ps.radial_segments = 7; ps.rings = 4
 				p.mesh = ps
-				p.material_override = _flat(Color(0.72, 0.72, 0.7).lerp(Color(0.6, 0.62, 0.6), randf()))
+				p.material_override = MeshFit.flat(Color(0.72, 0.72, 0.7).lerp(Color(0.6, 0.62, 0.6), randf()))
 				p.position = Vector3(randf_range(-0.08, 0.08), 0.02, randf_range(-0.08, 0.08))
 				root.add_child(p)
 		2:  # fresh sprout: two tiny leaning leaves
@@ -154,16 +154,10 @@ func _cyl(parent: Node3D, r: float, h: float, col: Color, pos: Vector3) -> MeshI
 	var c := CylinderMesh.new()
 	c.top_radius = r; c.bottom_radius = r * 1.3; c.height = h; c.radial_segments = 6
 	mi.mesh = c
-	mi.material_override = _flat(col)
+	mi.material_override = MeshFit.flat(col)
 	mi.position = pos
 	parent.add_child(mi)
 	return mi
-
-func _flat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	return m
 
 func _spawn_moss(cell: Vector3i) -> void:
 	var block: BlockData = GridManager.get_block(cell)

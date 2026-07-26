@@ -6,14 +6,6 @@ extends StaticBody3D
 
 const MODEL: PackedScene = preload("res://assets/3DModel/generated/pipe_elbow.glb")
 
-## Elbow port sets: always {top +Y, one side}, cycled by R.
-const PORT_SETS: Array = [
-	[Vector3i(0, 1, 0), Vector3i(1, 0, 0)],
-	[Vector3i(0, 1, 0), Vector3i(0, 0, 1)],
-	[Vector3i(0, 1, 0), Vector3i(-1, 0, 0)],
-	[Vector3i(0, 1, 0), Vector3i(0, 0, -1)],
-]
-
 func _ready() -> void:
 	var model: Node3D = MODEL.instantiate()
 	add_child(model)

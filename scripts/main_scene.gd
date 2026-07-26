@@ -153,11 +153,3 @@ func _starter(cell: Vector3i, type: int, variant: int = 0) -> void:
 		instance.refresh_shape()
 	elif instance.has_method("face_adjacent_water"):
 		instance.face_adjacent_water()
-
-func _paint(mi: MeshInstance3D, color: Color) -> void:
-	# The island materials are baked sub-resources shared with the .tscn —
-	# override instead of mutating them.
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = 1.0
-	mi.set_surface_override_material(0, m)

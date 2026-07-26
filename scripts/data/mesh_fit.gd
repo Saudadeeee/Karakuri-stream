@@ -45,6 +45,20 @@ static func fit_centered(model: Node3D, target: float) -> void:
 	model.scale = Vector3(s, s, s)
 	model.position = -box.get_center() * s
 
+## The game's matte clay material, built from a colour — the procedural-geometry
+## counterpart to `matte()` (which flattens materials that came in with a model).
+## Clock movement, tea doll, pinwheel, pipes, decor and island rocks each carried
+## a byte-identical private copy of this; one shared factory instead, so the look
+## can only drift in one place. Deliberately does NOT touch `metallic_specular`:
+## roughness 1.0 already kills the highlight on these flat-shaded props, and the
+## six originals left it at default — keeping it that way means no visual change.
+static func flat(col: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.roughness = 1.0
+	m.metallic = 0.0
+	return m
+
 ## Forces every material to the game's matte clay look. glTF import gives
 ## StandardMaterial3D with default specular 0.5, so smooth-shaded imported props
 ## catch bright highlights (a grey stone bell reads as white, wood as cream) —
