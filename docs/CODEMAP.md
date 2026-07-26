@@ -30,7 +30,7 @@ tests/
     bell_block.tscn      StaticBody3D + collision. `bell_block.gd` nạp `generated/bell.glb`, `fit_bottom`. Visual — kêu khi stream rơi trúng (StreamManager) hoặc gear kề gõ
     source_block.tscn    StaticBody3D + collision. `source_block.gd` nạp `generated/source.glb` (ống tre ĐỨNG CĂN TÂM, miệng đáy-tâm, lá đối xứng ±Z → thẳng hàng ống dưới + stream tâm ô). Model đối xứng nên `face_adjacent_water()` chỉ còn trang trí. StreamManager phun dòng thẳng xuống từ tâm ô
     pipe_block.tscn      Ống tre TỰ NỐI (kín/hở variant, `pipe_block.gd`). `build_visual(dirs,open)`: run THẲNG (2 hướng đối) → 1 tube liền `_add_tube_through` (KHÔNG hub); rẽ/T/thập/xuống/lẻ → hub + 1 stub/hướng (**KÍN=SphereMesh tròn**, **HỞ=box phẳng** lấp góc máng, không dùng cầu tròn). Hở → máng U `_add_trough` (đáy+2 vách). `PipeRouting.connections(cell)`; nghe grid đổi → `refresh_shape()`. `static build_visual` dùng chung ghost. `grid_cell` do Placement/Save set
-    pipe_bend_block.tscn (CŨ, không dùng)
+    pipe_bend_block.tscn **Khuỷu tre 90°** (type PIPE_BEND, đang dùng thật). `pipe_bend_block.gd` nạp `generated/pipe_elbow.glb`, `MeshFit.fit_centered`. Nước vào cổng TRÊN (+Y), ra 1 cổng CẠNH; `apply_ports` xoay model quanh Y (model author sẵn cổng {+Y, +X}), phím R lúc đặt để đổi cạnh
     shishi_block.tscn    **Shishi-odoshi** — stream rót → `fill()` 2 tick → LẬT đổ nước tiếp (`add_temp_source`) + "cộc-cốc". Art: `shishi_base.glb` (đá+cột) + `shishi_arm.glb` dưới pivot `_arm` (tip anim)
     drum_block.tscn      **Trống taiko** — stream/gear-vòng gõ → `hit()` "tùm" trầm + squash. Art: `drum.glb` (thùng+da+đinh+chân)
     chime_block.tscn     **Phong linh** — 5 variant = 5 nốt pentatonic (màu theo nốt) → `ring()`. Art: `chime_frame.glb` + `chime_tube.glb` dưới `_swing` (lắc), tube TINT theo nốt + fatten ×1.7
@@ -47,19 +47,26 @@ scripts/
 shaders/
   water.gdshader         Spatial shader cho mặt nước occupancy-isosurface gộp (world-space, alpha vừa để thấy đáy, depth_draw_always chống xuyên)
   wood.gdshader          Vân gỗ procedural (world-pos noise) + rim-light — chạy trên occupancy-isosurface gỗ (world-pos nên không cần UV)
-  metal.gdshader         Kim loại toy (rim sheen + emissive) — CŨ, gear/bell giờ dùng material của model glb; giữ lại phòng khi cần
+  stream.gdshader        Dòng nước rơi (StreamManager)
+  cloudsea.gdshader      Biển mây quanh đảo (CloudSea)
+
+  (`metal.gdshader` ĐÃ XOÁ — 0 ref, gear/bell dùng material trong glb. Lấy lại từ git history nếu cần.)
 
   (scripts/data/iso_surface.gd — `class_name IsoSurface`, thuật toán Surface Nets dựng mesh isosurface cho CẢ gỗ + nước)
 
 assets/
-  sounds/                4 file audio đang dùng thật (xem Audio bên dưới)
-  3DModel/               Model art (.glb/.obj). zen-garden.glb = moodboard. `generated/` = bộ asset TỰ SINH bằng Blender theo artstyle.md (xem dưới)
+  sounds/                7 file audio, TẤT CẢ đang dùng thật (xem Audio bên dưới). Không giữ file thừa ở đây
+  fonts/                 Baloo2.ttf (OFL) — font project-wide, cũng là ThemeDB.fallback_font cho TextMesh
+  3DModel/               CHỈ còn `generated/` + `blockbench/` (source authoring). Mọi model legacy tải về đã xoá — in-game 100% dùng `generated/*.glb`
   3DModel/generated/     Bộ asset Blender sinh (`stylekit.py` + `gen_assets.py` + `gen_fix.py`, chạy `blender --background --python`). Theo artstyle.md: chunky+bevel, matte flat, palette hex. **LƯU Ý Z-up**: Blender Z-up → Godot Y-up (glTF đổi (x,y,z)→(x,z,-y)); author "cao" theo Blender Z, wheel phẳng trong Blender X-Y. DÙNG in-game: gear (Gear), bell (Bell), source/pipe_straight/pipe_elbow (Source/Pipe/Pipe_bend), grass_tuft (Decor), lily_pad (Pond), pine_tree/bush/reeds/rock_cluster/lantern/bonsai (SceneryManager)
-  unused/                Asset đã tải về nhưng không dùng (rain ambience, giữ lại phòng khi cần, không xoá)
+  3DModel/blockbench/    Source authoring cho pipeline Blockbench→GLB: `*.obj` + `*_cmap.json` + `bb_bridge.py` + README. GLB thành phẩm được copy sang `generated/`, KHÔNG giữ bản trung gian ở đây
 
 default_bus_layout.tres  3 bus: Master (Reverb) ← Music (-10dB) + SFX. Đăng ký trong project.godot [audio]
 export_presets.cfg       Cấu hình export Windows Desktop + Web (xem mục Export bên dưới)
-builds/                  Output export — KHÔNG commit (.gitignore), tự tạo lại bằng lệnh export
+build/                   Output export DUY NHẤT — KHÔNG commit (.gitignore), tự tạo lại bằng lệnh export.
+                         `build/.gdignore` được commit CÓ CHỦ Ý (`git add -f`): thiếu nó Godot quét lại
+                         PNG trong output export thành asset project → import ngược vào .godot/imported →
+                         bị nhồi vào lần export sau (vòng lặp phình dung lượng). ĐỪNG xoá file đó
 ```
 
 ## Quy ước cốt lõi (đọc kỹ trước khi sửa)
@@ -123,7 +130,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | # | Tên | File | Vai trò |
 |---|-----|------|---------|
 | 1 | `GridManager` | `autoload/grid_manager.gd` | Nguồn sự thật duy nhất của lưới. `set_block`/`remove_block`/`get_block`/`has_block`/`get_neighbors`/`get_all_cells_of_type`. Bắn signal `block_placed(cell)`/`block_removed(cell)`/`grid_cleared` (khi gọi `clear_all()` — xoá 1 lần, KHÔNG lặp `remove_block()` per-cell vì sẽ trigger rescan dây chuyền ở mọi autoload bên dưới). |
-| 2 | `AudioManager` | `autoload/audio_manager.gd` | Pool 24 player trên bus **SFX**. `play_wood_hit`/`play_chime` (ngũ cung `PENTATONIC_RATIOS` + humanization pitch/vol ngẫu nhiên), `play_jelly_bounce` (boing khi đặt jelly / stream chạm jelly), `make_water_loop_player` (tiếng suối, loop), `make_gear_loop_player` (rattle gỗ "kẽo kẹt", loop), `play_ambient_note` (nốt ngũ cung mềm, bus **Music**, cho AmbientMusic). Files thật trong `assets/sounds/`. |
+| 2 | `AudioManager` | `autoload/audio_manager.gd` | Pool 24 player trên bus **SFX**. `play_wood_pitch`/`play_chime` (ngũ cung `PENTATONIC_RATIOS` + humanization pitch/vol ngẫu nhiên), `play_jelly_bounce` (boing khi đặt jelly / stream chạm jelly), `make_water_loop_player` (tiếng suối, loop), `make_gear_loop_player` (rattle gỗ "kẽo kẹt", loop), `play_ambient_note` (nốt ngũ cung mềm, bus **Music**, cho AmbientMusic). Files thật trong `assets/sounds/`. |
 | 2b | `AmbientMusic` | `autoload/ambient_music.gd` | 3 lớp bus Music: (1) bed nhạc CHILL loop (CC0, random 1/2 track, -17dB), (2) lớp MƯA loop — `apply_theme_mix()` tween vol theo MAP (Thu -18 / Đêm -24 / Xuân -28 / Tuyết -44), (3) nốt ngũ cung GENERATIVE mỗi 2.2–5.5s. **Bus chain**: Master[HardLimiter] ← Music[-10, LowPass 900Hz bật khi PAUSE] + SFX[Compressor→Reverb — reverb CHỈ SFX, bed khô]. AudioManager dedupe 35ms wood knocks (anti machine-gun, chime miễn — hợp âm); StreamManager stagger impacts 0-120ms (humanize). |
 | 3 | `WaterFlowManager` | `autoload/water_flow_manager.gd` | Flow CỤC BỘ (PHẦN 26): khối WATER lan sang ô lân cận + tiếng nước loop + waterfall ở rìa, caps NHỎ (`MAX_FALL=40, MAX_POOL=18`) → KHÔNG flood cả đảo. Spill source = mọi ô nước hở đỉnh (kể cả y=0 → lan ngang tới hàng xóm). Dòng đường-xa CHỦ ĐÍCH = StreamManager. `_active_flows` cấp cho VoxelSurface render. |
 | 4 | `StreamManager` | `autoload/stream_manager.gd` | **CƠ CHẾ CHÍNH (karakuri)**: mỗi khối SOURCE phun dòng thẳng xuống; trace ô-theo-ô: qua PIPE/PIPE_BEND thì vào 1 port ra port kia (đọc `state["ports"]`), else rơi theo trọng lực tới khi trúng khối. `_trace()` gom `_segments` (dựng cylinder nước cyan) + `_impacts` (ô đích) + `_driven_gears`. Ô đích phát âm theo loại (gỗ/pipe→wood_hit, bell→chime+firefly, gear→clack+quay) mỗi `IMPACT_INTERVAL=0.55s` + splash. Rebuild throttled khi lưới đổi. |
@@ -133,7 +140,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | 8 | `FireflyManager` | `autoload/firefly_manager.gd` | `burst_at(pos)` — chớp hạt sáng 1 lần, gọi từ `GearManager`/`StreamManager` mỗi khi Chuông kêu. |
 | 9 | `GearManager` | `autoload/gear_manager.gd` | **Hệ truyền động**: mỗi frame dựng đồ thị liên thông Gear (6 hướng); 1 component quay nếu CÓ gear là driver. `_is_driver` = gear bị **STREAM rơi trúng** (`StreamManager._driven_gears`) HOẶC kề khối Nước tĩnh. Chiều quay = parity `(x+y+z)` → gear kề nhau tự quay NGƯỢC chiều (lưới bipartite). Răng ĂN KHỚP: gear parity lẻ lệch pha `HALF_TOOTH=TAU/20` (răng khớp vào khe, không đụng răng-răng), set 1 lần qua `_phased`. Xoay bằng `mesh_instance.rotate_y` — vì gear_block đã orient ROOT theo trục đặt (xem dưới), trục local-Y của mesh = trục đặt, nên quay quanh đúng trục. Bụi lấp lánh + gõ Chuông kề bên mỗi vòng. |
 | 10b | `UndoManager` | `autoload/undo_manager.gd` | Undo/redo đặt-xóa khối (stack 200). Placement record place/remove (type+variant+axis); Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z); undo remove RESTORE đủ (đường recreate như SaveManager). |
-| 10 | `SaveManager` | `autoload/save_manager.gd` | `save_game()`/`load_game()`/`has_save()`. KHÔNG `_ready()` nghe signal — 3 hàm gọi từ `pause_menu.gd`. Lưu thêm `axis` cho Gear + `ports` cho Pipe/Pipe_bend (`{x,y,z,type,axis?,ports?}`; save cũ thiếu → mặc định). Xem mục Save/Load. |
+| 10 | `SaveManager` | `autoload/save_manager.gd` | `save_game()`/`load_game()`/`has_save()`. KHÔNG `_ready()` nghe signal, và KHÔNG bắn signal — 3 hàm gọi từ `pause_menu.gd`, nó tự hiện toast. (`signal saved`/`signal loaded` đã XOÁ: emit nhưng không ai connect. Cần thì thêm lại kèm listener thật.) Lưu thêm `axis` cho Gear + `ports` cho Pipe/Pipe_bend (`{x,y,z,type,axis?,ports?}`; save cũ thiếu → mặc định). Xem mục Save/Load. |
 | 11 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — lá phong cam rơi lơ lửng lúc khởi động, cast_shadow OFF. |
 | 12 | `SceneryManager` | `autoload/scenery_manager.gd` | `rebuild()` rải prop quanh rìa THEO MAP THEME (`MapThemes`): thông/bụi/lau/đá/đèn/bonsai + slot "feature" (sakura/maple/pine tuyết); lá recolor `MeshFit.recolor_foliage`; ring 8 núi backdrop nhận `mountain_tint`; lantern GLB nằm ngang → heuristic AABB dựng đứng (xoay ở CON, fit qua wrapper). Gọi lại khi menu đổi theme. Thuần backdrop. |
 | 12b | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Hạt drift THEO THEME (`rebuild()`): cánh sakura hồng / lá phong cam / bông tuyết / đom đóm vàng (bay LÊN + emissive ăn bloom). |
@@ -147,7 +154,9 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 
 - **`block_data.gd`** — struct, xem trên. `state: Dictionary` chứa dữ liệu per-khối (vd `state["axis"]` cho Gear = trục đặt Vector3i).
 - **`pipe_routing.gd`** (`class_name PipeRouting`) — `static ports_for(cell)`: 2 đầu mở của ống từ hàng xóm (PIPE/SOURCE) theo 6 hướng, kiểu ray Minecraft (0 hàng xóm→dọc; 1→nối nó + đầu kia xuống; 2+→ưu tiên feed từ trên + đầu ra kế). Nguồn logic CHUNG cho `pipe_block` (visual) + `StreamManager` (routing).
-- **`mesh_fit.gd`** (`class_name MeshFit`) — `fit_centered(model, target)` / `fit_bottom(model, height, floor_y)` + `local_aabb(root)` + `matte(root)`. Scale/đặt lại model art nhập cho vừa ô; `matte()` duplicate mọi StandardMaterial của model → ép `metallic=0, metallic_specular=0, roughness=1` (glTF import mặc định specular 0.5 làm bề mặt mượt bị chói/cháy trắng — vd chuông đá thành trắng). Gear/Bell/lily/grass đều route qua fit + matte.
+- **`mesh_fit.gd`** (`class_name MeshFit`) — `fit_centered(model, target)` / `fit_bottom(model, height, floor_y)` + `local_aabb(root)` + `matte(root)` + **`flat(col)`**. Scale/đặt lại model art nhập cho vừa ô; `matte()` duplicate mọi StandardMaterial của model → ép `metallic=0, metallic_specular=0, roughness=1` (glTF import mặc định specular 0.5 làm bề mặt mượt bị chói/cháy trắng — vd chuông đá thành trắng). Gear/Bell/lily/grass đều route qua fit + matte.
+  **`MeshFit.flat(col)`** = bản cho geometry TỰ DỰNG BẰNG CODE: tạo StandardMaterial3D `albedo=col, roughness=1, metallic=0`. NƠI DUY NHẤT dựng material phẳng từ màu — trước đây 8 file mỗi file 1 bản y hệt (`_mat`/`_flat`/`_matte` + 2 chỗ viết inline), look dễ lệch. Cần material phẳng → gọi hàm này, ĐỪNG viết `StandardMaterial3D.new()` mới. CỐ Ý không set `metallic_specular` (roughness 1.0 đã dập highlight; giữ đúng hành vi 8 bản gốc → không đổi hình).
+  **Ngoại lệ hợp lệ**, KHÔNG dùng `flat()`: `main_menu._flat3` (unshaded cho chữ 3D), `gear_mesh.material()` (vertex-color), particle/billboard/transparent material (placement_controller, water_flow, firefly, stream…) — chúng cần cờ khác.
 - **`iso_surface.gd`** (`class_name IsoSurface`) — `static func build(samples, dims, cell_size, iso) -> ArrayMesh`. Thuật toán Surface Nets (chọn thay Marching Cubes để khỏi bảng 256-entry, cho mặt blob mượt). Thuần toán, không phụ thuộc scene. Dùng bởi `VoxelSurfaceManager` để gộp CẢ gỗ + nước thành mặt liền. Density convention: "inside" khi value > iso. Sau khi dựng tam giác → `_smooth()` chạy **Taubin** (`SMOOTH_PASSES=2` × 2 bước: co +λ0.5 rồi phồng -μ0.53) dẹp scallop mà KHÔNG co thể tích — Laplacian thuần trước đây co mesh làm hở/xuyên mối nối. `VoxelSurfaceManager` dùng `ROUND_R=0.26`, `ISO=0.42` (<0.5 để phồng nhẹ, bắc cầu ô kề CHÉO → bậc thang merge liền, không hở).
 - **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi". Dùng chung bởi `PlacementController` và `SaveManager`.
 
@@ -181,7 +190,7 @@ Hướng nghệ thuật: đảo nổi trong không gian vô cực kiểu Townsca
 
 - **Bầu trời**: `main.tscn` WorldEnvironment dùng `ProceduralSkyMaterial` (built-in), gradient xanh ngọc (đỉnh) → hồng pastel (chân trời/hoàng hôn). Ambient dùng màu CỐ ĐỊNH (`ambient_light_source = COLOR`, energy ~0.45), **KHÔNG** dùng `ambient_light_source = SKY` — đã thử, bầu trời hồng quá sáng làm cháy trắng toàn cảnh (over-expose). Đừng đổi lại SKY hay bật tonemap Filmic mà không kiểm tra lại phơi sáng bằng ảnh thật.
 - **Đảo**: node `Ground` = 2 `CylinderMesh` (đĩa mặt trên mỏng + côn cụt thân dưới thu nhỏ) cho cảm giác đảo lơ lửng. Mặt trên vẫn đúng world y=0 (collision box giữ nguyên cho raycast đặt khối) — chỉ đổi visual, không đụng quy ước lưới.
-- **Bảng màu + bề mặt chi tiết**: Gỗ dùng `wood.gdshader` (vân procedural world-pos + rim-light) trên occupancy-isosurface gộp; Nước qua `water.gdshader` (1 material trên isosurface gộp). Màu Gỗ/Nước lấy theo model art (`wooden-foundation-block.mtl` / `teal-water-block.mtl`) để đồng bộ style zen gỗ. Cả Gỗ + Nước dựng bởi `VoxelSurfaceManager`. Gear/Bell dùng material của model glb (`wooden-cogwheel`/`zen-chime`). Lá phong cam (`AmbientLeaves`).
+- **Bảng màu + bề mặt chi tiết**: Gỗ dùng `wood.gdshader` (vân procedural world-pos + rim-light) trên occupancy-isosurface gộp; Nước qua `water.gdshader` (1 material trên isosurface gộp). Màu Gỗ/Nước là hằng trong `map_themes.gd`/shader (gốc lấy từ model art legacy `wooden-foundation-block.mtl` / `teal-water-block.mtl` — các model đó ĐÃ XOÁ, màu đã hardcode nên không phụ thuộc nữa). Cả Gỗ + Nước dựng bởi `VoxelSurfaceManager`. Gear/Bell dùng material trong `generated/gear.glb` / `generated/bell.glb`. Lá phong cam (`AmbientLeaves`).
 - **Mesh chi tiết (không phải primitive trơn)**: Gear = hub cylinder + 10 răng box dựng bằng `scripts/blocks/gear_block.gd` (răng là con của MeshInstance3D nên quay cùng khi GearManager xoay). Bell = nón cụt + quai (torus) + đỉnh (sphere) + quả lắc, author trong `bell_block.tscn`. Koi = model Blockbench `generated/koi.glb` (thân box thon trắng + đốm đỏ Kohaku + vây đuôi/lưng/ngực + mắt đen; `_add_koi` fit theo CHIỀU DÀI, `_process` xoay đầu +X theo hướng bơi), lá sen có khía + đôi khi hoa súng hồng, rêu là cụm 4-6 blob nhiều sắc xanh — tất cả trong `pond_decor_manager.gd`/`decor_manager.gd`.
 - **Post-processing (`main.tscn` Environment)**: glow/bloom (bắt sáng foam/sparkle/emissive — `glow_hdr_threshold=1.0` để chỉ vùng thật sáng mới bloom, tránh cháy trắng), fog mật độ thấp cho không khí xa, adjustment color-grade (saturation 1.15). Đều chạy trên `gl_compatibility` (glow/fog/adjustment được hỗ trợ; SSAO/SSR/SDFGI thì KHÔNG).
 - **Squash & stretch**: `placement_controller._animate_drop` — lún sâu (y 0.55) rồi nảy `TRANS_ELASTIC` cho cảm giác thạch dẻo.
@@ -215,23 +224,27 @@ Lưu **toàn bộ dữ liệu gameplay** (vị trí + loại từng khối) — 
 
 ## Audio
 
+Mọi file trong `assets/sounds/` đều có ref thật trong code. Thêm file mà chưa `preload` → coi là rác, xoá.
+
 | File | Dùng cho | Ghi chú |
 |------|----------|---------|
-| `218460__thomasjaunism__wood-block-hit.wav` | `AudioManager.play_wood_hit` | Đã kiểm khoảng lặng đầu bằng `ffmpeg silencedetect`, sạch |
+| `218460__thomasjaunism__wood-block-hit.wav` | `AudioManager.play_wood_pitch` (Drum/Shishi/gõ gỗ) | 1 sample gỗ duy nhất, đổi `pitch_scale` ra cả bộ percussion. Đã kiểm khoảng lặng đầu bằng `ffmpeg silencedetect`, sạch |
 | `517660__samuelgremaud__chimes-5.wav` | `AudioManager.play_chime` (Bell) | Đã cắt 161ms lặng đầu bằng `ffmpeg atrim` |
-| `249666__tymorafarr__water-stream-looped.ogg` | `AudioManager.make_water_loop_player` | Convert từ `.flac` gốc bằng ffmpeg — Godot 4 không import `.flac` native. File `.flac` gốc vẫn giữ trong `assets/sounds/` làm bản gốc tham chiếu |
+| `463590__mixtos__jellybounce.wav` | `AudioManager` (Jelly) | |
+| `461166__hisoul__wooden-gear-lq-5-sprocket-rattling.ogg` | `AudioManager` gear creak (loop, -19dB, pitch 0.62–0.82) | **Đã nén từ WAV 22MB → OGG mono 395KB** (`-ac 1 -ar 44100 -c:a libvorbis -q:a 3`). Bản gốc là PCM 24-bit/96kHz stereo 40s — vô nghĩa cho 1 tiếng lặp phát ở -19dB, và làm web build phình ~20MB. Loop set trong code bằng `.loop = true` (AudioStreamOggVorbis), KHÔNG phải `loop_mode` (đó là API của AudioStreamWAV) |
+| `249666__tymorafarr__water-stream-looped.ogg` | `AudioManager.make_water_loop_player` | Convert từ `.flac` gốc bằng ffmpeg — Godot 4 không import `.flac` native. File `.flac` gốc ĐÃ XOÁ (2.9MB, không dùng được, tải lại từ Freesound nếu cần bản master) |
+| `chill_ambient.ogg` | `AmbientMusic` (nhạc nền) | |
+| `rain_loop.ogg` | `AmbientMusic.RAIN_LAYER` (layer mưa) | |
 | `default_bus_layout.tres` | Bus Master + `AudioEffectReverb` | Thông số `room_size`/`wet`/`damping` là ước lượng, CHƯA nghe thử thật — cần tinh chỉnh bằng tai |
-
-`assets/unused/79272__ra_gun__ambience-summer-rain-07-090718.wav` — tải về ban đầu định dùng làm tiếng nước, sau tìm ra file nước chuyên dụng nên đổi, file rain không còn ref trong code nữa nhưng giữ lại (không xoá) phòng khi cần ambience sau này.
 
 ## Export (Windows Desktop + Web)
 
-`export_presets.cfg` có 2 preset: `"Windows Desktop"` và `"Web"`. Export template đã bundle sẵn theo bản Godot cài qua Steam (`.../Godot Engine/editor_data/export_templates/4.7.1.stable/`) — không cần tải thêm nếu dùng đúng install này.
+`export_presets.cfg` có preset `"Windows Desktop"`, `"Web"`, `"Android"`, `"iOS"`. Dùng **binary Godot official**, KHÔNG dùng bản Steam (bản Steam nuốt text lỗi export → debug mù). Template ở `%APPDATA%/Godot/export_templates/4.7.1.stable/`. Chi tiết đầy đủ 3 nền tảng: `docs/BUILD.md`.
 
-Lệnh export (chạy từ thư mục project, headless không cần mở editor):
+Lệnh export (chạy từ thư mục project, headless không cần mở editor). Output vào `build/` — thư mục output DUY NHẤT, khớp `export_path` trong preset:
 ```
-godot --headless --export-release "Windows Desktop" "builds/windows/karakuri-stream.exe"
-godot --headless --export-release "Web" "builds/web/index.html"
+godot --headless --path . --export-release "Windows Desktop" build/windows/karakuri-stream.exe
+godot --headless --path . --export-release "Web" build/web/index.html
 ```
 
 **Web — bắt buộc serve qua HTTP, không mở trực tiếp file `index.html`** (WASM/CORS sẽ chặn nếu mở qua `file://`). Web export cần header `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` (do `GODOT_CONFIG.ensureCrossOriginIsolationHeaders=true` trong `index.html`) — server tĩnh trần (`python -m http.server`) KHÔNG tự gắn 2 header này, cần server tuỳ chỉnh set thêm (xem ví dụ inline trong `end_headers()` override của `http.server.SimpleHTTPRequestHandler`). Các host thật như itch.io/GitHub Pages (qua service worker) thường tự lo việc này.

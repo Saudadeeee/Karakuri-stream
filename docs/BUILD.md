@@ -19,7 +19,27 @@ Two editions from one codebase, split by `QualityManager` (autoload):
 godot --headless --path . --export-release "Web" build/web/index.html
 ```
 - `web_nothreads` template → no SharedArrayBuffer → hosts anywhere (itch.io, GitHub Pages, any static server), no COOP/COEP headers needed.
-- ~51 MB. Requires the project setting `textures/vram_compression/import_etc2_astc=true` (already on).
+- Requires the project setting `textures/vram_compression/import_etc2_astc=true` (already on).
+
+**Measured size** (4.7.1, release):
+
+| Part | Size | Note |
+|---|---|---|
+| `index.wasm` | 37.7 MB | the Godot engine itself — fixed cost, not affected by your assets. Serve it gzip/brotli (~10 MB on the wire); a plain static server sending it raw is why a web build "feels" huge |
+| `index.pck` | 5.1 MB | all game content. Was 14.0 MB before the asset cleanup — the single biggest item was one 22 MB gear-rattle WAV (24-bit/96 kHz), now a 395 KB OGG |
+| total on disk | ~44 MB | |
+
+`exclude_filter` in every preset drops `tests/*` and the model-authoring sources
+(`blockbench/*`, `generated/*.py`, `*.bbmodel`) — those are build inputs, and
+players should never receive the regression suite. Verified: `regression` appears
+0× in the export log.
+
+### Do not let Godot scan the export output
+`build/.gdignore` is committed (`git add -f`, since `build/` itself is
+gitignored). Without it Godot treats `build/web/*.png` as project assets,
+generates `.import` files next to them, and folds them into the *next* export —
+each build a little bigger than the last. If you add another output directory,
+give it a `.gdignore` too.
 
 ## Android (full edition)
 One-time machine setup (already done on this machine):
