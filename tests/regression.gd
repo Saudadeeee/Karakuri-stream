@@ -277,13 +277,26 @@ func _sec_wildlife() -> void:
 	_check(WildlifeManager._birds.is_empty(), "no birds without a house")
 	_check(WildlifeManager._cats.is_empty(), "no cats without a village")
 
-	# A house + a perch: birds move in.
+	# One house earns ONE bird — that first bird is the whole point of the
+	# feature, since it can land on a bell and play it — but nothing more, and
+	# no cat yet: two houses is not a village.
 	_b(Vector3i(0, 0, 16), BlockData.Type.HOUSE)
 	_b(Vector3i(2, 0, 16), BlockData.Type.HOUSE)
 	_b(Vector3i(4, 0, 16), BlockData.Type.WOOD)
 	await _wildlife_scan()
-	_check(not WildlifeManager._birds.is_empty(), "houses attract birds")
-	_check(not WildlifeManager._cats.is_empty(), "a village attracts a cat")
+	_check(WildlifeManager._birds.size() == 1, "a couple of houses earn exactly one bird")
+	_check(WildlifeManager._cats.is_empty(), "two houses is not yet a village, so no cat")
+
+	# Grow it into a real village and the population grows WITH it, still capped.
+	for i in 10:
+		_b(Vector3i(i, 0, 18), BlockData.Type.HOUSE)
+	await _wildlife_scan()
+	_check(WildlifeManager._cats.size() >= 1, "a real village attracts a cat")
+	_check(WildlifeManager._birds.size() <= WildlifeManager.BIRDS[2], "bird population stays capped")
+	_check(WildlifeManager._cats.size() <= WildlifeManager.CATS[2], "cat population stays capped")
+	var total: int = WildlifeManager._birds.size() + WildlifeManager._cats.size()
+	_check(total <= WildlifeManager.BIRDS[2] + WildlifeManager.CATS[2],
+		"even a big village never becomes a crowd")
 
 	# Water is a pond for ducks, never ground for the cat.
 	for z in 4:

@@ -114,10 +114,35 @@ func _process(delta: float) -> void:
 	_tick_deer(delta, t)
 
 ## Spawn/despawn so the population always matches what the world can support.
+## Population has to GROW WITH the thing that supports it, not switch on. The
+## first version gated on "is there a house at all", so one hut instantly had
+## three birds hopping on it and two houses added two cats — a crowd on a build
+## with nothing in it yet. Animals should feel like they found the place, which
+## means the first one arrives alone and the rest turn up as the village does.
+## {arrives at, then one more every, hard cap}. The FIRST threshold is kept low
+## on purpose — one house should still earn one bird, because a bird landing on
+## your bell is the moment the whole feature exists for. It is the CROWD that was
+## wrong, so the second and third only turn up once there is a real village.
+##   1 house  -> 1 bird                 (was: 3 birds)
+##   4 houses -> 1 bird + 1 cat         (was: 3 birds + 2 cats)
+##   9 houses -> 3 birds + 1 cat
+const BIRDS := [1, 4, 3]
+const CATS := [4, 6, 2]
+const DUCKS := [3, 5, 3]
+
 func _populate() -> void:
-	_fit(_birds, _cap(3) if _houses > 0 and not _perches.is_empty() else 0, _make_bird)
-	_fit(_cats, _cap(2) if _houses >= 2 and not _walkable.is_empty() else 0, _make_cat)
-	_fit(_ducks, _cap(3) if _pond.size() >= 3 else 0, _make_duck)
+	var birds: int = 0 if _perches.is_empty() else _scaled(_houses, BIRDS)
+	var cats: int = 0 if _walkable.is_empty() else _scaled(_houses, CATS)
+	_fit(_birds, _cap(birds), _make_bird)
+	_fit(_cats, _cap(cats), _make_cat)
+	_fit(_ducks, _cap(_scaled(_pond.size(), DUCKS)), _make_duck)
+
+## One creature once `supply` reaches rule[0], then one more per rule[1] beyond
+## that, never more than rule[2].
+func _scaled(supply: int, rule: Array) -> int:
+	if supply < int(rule[0]):
+		return 0
+	return mini(int(rule[2]), 1 + (supply - int(rule[0])) / int(rule[1]))
 
 func _fit(herd: Array, want: int, maker: Callable) -> void:
 	while herd.size() > want:
