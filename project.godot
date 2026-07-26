@@ -48,7 +48,7 @@ window/stretch/aspect="expand"
 [gui]
 
 theme/custom="res://ui/karakuri_theme.tres"
-theme/custom_font="res://assets/fonts/Baloo2.ttf"
+theme/custom_font="res://assets/fonts/fredoka_chunky.tres"
 
 [physics]
 

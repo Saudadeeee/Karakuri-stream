@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://n3mpoc75ctft"
-path="res://.godot/imported/Baloo2.ttf-c3e219a2a77cbf36f8f815e88f09ed02.fontdata"
+uid="uid://cmaekc5cf0wdr"
+path="res://.godot/imported/Fredoka.ttf-38db4f924b441151c6642ef65fe93e1f.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Baloo2.ttf"
-dest_files=["res://.godot/imported/Baloo2.ttf-c3e219a2a77cbf36f8f815e88f09ed02.fontdata"]
+source_file="res://assets/fonts/Fredoka.ttf"
+dest_files=["res://.godot/imported/Fredoka.ttf-38db4f924b441151c6642ef65fe93e1f.fontdata"]
 
 [params]
 

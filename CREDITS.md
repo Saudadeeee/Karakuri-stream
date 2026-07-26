@@ -27,8 +27,8 @@ game sound like something.
 
 ## Font — SIL Open Font License 1.1
 
-**Baloo 2** by [Ek Type](https://github.com/EkTypeFoundry/Baloo2), via
-[Google Fonts](https://fonts.google.com/specimen/Baloo+2).
+**Fredoka** by [Hafontia](https://github.com/hafontia/Fredoka-One), via
+[Google Fonts](https://fonts.google.com/specimen/Fredoka).
 
 Unlike CC0, the OFL **requires** the licence text and copyright notice to travel
 with the font. Both are in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt), which
