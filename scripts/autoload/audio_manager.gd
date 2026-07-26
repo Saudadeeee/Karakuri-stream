@@ -12,7 +12,7 @@ const POOL_SIZE: int = 24
 
 const WOOD_HIT: AudioStream = preload("res://assets/sounds/218460__thomasjaunism__wood-block-hit.wav")
 const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__chimes-5.wav")
-var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.wav")
+var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.ogg")
 var _water_flow := preload("res://assets/sounds/249666__tymorafarr__water-stream-looped.ogg")
 const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.wav")
 
@@ -29,7 +29,7 @@ const DEDUPE_MS: int = 35
 
 func _ready() -> void:
 	_water_flow.loop = true
-	_gear_creak.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_gear_creak.loop = true
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
 		player.bus = "SFX"
@@ -55,16 +55,6 @@ func _get_free_player() -> AudioStreamPlayer3D:
 	var player: AudioStreamPlayer3D = _pool[_next_index]
 	_next_index = (_next_index + 1) % _pool.size()
 	return player
-
-func play_wood_hit(global_pos: Vector3) -> void:
-	if not _can_start("wood"):
-		return
-	var player: AudioStreamPlayer3D = _get_free_player()
-	player.global_position = global_pos
-	player.stream = WOOD_HIT
-	player.pitch_scale = randf_range(0.94, 1.06)
-	player.volume_db = randf_range(-3.0, 0.0)
-	player.play()
 
 ## Wood knock at an exact pitch — the karakuri percussion palette is all one
 ## wood sample at different speeds (drum = slow/deep, shishi = bright "cốc").
