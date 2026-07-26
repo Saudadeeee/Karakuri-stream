@@ -35,6 +35,8 @@ func _ready() -> void:
 	await _sec_houses()
 	print("SECTION _sec_wildlife")
 	await _sec_wildlife()
+	print("SECTION _sec_save_corruption")
+	await _sec_save_corruption()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
 	print("SECTION _sec_photo_and_misc")
@@ -321,6 +323,61 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7d. A damaged save file must never cost the player the build they can see.
+## Before this was fixed, load_game() cleared the grid FIRST and then hit an
+## error partway through rebuilding, so a truncated file (a browser tab closed
+## mid-flush is enough) wiped the current build and restored nothing.
+func _sec_save_corruption() -> void:
+	var cases: Array = [
+		["not json at all", "garbage text"],
+		['{"nope": 1}', "JSON object instead of an array"],
+		['[{"x":0,"y":0}]', "entry missing coordinates"],
+		['[{"x":0,"y":0,"z":0,"type":999}]', "block type from a newer build"],
+		['[]', "empty array"],
+	]
+	for c in cases:
+		_clear()
+		await get_tree().process_frame
+		# Something on screen that must survive a failed load.
+		_b(Vector3i(0, 0, 20), BlockData.Type.WOOD)
+		_b(Vector3i(1, 0, 20), BlockData.Type.BELL)
+		var f := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+		f.store_string(c[0])
+		f.close()
+		_check(not SaveManager.load_game(), "load refuses: %s" % c[1])
+		await get_tree().process_frame
+		_check(GridManager.has_block(Vector3i(0, 0, 20)) and GridManager.has_block(Vector3i(1, 0, 20)),
+			"failed load keeps the current build: %s" % c[1])
+
+	# A file with SOME good entries and some junk loads the good ones and says so.
+	_clear()
+	await get_tree().process_frame
+	var f2 := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	f2.store_string('[{"x":3,"y":0,"z":20,"type":%d,"variant":0},{"bad":true},{"x":4,"y":0,"z":20,"type":999}]'
+		% int(BlockData.Type.WOOD))
+	f2.close()
+	_check(SaveManager.load_game(), "partial save still loads what is readable")
+	await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(3, 0, 20)), "readable entry is restored")
+	_check(not GridManager.has_block(Vector3i(4, 0, 20)), "unknown block type is skipped, not crashed on")
+
+	# Unknown types must be handled at the factory too, for any future caller.
+	_check(BlockFactory.instantiate(999 as BlockData.Type) == null, "factory returns null for unknown type")
+
+	# Round trip still works after all that.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 20), BlockData.Type.HOUSE, 1)
+	_check(SaveManager.save_game(), "save_game reports success")
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(), "healthy save still loads")
+	await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(0, 0, 20)), "round trip intact")
+	_clear()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.SAVE_PATH))
+	await get_tree().process_frame
 
 ## 7. Removing blocks mid-activity must not error or leave ghosts.
 func _sec_removal_during_activity() -> void:

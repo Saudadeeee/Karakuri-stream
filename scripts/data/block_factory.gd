@@ -44,6 +44,12 @@ const SCENES_BY_TYPE: Dictionary = {
 	BlockData.Type.HOUSE: HOUSE_SCENE,
 }
 
+## Returns null for a type this build doesn't know — which happens for real once
+## the game ships and a save file written by a newer version comes back. Callers
+## must handle null rather than get an "out of bounds" mid-rebuild.
 static func instantiate(type: BlockData.Type) -> Node3D:
-	var scene: PackedScene = SCENES_BY_TYPE[type]
+	var scene: PackedScene = SCENES_BY_TYPE.get(type)
+	if scene == null:
+		push_warning("No scene registered for block type %d" % int(type))
+		return null
 	return scene.instantiate()

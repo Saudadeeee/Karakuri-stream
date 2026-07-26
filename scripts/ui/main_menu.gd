@@ -231,9 +231,12 @@ func _build_ui() -> void:
 	play.add_theme_color_override("font_color", Color("fff6ee"))
 	play.add_theme_color_override("font_hover_color", Color.WHITE)
 	row.add_child(play)
-	var quit_b := _menu_button("Quit", _on_quit)
-	quit_b.custom_minimum_size = Vector2(130, 48)
-	row.add_child(quit_b)
+	# No Quit in the browser: get_tree().quit() cannot close a tab, so the button
+	# would just look broken. The web build simply doesn't offer one.
+	if not OS.has_feature("web"):
+		var quit_b := _menu_button("Quit", _on_quit)
+		quit_b.custom_minimum_size = Vector2(130, 48)
+		row.add_child(quit_b)
 
 	var hint := Label.new()
 	hint.text = "drop blocks · hear the stream · relax"
