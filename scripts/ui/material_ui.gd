@@ -33,10 +33,12 @@ const HINTS: Dictionary = {
 	BlockData.Type.STONE_LANTERN: "Glowing lantern — prettiest on the Night map",
 	BlockData.Type.PINWHEEL: "Pinwheel — spins when a stream hits it",
 	BlockData.Type.GATE: "Sluice gate — CLICK it in the world to open/close the flow",
+	BlockData.Type.HOUSE: "House — stack and line them up, they merge into one building",
 }
 
 const ENTRIES: Array = [
 	BlockData.Type.WOOD,
+	BlockData.Type.HOUSE,
 	BlockData.Type.WATER,
 	BlockData.Type.SOURCE,
 	BlockData.Type.PIPE,

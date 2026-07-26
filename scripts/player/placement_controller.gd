@@ -114,6 +114,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_1:
 			select_material(BlockData.Type.WOOD)
+		elif event.keycode == KEY_Q:
+			select_material(BlockData.Type.HOUSE)
 		elif event.keycode == KEY_2:
 			select_material(BlockData.Type.WATER)
 		elif event.keycode == KEY_3:
@@ -306,7 +308,8 @@ func _place_block() -> void:
 		block.state["axis"] = axis
 		if instance.has_method("apply_axis"):
 			instance.apply_axis(axis)
-	elif _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.SOURCE:
+	elif _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.SOURCE \
+			or _current_type == BlockData.Type.HOUSE:
 		# Auto-connecting blocks derive orientation/shape from neighbours; set
 		# their cell before set_block so the placement signal drives the refresh.
 		instance.grid_cell = _ghost_cell
@@ -322,11 +325,12 @@ func _place_block() -> void:
 	_animate_drop(instance, final_pos, _current_type, cell, click_phase)
 	GridManager.set_block(_ghost_cell, block)
 	UndoManager.record_place(_ghost_cell, block)
-	if _current_type == BlockData.Type.PIPE:
+	if _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.HOUSE:
 		instance.refresh_shape()
 	elif _current_type == BlockData.Type.SOURCE:
 		instance.face_adjacent_water()
 	PondDecorManager.excite_near(final_pos)
+	WildlifeManager.look_near(final_pos)
 	# Placing water — or landing a block right beside water — sends a ripple
 	# splash through the pond surface.
 	if _current_type != BlockData.Type.WATER:

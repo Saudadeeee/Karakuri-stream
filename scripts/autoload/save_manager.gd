@@ -70,11 +70,12 @@ func load_game() -> bool:
 			block.state["axis"] = axis
 			if instance.has_method("apply_axis"):
 				instance.apply_axis(axis)
-		elif type == BlockData.Type.PIPE or type == BlockData.Type.SOURCE:
+		elif type == BlockData.Type.PIPE or type == BlockData.Type.SOURCE \
+				or type == BlockData.Type.HOUSE:
 			# Auto-shaping blocks re-derive orientation from neighbours.
 			instance.grid_cell = cell
 		GridManager.set_block(cell, block)
-		if type == BlockData.Type.PIPE:
+		if type == BlockData.Type.PIPE or type == BlockData.Type.HOUSE:
 			instance.refresh_shape()
 		elif type == BlockData.Type.SOURCE:
 			instance.face_adjacent_water()
