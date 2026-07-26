@@ -14,6 +14,12 @@ signal grid_cleared
 
 var _blocks: Dictionary = {} # Vector3i -> BlockData
 
+## Bumped on every structural change. Lets a caller cache something derived from
+## the whole grid (HouseShape caches which building each house cell belongs to)
+## and know cheaply when that cache went stale, without every such cache having
+## to connect signals and manage its own invalidation.
+var version: int = 0
+
 ## Secondary index so get_all_cells_of_type() doesn't have to scan every
 ## block in the grid to find the handful of a given type — without this,
 ## every reactive autoload (and GearManager every single frame) pays a cost
@@ -32,6 +38,7 @@ func set_block(cell: Vector3i, block: BlockData) -> void:
 		_unindex(cell, _blocks[cell].type)
 	_blocks[cell] = block
 	_index(cell, block.type)
+	version += 1
 	block_placed.emit(cell)
 
 func remove_block(cell: Vector3i) -> void:
@@ -42,6 +49,7 @@ func remove_block(cell: Vector3i) -> void:
 		block.node.queue_free()
 	_unindex(cell, block.type)
 	_blocks.erase(cell)
+	version += 1
 	block_removed.emit(cell)
 
 ## Wipes the whole grid in one shot instead of calling remove_block() per
@@ -53,6 +61,7 @@ func clear_all() -> void:
 			block.node.queue_free()
 	_blocks.clear()
 	_cells_by_type.clear()
+	version += 1
 	grid_cleared.emit()
 
 func _index(cell: Vector3i, type: BlockData.Type) -> void:

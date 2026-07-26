@@ -228,15 +228,15 @@ func _sec_houses() -> void:
 	_check(mid["open_sides"].size() == 2, "terrace middle drops both shared walls")
 	_check(not mid["roof"], "cell under a storey grows no roof")
 	_check(left["roof"], "terrace end keeps its roof")
-	# Ridge follows the 3-long X run, not the 1-deep Z.
-	_check(left["ridge_x"], "ridge runs along the building's long axis")
-	_check(int(left["run_x"]) == 3 and int(left["run_z"]) == 1, "run measured on both axes")
-	# Door on the near corner, chimney on the far one — never the same cell here.
-	_check(left["door_side"] != Vector3i.ZERO, "ground corner cell gets the door")
+	_check(int(left["building_size"]) == 4, "building knows its full extent, storeys included")
+	# Door on the building's first cell, chimney on its last — never the same one.
+	_check(left["door_side"] != Vector3i.ZERO, "the building's first cell gets the door")
 	_check(mid["door_side"] == Vector3i.ZERO, "only one door per building")
-	_check(not left["chimney"], "near corner does not also take the chimney")
+	_check(not left["chimney"], "the door cell does not also take the chimney")
 	_check(top["stacked"], "upper storey knows it is stacked")
 	_check(top["roof"] and not bool(top["floor"]), "top cell roofs, does not re-floor")
+
+	await _sec_house_merging()
 
 	# Deterministic: the same cell must decide the same windows every time, or a
 	# reload would rearrange the whole street.
@@ -315,6 +315,82 @@ func _sec_wildlife() -> void:
 	_check(WildlifeManager._birds.is_empty() and WildlifeManager._cats.is_empty()
 		and WildlifeManager._ducks.is_empty(), "clear_all removes every critter")
 	_check(WildlifeManager._perches.is_empty(), "scan forgets the cleared grid")
+
+## Houses wider than one cell must merge into ONE building, not a row of sheds.
+## This is the property that broke first: giving each top cell its own gable
+## looks right on a 1-wide row and wrong on everything else. The roof is a height
+## field over the whole footprint, so the checks below are on that field —
+## `roof_level` in doubled cell coordinates, where an interior sample climbing
+## above 0 is what a ridge, hip or peak actually IS.
+func _sec_house_merging() -> void:
+	# 2x2: the only interior sample is the shared corner. One peak, one hip roof —
+	# NOT two parallel gables sitting next to each other.
+	_clear()
+	await get_tree().process_frame
+	for x in 2:
+		for z in 2:
+			_b(Vector3i(x, 0, 30 + z), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.roof_level(1, 61, 0) > 0, "2x2 raises its shared centre into a peak")
+	_check(HouseShape.roof_level(-1, 59, 0) == 0, "2x2 outer corner stays at eaves height")
+
+	# 3x3: the middle reaches the SECOND level — a true pyramid, not a plateau.
+	_clear()
+	await get_tree().process_frame
+	for x in 3:
+		for z in 3:
+			_b(Vector3i(x, 0, 30 + z), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.roof_level(2, 62, 0) == HouseShape.ROOF_LEVELS, "3x3 peaks at the centre")
+	_check(HouseShape.roof_level(0, 60, 0) < HouseShape.ROOF_LEVELS, "3x3 slopes down toward its edge")
+
+	# A one-wide row must still gable: a continuous ridge along the run, with the
+	# ends falling away to a hip rather than a flat wall.
+	_clear()
+	await get_tree().process_frame
+	for x in 4:
+		_b(Vector3i(x, 0, 30), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	for x in 4:
+		_check(HouseShape.roof_level(x * 2, 60, 0) > 0, "row keeps a ridge over cell %d" % x)
+	_check(HouseShape.roof_level(-1, 60, 0) == 0, "row hips down at its end")
+	_check(HouseShape.roof_level(0, 61, 0) == 0, "row eaves fall away to the side")
+
+	# Shapes with more than one outside corner must still get exactly ONE door and
+	# ONE chimney. A plus used to produce two of each.
+	for shape in [
+		[Vector3i(1,0,30), Vector3i(0,0,31), Vector3i(1,0,31), Vector3i(2,0,31), Vector3i(1,0,32)],
+		[Vector3i(0,0,30), Vector3i(0,0,31), Vector3i(0,0,32), Vector3i(1,0,32), Vector3i(2,0,32)],
+	]:
+		_clear()
+		await get_tree().process_frame
+		for c in shape:
+			_b(c, BlockData.Type.HOUSE)
+		await get_tree().process_frame
+		var doors := 0
+		var chimneys := 0
+		for c in shape:
+			var ctx := HouseShape.context(c)
+			if ctx["door_side"] != Vector3i.ZERO:
+				doors += 1
+			if ctx["chimney"]:
+				chimneys += 1
+			_check(int(ctx["building_size"]) == shape.size(), "every cell sees the whole building")
+		_check(doors == 1, "exactly one door on an irregular footprint")
+		_check(chimneys == 1, "exactly one chimney on an irregular footprint")
+
+	# Two buildings that do NOT touch stay two buildings, with a door each.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 30), BlockData.Type.HOUSE)
+	_b(Vector3i(4, 0, 30), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(int(HouseShape.context(Vector3i(0, 0, 30))["building_size"]) == 1, "separate houses stay separate")
+	_check(HouseShape.context(Vector3i(0, 0, 30))["door_side"] != Vector3i.ZERO
+		and HouseShape.context(Vector3i(4, 0, 30))["door_side"] != Vector3i.ZERO,
+		"each separate house gets its own door")
+	_clear()
+	await get_tree().process_frame
 
 ## The manager scans on a throttle, so tests must let that interval elapse
 ## instead of assuming the very next frame is up to date.

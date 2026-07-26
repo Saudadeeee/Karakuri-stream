@@ -39,11 +39,18 @@ Use an **official** Godot 4.7.1 binary. The Steam build swallows export error te
 
 You don't place a house, you place a house *cell*, and the building assembles
 itself. Put two side by side and the wall between them disappears — they become
-one wide house under one long roof, with the ridge turning to follow whichever
-way the building runs. Stack one and the lower roof becomes a floor. Knock a hole
-in a terrace and the two new ends grow their own gable walls. Doors, chimneys,
-window boxes and balconies all place themselves, and they place themselves the
-*same way every time*, so a village looks identical after you reload it.
+one wide house under one roof.
+
+The roof isn't drawn per cell, which is what lets buildings actually merge: it's
+one surface over the whole footprint, and its shape falls out of how deep each
+point sits inside that footprint. So a single row gets a ridge with hipped ends,
+a 2x2 gets a hip roof, a 3x3 peaks into a pyramid, and an L-shaped building grows
+a valley where its two wings meet — none of which is special-cased anywhere.
+
+Stack a cell and the lower roof becomes a floor. Knock a hole in a terrace and
+the two new ends close themselves up. Each building gets exactly one front door
+and one chimney however odd its shape, and everything places itself the *same way
+every time*, so a village looks identical after you reload it.
 
 ### Animals
 
@@ -91,7 +98,6 @@ per-platform setup, keystores, and the measured performance traps:
 
 ## Third-party assets
 
-Baloo 2 font by Ek Type (SIL OFL 1.1). Sound effects from Freesound, filenames
-keep their original Freesound IDs and author handles. 3D models are generated from
-source scripts in `assets/3DModel/generated/` (Blender) and
-`assets/3DModel/blockbench/` (Blockbench → GLB bridge).
+Every third-party asset is **CC0 (public domain)** except the font, which is
+**SIL OFL 1.1** and ships its licence in `assets/fonts/OFL.txt`. All 3D models are
+original. Full list with sources and licences: **[CREDITS.md](CREDITS.md)**.

@@ -183,61 +183,87 @@ func _material_for(col: Color) -> StandardMaterial3D:
 	return m
 
 # --------------------------------------------------------------------- roof
-## Gable prism sitting on the cell top. The two ends are only capped where the
-## building actually STOPS — that's what lets a row of cells share one unbroken
-## ridge instead of each growing its own little hut roof.
-func _build_roof(ctx: Dictionary) -> void:
-	var ridge_x: bool = ctx["ridge_x"]
-	var axis := Vector3i(1, 0, 0) if ridge_x else Vector3i(0, 0, 1)
-	var cap_neg: bool = not HouseShape.is_house(grid_cell - axis)
-	var cap_pos: bool = not HouseShape.is_house(grid_cell + axis)
-	# Along the ridge we only overhang at a capped end, otherwise the eaves of
-	# two neighbouring cells would intersect and z-fight down the whole terrace.
-	var half_along := Vector3(0.5 + (ROOF_OVER if cap_pos else 0.0), 0.0, 0.5 + (ROOF_OVER if cap_neg else 0.0))
-	_emit_gable(ridge_x, half_along.x, half_along.z, cap_neg, cap_pos, _tint(_palette["roof"]))
-	# Ridge cap board — reads as tile capping and hides the seam between cells.
-	var cap := Vector3(1.0, 0.06, 0.1) if ridge_x else Vector3(0.1, 0.06, 1.0)
-	var ridge_col: Color = SNOW if MapThemes.current == SNOW_THEME else _dark()
-	_batch.box(cap, Vector3(0, 0.5 + ROOF_H, 0), ridge_col)
+## The roof is not this cell's own shape — it is this cell's PATCH of a surface
+## that belongs to the whole building. See HouseShape for why: per-cell gables
+## turn anything wider than one cell into a row of sheds.
+##
+## Nine samples on a half-cell grid (corners, edge midpoints, centre), each given
+## a height by HouseShape.roof_level(), then four quads between them. Neighbouring
+## cells sample the SAME shared points, so the patches meet exactly — a 3-cell row
+## grows one continuous ridge, a 2x2 grows one pyramid, an L grows a valley, and
+## every end hips itself, all without the cells talking to each other.
+##
+## Emitted as a solid slab (top surface, underside, fascia around the rim) because
+## an overhanging single surface is see-through from below.
+const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]
+const ROOF_THICK := 0.07
+
+func _build_roof(_ctx: Dictionary) -> void:
+	var col: Color = _tint(_palette["roof"])
+	var top: Array = _roof_samples(0.0)
+	_emit_roof_surface(top, col, false)
+	# Underside, reversed so it faces down, plus a rim so the eaves have an edge.
+	var under: Array = _roof_samples(-ROOF_THICK)
+	_emit_roof_surface(under, _dark(), true)
+	_emit_roof_rim(top, under, _dark())
 	if MapThemes.current == SNOW_THEME:
-		_snow_cap(ridge_x, half_along)
+		# Snow rides ON the roof, inset so the tile edge still shows at the eaves —
+		# a fully coated roof turns the whole village into white blobs.
+		_emit_roof_surface(_roof_samples(0.035, 0.13), SNOW, false)
 
-## Snow lying on the roof: two thin slabs laid along the slopes. Snow settles on
-## the UPPER half only — a fully coated roof loses the tile colour entirely and
-## the whole village turns into white blobs.
-func _snow_cap(ridge_x: bool, half_along: Vector3) -> void:
-	var along: float = (half_along.x + half_along.z)
-	for s in [-1.0, 1.0]:
-		var size := Vector3(along, 0.045, 0.34) if ridge_x else Vector3(0.34, 0.045, along)
-		var across: float = 0.17 * s
-		var at := Vector3(0, 0.5 + ROOF_H * 0.72, across) if ridge_x else Vector3(across, 0.5 + ROOF_H * 0.72, 0)
-		# Lie along the pitch instead of floating flat above it.
-		var tilt := Basis(Vector3(1, 0, 0), -0.62 * s) if ridge_x else Basis(Vector3(0, 0, 1), 0.62 * s)
-		_batch.box(size, at, SNOW, tilt)
+## The 3x3 sample grid for this cell, as world-local positions.
+## `lift` raises the whole sheet; `inset` pulls the outer ring inward (used for
+## the snow layer). Outer samples push OUT by the eaves overhang, but only on
+## sides where the roof actually ends — pushing out into a neighbour would make
+## the two cells' eaves intersect and z-fight down the whole terrace.
+func _roof_samples(lift: float, inset: float = 0.0) -> Array:
+	var pts: Array = []
+	for iz in 3:
+		var row: Array = []
+		for ix in 3:
+			var a: int = ix - 1
+			var b: int = iz - 1
+			var x: float = a * 0.5
+			var z: float = b * 0.5
+			if a != 0 and not HouseShape.is_roof_cell(grid_cell + Vector3i(a, 0, 0)):
+				x = a * (0.5 + ROOF_OVER - inset)
+			if b != 0 and not HouseShape.is_roof_cell(grid_cell + Vector3i(0, 0, b)):
+				z = b * (0.5 + ROOF_OVER - inset)
+			var level: int = HouseShape.roof_level(grid_cell.x * 2 + a, grid_cell.z * 2 + b, grid_cell.y)
+			row.append(Vector3(x, 0.5 + ROOF_STEP[level] + lift, z))
+		pts.append(row)
+	return pts
 
-## Emits the gable straight into the batch. Faceted normals come for free —
-## MeshBatch computes one per triangle, which is what the flat-shaded art style
-## wants anyway (smoothing a roof this chunky just muddies the ridge line).
-func _emit_gable(ridge_x: bool, over_pos: float, over_neg: float, cap_neg: bool, cap_pos: bool, col: Color) -> void:
-	var w: float = 0.5 + ROOF_OVER          # across the ridge (eaves side)
-	var a: float = over_pos                  # along the ridge, + end
-	var b: float = over_neg                  # along the ridge, - end
-	var top: float = 0.5                     # roof sits on the cell top
-	# Corners named along/across so one formula serves both ridge directions.
-	var p := func(al: float, ac: float, y: float) -> Vector3:
-		return Vector3(al, top + y, ac) if ridge_x else Vector3(ac, top + y, al)
+func _emit_roof_surface(p: Array, col: Color, flip: bool) -> void:
+	for iz in 2:
+		for ix in 2:
+			var a: Vector3 = p[iz][ix]
+			var b: Vector3 = p[iz][ix + 1]
+			var c: Vector3 = p[iz + 1][ix + 1]
+			var d: Vector3 = p[iz + 1][ix]
+			if flip:
+				_batch.quad(d, c, b, a, col)
+			else:
+				_batch.quad(a, b, c, d, col)
 
-	var bl: Vector3 = p.call(-b, -w, 0.0); var br: Vector3 = p.call(a, -w, 0.0)
-	var fl: Vector3 = p.call(-b, w, 0.0);  var fr: Vector3 = p.call(a, w, 0.0)
-	var rl: Vector3 = p.call(-b, 0.0, ROOF_H); var rr: Vector3 = p.call(a, 0.0, ROOF_H)
-
-	_batch.quad(bl, br, rr, rl, col)     # one slope
-	_batch.quad(fr, fl, rl, rr, col)     # the other slope
-	_batch.quad(br, bl, fl, fr, col)     # underside, so eaves aren't see-through
-	if cap_pos:
-		_batch.tri(br, fr, rr, col)
-	if cap_neg:
-		_batch.tri(fl, bl, rl, col)
+## Fascia band closing the gap between the top sheet and its underside, but only
+## along edges where the roof really stops — an interior edge is shared with the
+## neighbour's slab and capping it would bury a wall inside the roof.
+func _emit_roof_rim(top: Array, under: Array, col: Color) -> void:
+	var edges := [
+		[Vector3i(0, 0, -1), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]],
+		[Vector3i(0, 0, 1), [Vector2i(2, 2), Vector2i(1, 2), Vector2i(0, 2)]],
+		[Vector3i(-1, 0, 0), [Vector2i(0, 2), Vector2i(0, 1), Vector2i(0, 0)]],
+		[Vector3i(1, 0, 0), [Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 2)]],
+	]
+	for e in edges:
+		if HouseShape.is_roof_cell(grid_cell + (e[0] as Vector3i)):
+			continue
+		var idx: Array = e[1]
+		for i in idx.size() - 1:
+			var m: Vector2i = idx[i]
+			var n: Vector2i = idx[i + 1]
+			_batch.quad(top[m.y][m.x], top[n.y][n.x], under[n.y][n.x], under[m.y][m.x], col)
 
 func _build_chimney(trim_col: Color) -> void:
 	var at := Vector3(0.26, 0.5 + ROOF_H * 0.55, 0.26)
