@@ -11,19 +11,30 @@ extends StaticBody3D
 ## end walls, gables and all.
 
 const WALL_T := 0.07          # plaster thickness
-const ROOF_H := 0.42          # ridge height above the cell top
+## Ridge height above the cell top. At 0.42 the pitch was so shallow that roofs
+## read as flat dark slabs from a normal camera angle; 0.58 makes them read as
+## roofs without turning the town into spires.
+const ROOF_H := 0.58
 const ROOF_OVER := 0.11       # eaves overhang past the wall
 
-## Townscaper's palette logic: quiet plaster, one warm roof, one darker timber.
-## The roof stays close in hue across variants so a mixed street still reads as
-## one town instead of a colour swatch.
+## The four original palettes were all pale plaster over a red-brown roof, so
+## whichever one a building picked it came out looking the same — a test town
+## rendered as one uniform grey block, which is exactly why placing houses felt
+## flat. These seven carry real separation in BOTH hue and value while staying
+## inside the clay/pastel family, so a street reads as a street.
 const PALETTES: Array[Dictionary] = [
-	{"wall": Color("f2e8d5"), "roof": Color("c1683f"), "trim": Color("8a6a4a")},
-	{"wall": Color("cfe0e8"), "roof": Color("9a5f7a"), "trim": Color("6d7b84")},
-	{"wall": Color("f6d9d5"), "roof": Color("b5563f"), "trim": Color("8a5f52")},
-	{"wall": Color("dbe4cf"), "roof": Color("a1663c"), "trim": Color("6f7a5c")},
+	{"wall": Color("f4ead6"), "roof": Color("b8563c"), "trim": Color("8a6a4a")},   # cream + terracotta
+	{"wall": Color("bcd4dd"), "roof": Color("5f6f86"), "trim": Color("6d7b84")},   # sea blue + slate
+	{"wall": Color("f3cbc2"), "roof": Color("9c4a63"), "trim": Color("8a5f52")},   # blossom + plum
+	{"wall": Color("cfd9b6"), "roof": Color("7d6a3a"), "trim": Color("6f7a5c")},   # sage + olive
+	{"wall": Color("f2d49a"), "roof": Color("a8552f"), "trim": Color("8a6134")},   # ochre + rust
+	{"wall": Color("d8c8e0"), "roof": Color("6a5578"), "trim": Color("7a6a86")},   # lilac + aubergine
+	{"wall": Color("e8e4dd"), "roof": Color("4f5f5a"), "trim": Color("77776f")},   # chalk + pine
 ]
 
+## Awning cloth. The one saturated accent on an otherwise quiet building, so a
+## street reads as lived-in rather than as a colour swatch.
+const ACCENT := Color("e07a5f")
 const GLASS_DAY := Color("6f8794")
 const GLASS_NIGHT := Color("ffd79a")
 const SNOW_THEME := 2
@@ -55,7 +66,35 @@ var grid_cell: Vector3i:
 var _placed: bool = false
 var _visual: Node3D
 var _batch: MeshBatch
+var _base_palette: int = 0
 var _palette: Dictionary = PALETTES[0]
+
+## The player's variant picks a FAMILY; the building picks its own exact shade
+## within it. Without this a street of same-variant houses is one flat block of
+## identical grey — which is what a test town actually looked like, and the
+## reason placing houses stopped being interesting. Townscaper's whole charm is
+## that no two buildings match, so the variety has to come from the BUILDING,
+## not from the player having to remember to cycle the variant every time.
+func _resolve_palette() -> void:
+	var base: Dictionary = PALETTES[_base_palette]
+	if not _placed:
+		_palette = base
+		return
+	# Blending 34% between two pale palettes was invisible — a test town came out
+	# as one uniform grey. A building now takes a WHOLE palette of its own and
+	# then shifts it, so neighbours are obviously different houses.
+	var pick: int = int(HouseShape.building_roll(grid_cell, 3) * PALETTES.size()) % PALETTES.size()
+	var chosen: Dictionary = PALETTES[pick]
+	var light: float = (HouseShape.building_roll(grid_cell, 5) - 0.5) * 0.26
+	var roof_light: float = (HouseShape.building_roll(grid_cell, 11) - 0.5) * 0.34
+	# The player's variant still leads: it is mixed back in so a deliberately
+	# chosen colour stays recognisable across the street rather than being
+	# overwritten by the building's own roll.
+	_palette = {
+		"wall": (chosen["wall"] as Color).lerp(base["wall"], 0.35).lightened(light),
+		"roof": (chosen["roof"] as Color).lerp(base["roof"], 0.35).lightened(roof_light),
+		"trim": (chosen["trim"] as Color).lerp(base["trim"], 0.5),
+	}
 var _glow: Array[StandardMaterial3D] = []
 var _phase: float = randf() * TAU
 
@@ -81,7 +120,7 @@ func _on_grid_changed(cell: Vector3i) -> void:
 		refresh_shape()
 
 func apply_variant(v: Dictionary) -> void:
-	_palette = PALETTES[int(v.get("palette", 0)) % PALETTES.size()]
+	_base_palette = int(v.get("palette", 0)) % PALETTES.size()
 	if is_inside_tree():
 		refresh_shape()
 
@@ -94,6 +133,7 @@ func refresh_shape() -> void:
 	add_child(_visual)
 
 	var ctx: Dictionary = HouseShape.context(grid_cell) if _placed else HouseShape.lone_context()
+	_resolve_palette()
 	_batch = MeshBatch.new()
 	var wall_col: Color = _tint(_palette["wall"])
 	var trim_col: Color = _tint(_palette["trim"])
@@ -111,6 +151,10 @@ func refresh_shape() -> void:
 		_build_roof(ctx)
 	if ctx["chimney"]:
 		_build_chimney(trim_col)
+	# Only a real building earns a roof garden, and only where its roof is flat
+	# enough on top to stand a pot on — a narrow ridge would just float them.
+	if HouseShape.has_roof_garden(grid_cell):
+		_build_roof_garden(trim_col)
 
 	# Everything above went into ONE mesh, grouped by colour: four or five draw
 	# calls per cell instead of one per plank.
@@ -131,12 +175,16 @@ func _build_face(side: Vector3i, ctx: Dictionary, wall_col: Color, trim_col: Col
 	_batch.box(_face_size(side, 1.0, WALL_T), out * (0.5 - WALL_T * 0.5), wall_col)
 
 	var is_door: bool = ctx["door_side"] == side
+	var ground: bool = not bool(ctx["stacked"])
 	if is_door:
 		_build_door(out, horiz, trim_col)
 	for ox in HouseShape.window_offsets(grid_cell, side, is_door):
-		_build_window(out, horiz * ox, trim_col)
+		_build_window(out, horiz * ox, trim_col, ground)
 	if HouseShape.has_balcony(grid_cell, side, ctx["stacked"]):
 		_build_balcony(out, horiz, trim_col)
+	# Street level meets the grass with something growing, not a hard edge.
+	if HouseShape.has_planter(grid_cell, side, ground) and not is_door:
+		_build_planter(out, horiz, trim_col)
 
 ## Size of a slab covering one face: full across, thin through.
 func _face_size(side: Vector3i, span: float, thick: float) -> Vector3:
@@ -149,13 +197,39 @@ func _build_door(out: Vector3, horiz: Vector3, trim_col: Color) -> void:
 	_batch.box(_slab(out, 0.44, 0.06), out * 0.56 + Vector3(0, -0.47, 0), trim_col)
 	_batch.box(Vector3(0.12, 0.16, 0.12), out * 0.46 + horiz * 0.3 + Vector3(0, 0.16, 0), _glass_col())
 
-func _build_window(out: Vector3, offset: Vector3, trim_col: Color) -> void:
+func _build_window(out: Vector3, offset: Vector3, trim_col: Color, ground: bool = false) -> void:
 	var centre: Vector3 = out * 0.5 + offset + Vector3(0, 0.08, 0)
 	_batch.box(_slab(out, 0.30, 0.30), centre, trim_col)
 	_batch.box(_slab(out, 0.22, 0.22), centre + out * 0.03, _glass_col())
 	# Flower box under the sill — small, but it's what makes a wall look lived-in.
 	_batch.box(_slab(out, 0.26, 0.07), centre + out * 0.05 + Vector3(0, -0.19, 0), trim_col)
 	_batch.box(_slab(out, 0.22, 0.06), centre + out * 0.06 + Vector3(0, -0.14, 0), _tint(Color("8cb369")))
+	var across := Vector3(absf(out.z), 0.0, absf(out.x))
+	# Shutters are a per-BUILDING trait, so a house either has them everywhere or
+	# nowhere — half-shuttered walls look like an unfinished job, not a style.
+	if HouseShape.has_shutters(grid_cell):
+		for s2 in [-1.0, 1.0]:
+			_batch.box(_slab(out, 0.08, 0.28), centre + out * 0.02 + across * (0.19 * s2), _dark())
+	# Ground-floor awning: shop-front warmth exactly where a passer-by would see it.
+	if ground and HouseShape.has_awning(grid_cell, _side_of(out), true):
+		# Use the same _slab helper as every other wall piece. A hand-rolled size
+		# vector here produced a huge flat sheet jutting out of the building —
+		# the face axes are easy to get wrong when out can point along X or Z.
+		var lip: Vector3 = centre + out * 0.12 + Vector3(0, 0.23, 0)
+		_batch.box(_slab(out, 0.34, 0.05) + out.abs() * 0.16, lip, _tint(ACCENT))
+		_batch.box(_slab(out, 0.34, 0.06), centre + out * 0.04 + Vector3(0, 0.2, 0), _tint(ACCENT).darkened(0.12))
+
+## Which of the four sides a face normal belongs to.
+func _side_of(out: Vector3) -> Vector3i:
+	return Vector3i(roundi(out.x), 0, roundi(out.z))
+
+## A trough of greenery along the foot of the wall.
+func _build_planter(out: Vector3, horiz: Vector3, trim_col: Color) -> void:
+	var at: Vector3 = out * 0.56 + Vector3(0, -0.44, 0)
+	_batch.box(_slab(out, 0.5, 0.14) + out.abs() * 0.1, at, trim_col)
+	_batch.box(_slab(out, 0.44, 0.1) + out.abs() * 0.08, at + Vector3(0, 0.08, 0), _tint(Color("8cb369")))
+	for s2 in [-0.14, 0.13]:
+		_batch.box(Vector3(0.07, 0.16, 0.07), at + horiz * s2 + Vector3(0, 0.16, 0), _tint(Color("7aa85c")))
 
 func _build_balcony(out: Vector3, horiz: Vector3, trim_col: Color) -> void:
 	var base: Vector3 = out * 0.62 + Vector3(0, -0.24, 0)
@@ -272,7 +346,7 @@ func _build_storey_band(ctx: Dictionary, trim_col: Color) -> void:
 ##
 ## Emitted as a solid slab (top surface, underside, fascia around the rim) because
 ## an overhanging single surface is see-through from below.
-const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]
+const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]   # keep in step with HouseShape.ROOF_RISE
 const ROOF_THICK := 0.07
 
 func _build_roof(_ctx: Dictionary) -> void:
@@ -341,6 +415,21 @@ func _emit_roof_rim(top: Array, under: Array, col: Color) -> void:
 			var m: Vector2i = idx[i]
 			var n: Vector2i = idx[i + 1]
 			_batch.quad(top[m.y][m.x], top[n.y][n.x], under[n.y][n.x], under[m.y][m.x], col)
+
+## Pots and a little tree on the flat of a big roof. This is the payoff for
+## building UP and WIDE rather than sprawling — the reward has to be visible from
+## the normal play camera, so it sits on the highest surface the building has.
+func _build_roof_garden(trim_col: Color) -> void:
+	var top: float = 0.5 + ROOF_STEP[HouseShape.ROOF_LEVELS] + 0.02
+	var leaf: Color = _tint(Color("8cb369"))
+	for i in 3:
+		var a: float = HouseShape.building_roll(grid_cell, 31 + i) * TAU
+		var at := Vector3(cos(a) * 0.22, top, sin(a) * 0.22)
+		_batch.box(Vector3(0.15, 0.12, 0.15), at + Vector3(0, 0.06, 0), trim_col)
+		_batch.box(Vector3(0.11, 0.16, 0.11), at + Vector3(0, 0.19, 0), leaf)
+		if i == 0:
+			_batch.box(Vector3(0.05, 0.2, 0.05), at + Vector3(0, 0.3, 0), _dark())
+			_batch.box(Vector3(0.26, 0.2, 0.26), at + Vector3(0, 0.44, 0), leaf)
 
 func _build_chimney(trim_col: Color) -> void:
 	var at := Vector3(0.26, 0.5 + ROOF_H * 0.55, 0.26)

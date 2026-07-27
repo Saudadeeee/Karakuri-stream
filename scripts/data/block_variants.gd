@@ -75,11 +75,17 @@ const V: Dictionary = {
 	BlockData.Type.GATE: [{"name": "Sluice gate"}],
 	# House plaster colours. `palette` indexes house_block.PALETTES; the roof hue
 	# stays close across all four so a mixed street still reads as one town.
+	# The variant leads the colour; each BUILDING then rolls its own shade around
+	# it (see house_block._resolve_palette), so a row of one variant is still a
+	# row of individual houses rather than a wall of identical grey.
 	BlockData.Type.HOUSE: [
-		{"name": "Cream house", "palette": 0, "color": "#f2e8d5"},
-		{"name": "Blue house", "palette": 1, "color": "#cfe0e8"},
-		{"name": "Blossom house", "palette": 2, "color": "#f6d9d5"},
-		{"name": "Sage house", "palette": 3, "color": "#dbe4cf"},
+		{"name": "Cream house", "palette": 0, "color": "#f4ead6"},
+		{"name": "Sea-blue house", "palette": 1, "color": "#bcd4dd"},
+		{"name": "Blossom house", "palette": 2, "color": "#f3cbc2"},
+		{"name": "Sage house", "palette": 3, "color": "#cfd9b6"},
+		{"name": "Ochre house", "palette": 4, "color": "#f2d49a"},
+		{"name": "Lilac house", "palette": 5, "color": "#d8c8e0"},
+		{"name": "Chalk house", "palette": 6, "color": "#e8e4dd"},
 	],
 	BlockData.Type.SCOOP: [{"name": "Water scoop"}],
 }

@@ -93,7 +93,7 @@ static func roof_level(dx: int, dz: int, y: int) -> int:
 ## — has to add this, or it stands at the level of the eaves and ends up buried
 ## inside the roof it is supposed to be sitting on.
 ## Must stay in step with house_block.ROOF_STEP.
-const ROOF_RISE: Array[float] = [0.0, 0.42, 0.63]
+const ROOF_RISE: Array[float] = [0.0, 0.58, 0.87]
 
 static func roof_top_height(cell: Vector3i) -> float:
 	if not is_roof_cell(cell):
@@ -275,6 +275,29 @@ static func lone_context() -> Dictionary:
 	}
 
 # ---------------------------------------------------------------------- trim
+## A stable number in [0,1) for the WHOLE building, not this cell.
+##
+## Per-cell hashes make a building noisy: every cell rolls its own dice, so one
+## house ends up with a different mood on each side. Townscaper's charm is the
+## opposite — a building is internally consistent and the VARIETY lives between
+## buildings. Anything that should read as "this house's character" (its exact
+## shade, whether it has a roof garden) must come from here; anything that is
+## per-window detail can stay on `_h`.
+static func building_roll(cell: Vector3i, salt: int) -> float:
+	var lo: Vector3i = _component(cell)["lo"]
+	return _h(lo, salt)
+
+## How much decoration this cell has earned. A lone hut stays plain and a real
+## building gets the good stuff — growth is what makes placing another block
+## feel like it did something.
+static func decor_tier(cell: Vector3i) -> int:
+	var n: int = int(_component(cell)["size"])
+	if n >= 8:
+		return 2
+	if n >= 3:
+		return 1
+	return 0
+
 ## Windows for one exposed face: 0-2 of them, biased so ground floors (which
 ## usually carry the door) stay plainer than the storeys above. Returns local
 ## X offsets across the face.
@@ -288,7 +311,34 @@ static func window_offsets(cell: Vector3i, side: Vector3i, is_door_side: bool) -
 		return [0.0]
 	return [-0.21, 0.21]
 
-## True when this cell should grow a small balcony on `side`: an upper floor with
-## something under it to rest on, and only sometimes, so they read as accents.
+## A small balcony on `side`: an upper floor with something under it to rest on.
+##
+## This was 22% and only ever read as "almost never" — a whole town could go by
+## without one. Balconies are one of the things people actually look for, so an
+## upper storey now grows them about half the time.
 static func has_balcony(cell: Vector3i, side: Vector3i, stacked: bool) -> bool:
-	return stacked and _h(cell, 91 + side.x * 7 + side.z * 13) < 0.22
+	return stacked and _h(cell, 91 + side.x * 7 + side.z * 13) < 0.48
+
+## A cloth awning over a GROUND-floor window: shop-front warmth at street level,
+## and never on an upper storey where it would look like a mistake.
+static func has_awning(cell: Vector3i, side: Vector3i, ground: bool) -> bool:
+	return ground and decor_tier(cell) >= 1 and _h(cell, 41 + side.x * 5 + side.z * 11) < 0.38
+
+## Shutters flanking a window. A building either uses shutters or it doesn't —
+## rolled per BUILDING so one house doesn't have them on half its windows.
+static func has_shutters(cell: Vector3i) -> bool:
+	return building_roll(cell, 7) < 0.45
+
+## Potted plants on a roof: only on real buildings, and only where the roof is
+## flat enough to stand a pot on — the top of a wide building, not a narrow ridge.
+static func has_roof_garden(cell: Vector3i) -> bool:
+	if decor_tier(cell) < 2 or not is_roof_cell(cell):
+		return false
+	if roof_level(cell.x * 2, cell.z * 2, cell.y) < ROOF_LEVELS:
+		return false
+	return building_roll(cell, 23) < 0.6
+
+## A planter trough at the foot of an exposed ground-floor wall. Cheap, and it is
+## what stops a building from meeting the grass in a hard line.
+static func has_planter(cell: Vector3i, side: Vector3i, ground: bool) -> bool:
+	return ground and _h(cell, 61 + side.x * 3 + side.z * 17) < 0.42

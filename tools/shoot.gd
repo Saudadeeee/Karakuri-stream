@@ -64,24 +64,16 @@ func _ready() -> void:
 
 ## A small sample build so a screenshot shows the actual game, not empty ground.
 func _village(root: Node) -> void:
-	var plan := [
-		# 2x2 merged block with a second storey -> hip roof + belt course
-		[Vector3i(-3,0,-1), BlockData.Type.HOUSE], [Vector3i(-2,0,-1), BlockData.Type.HOUSE],
-		[Vector3i(-3,0,0), BlockData.Type.HOUSE], [Vector3i(-2,0,0), BlockData.Type.HOUSE],
-		[Vector3i(-3,1,0), BlockData.Type.HOUSE],
-		# tower with a CANTILEVER -> corbel brackets
-		[Vector3i(0,0,-2), BlockData.Type.HOUSE], [Vector3i(0,1,-2), BlockData.Type.HOUSE],
-		[Vector3i(1,1,-2), BlockData.Type.HOUSE],
-		# house floating in mid-air -> stilts down to the ground
-		[Vector3i(3,2,-1), BlockData.Type.HOUSE],
-		# pond for ducks
-		[Vector3i(3,0,1), BlockData.Type.WATER], [Vector3i(2,0,1), BlockData.Type.WATER],
-		[Vector3i(3,0,2), BlockData.Type.WATER], [Vector3i(2,0,2), BlockData.Type.WATER],
-		[Vector3i(2,0,3), BlockData.Type.WATER],
-		# a running machine
-		[Vector3i(0,1,2), BlockData.Type.SOURCE], [Vector3i(0,0,3), BlockData.Type.BELL],
-		[Vector3i(-1,0,2), BlockData.Type.GEAR], [Vector3i(-1,0,3), BlockData.Type.DRUM],
-	]
+	var plan := []
+	# A dense little town: rows, corners, stacks — what a player actually makes.
+	for e in [
+		[0,0,0],[1,0,0],[2,0,0], [0,1,0],[1,1,0],
+		[0,0,1],[2,0,1],
+		[0,0,2],[1,0,2],[2,0,2], [2,1,2],
+		[4,0,0],[4,1,0],[4,2,0],
+		[4,0,2],[5,0,2],
+	]:
+		plan.append([Vector3i(e[0]-2, e[1], e[2]-1), BlockData.Type.HOUSE])
 	for e in plan:
 		var c: Vector3i = e[0]
 		var n: Node3D = BlockFactory.instantiate(e[1])
