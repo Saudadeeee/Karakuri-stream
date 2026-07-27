@@ -9,8 +9,39 @@ extends Control
 const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
 const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
-const ICON_SIZE: int = 40   # 15 entries must fit a ~700px-tall window
+## Icon size is COMPUTED, not fixed. The strip was sized by hand for 15 entries
+## in a ~700px window; at 17 entries and 40px it needs 792px, so on a 720p window
+## — and every browser window is shorter than its screen — the last few tools sat
+## off the bottom of the screen where the player could not reach them.
+const ICON_MAX: int = 40
+const ICON_MIN: int = 22
 const ICON_GAP: int = 5
+const STRIP_MARGIN: int = 16
+
+var _icon_size: int = ICON_MAX
+var _vbox: VBoxContainer
+
+## Largest icon that lets ALL entries fit the current window height.
+func _fit_icon_size() -> int:
+	var avail: float = get_viewport_rect().size.y - STRIP_MARGIN * 2.0
+	var gaps: float = float(ENTRIES.size() - 1) * ICON_GAP
+	var per: int = int(floor((avail - gaps) / float(ENTRIES.size())))
+	return clampi(per, ICON_MIN, ICON_MAX)
+
+## Re-fit on resize; a window can be dragged shorter at any time.
+func _on_viewport_resized() -> void:
+	var want: int = _fit_icon_size()
+	if want == _icon_size:
+		return
+	_icon_size = want
+	for type in _buttons:
+		var b: Button = _buttons[type]
+		b.custom_minimum_size = Vector2(_icon_size, _icon_size)
+		b.size = Vector2(_icon_size, _icon_size)
+	for type in _viewport_by_type:
+		var vp: SubViewport = _viewport_by_type[type]
+		if is_instance_valid(vp):
+			vp.size = Vector2i(_icon_size, _icon_size)
 const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 ## Faded, not hidden. 0.18 was tuned against the pale spring sky, where a wooden
 ## cog bezel still reads at that alpha; on the NIGHT map the same 0.18 over a dark
@@ -76,10 +107,13 @@ var _hint_panel: PanelContainer
 var _hint_label: Label
 
 func _ready() -> void:
+	_icon_size = _fit_icon_size()
 	var vbox := VBoxContainer.new()
+	_vbox = vbox
 	vbox.add_theme_constant_override("separation", ICON_GAP)
-	vbox.position = Vector2(16, 16)
+	vbox.position = Vector2(STRIP_MARGIN, STRIP_MARGIN)
 	add_child(vbox)
+	get_viewport().size_changed.connect(_on_viewport_resized)
 
 	for type in ENTRIES:
 		var button := _build_icon_button(type)
@@ -145,7 +179,7 @@ func _bake_icons() -> void:
 
 func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
-	button.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+	button.custom_minimum_size = Vector2(_icon_size, _icon_size)
 	button.toggle_mode = true
 
 	# Wooden cog bezel behind the icon (2D draw, no 3D cost).
@@ -166,7 +200,7 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	# the selected / hovered icon spins (see _refresh_viewport_modes), so the
 	# animation stays exactly where the player is looking.
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(ICON_SIZE, ICON_SIZE)
+	viewport.size = Vector2i(_icon_size, _icon_size)
 	viewport.transparent_bg = true
 	viewport.own_world_3d = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
@@ -268,7 +302,7 @@ func _on_icon_hover(type: int, entered: bool) -> void:
 		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
 		_hint_label.text = "%s\n%s" % [vname, HINTS.get(type, "")]
 		var btn: Button = _buttons[type]
-		_hint_panel.position = Vector2(btn.global_position.x + ICON_SIZE + 14, btn.global_position.y)
+		_hint_panel.position = Vector2(btn.global_position.x + _icon_size + 14, btn.global_position.y)
 		_hint_panel.visible = true
 	elif _hint_panel != null:
 		_hint_panel.visible = false

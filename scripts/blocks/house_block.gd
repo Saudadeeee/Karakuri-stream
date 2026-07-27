@@ -14,7 +14,11 @@ const WALL_T := 0.07          # plaster thickness
 ## Ridge height above the cell top. At 0.42 the pitch was so shallow that roofs
 ## read as flat dark slabs from a normal camera angle; 0.58 makes them read as
 ## roofs without turning the town into spires.
-const ROOF_H := 0.58
+## 0.42 read as a flat dark slab; 0.58 went too far the other way and on a
+## single-cell top the roof became a hat that swallowed the storey under it —
+## a two-storey house looked like a ground floor wearing a lid. 0.48 lets the
+## pitch read while leaving the upper walls visible.
+const ROOF_H := 0.48
 const ROOF_OVER := 0.11       # eaves overhang past the wall
 
 ## Townscaper's towns read as towns because the buildings are unmistakably
@@ -228,6 +232,7 @@ func _build_face(side: Vector3i, ctx: Dictionary, wall_col: Color, trim_col: Col
 	var lean: float = _jitter(side.x * 5 + side.z * 3) * 0.01
 	_batch.box(_face_size(side, 1.0 + wobble, WALL_T),
 		out * (0.5 - WALL_T * 0.5 + wobble * 0.5) + horiz * lean, wall_col)
+	_build_brickwork(side, out, horiz, wall_col)
 
 	var is_door: bool = ctx["door_side"] == side
 	var ground: bool = not bool(ctx["stacked"])
@@ -301,6 +306,40 @@ func _build_window(out: Vector3, offset: Vector3, trim_col: Color, ground: bool 
 		var lip: Vector3 = centre + out * 0.12 + Vector3(0, 0.23, 0)
 		_batch.box(_slab(out, 0.34, 0.05) + out.abs() * 0.16, lip, _tint(ACCENT))
 		_batch.box(_slab(out, 0.34, 0.06), centre + out * 0.04 + Vector3(0, 0.2, 0), _tint(ACCENT).darkened(0.12))
+
+## Brick courses in RELIEF, not in texture.
+##
+## The art style is untextured flat-shaded — every surface in the game is a solid
+## colour, and the meshes are procedurally batched with no UVs to map an image
+## onto. Painting bricks would mean adding a UV pipeline and a texture atlas to
+## one block type while everything around it stayed flat, which would make the
+## house look pasted in rather than detailed.
+##
+## So the bricks are GEOMETRY: shallow courses proud of the plaster, offset every
+## other row so the joints stagger the way real brick does, in a shade of the
+## wall's own colour. Detail without a new colour costs no extra draw call, since
+## MeshBatch groups by colour — see the note on the palette.
+const BRICK_ROWS := 5
+const BRICK_D := 0.018
+
+func _build_brickwork(side: Vector3i, out: Vector3, horiz: Vector3, wall_col: Color) -> void:
+	var shade: Color = wall_col.darkened(0.07)
+	var face: float = 0.5 - WALL_T + BRICK_D * 0.5
+	for r in BRICK_ROWS:
+		var y: float = -0.4 + float(r) * (0.8 / float(BRICK_ROWS - 1))
+		var j: float = _jitter(side.x * 3 + side.z * 5 + r * 17) * 0.01
+		# One proud course per row: a shallow band across the wall.
+		_batch.box(_slab(out, 0.92, 0.055) + out.abs() * BRICK_D,
+			out * face + Vector3(0, y + j, 0), shade)
+		# Perpends, staggered every other course so the joints break like real
+		# brickwork instead of lining up into a grid.
+		var stagger: float = 0.0 if r % 2 == 0 else 0.115
+		for i in 4:
+			var x: float = -0.345 + float(i) * 0.23 + stagger
+			if absf(x) > 0.4:
+				continue
+			_batch.box(_slab(out, 0.03, 0.055) + out.abs() * (BRICK_D * 1.6),
+				out * face + horiz * x + Vector3(0, y + j, 0), shade)
 
 ## Which of the four sides a face normal belongs to.
 func _side_of(out: Vector3) -> Vector3i:
@@ -492,7 +531,7 @@ func _build_storey_band(ctx: Dictionary, trim_col: Color) -> void:
 ##
 ## Emitted as a solid slab (top surface, underside, fascia around the rim) because
 ## an overhanging single surface is see-through from below.
-const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]   # keep in step with HouseShape.ROOF_RISE
+const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]   # mirror HouseShape.ROOF_RISE   # keep in step with HouseShape.ROOF_RISE
 const ROOF_THICK := 0.07
 
 func _build_roof(_ctx: Dictionary) -> void:

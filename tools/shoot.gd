@@ -44,8 +44,6 @@ func _ready() -> void:
 		GridManager.clear_all()
 		await get_tree().process_frame
 		_village(s)
-		for _f in range(90):
-			await get_tree().process_frame
 	for _f in range(30):
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
@@ -71,13 +69,10 @@ func _village(root: Node) -> void:
 	#  C x=1   base + TWO cells out -> columns
 	#  D x=5   two towers + a 2-cell span -> arch underside
 	for e in [
-		[-6,0,0],[-6,1,0],[-6,2,0],[-6,3,0],
-		[-2,0,0],[-2,1,0],[-1,1,0],
-		[1,0,0],[1,1,0],[2,1,0],[3,1,0],
-		[5,0,0],[5,1,0],[5,2,0], [8,0,0],[8,1,0],[8,2,0], [6,2,0],[7,2,0],
-		[-6,0,3],[-6,1,3],[-6,2,3],[-5,0,3],
+		[0,0,0],[0,1,0],
+		[3,0,0],
+		[6,0,0],[6,1,0],[6,2,0],
 	]:
-
 		plan.append([Vector3i(e[0], e[1], e[2]), BlockData.Type.HOUSE])
 	for e in plan:
 		var c: Vector3i = e[0]

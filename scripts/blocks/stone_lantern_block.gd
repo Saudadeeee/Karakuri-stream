@@ -31,6 +31,27 @@ func _ready() -> void:
 	MeshFit.fit_bottom(wrap, 0.85, -0.5)
 	MeshFit.matte(wrap)
 	_light_up(wrap)
+	_add_real_light()
+
+## An emissive material only makes the LANTERN look bright — it puts nothing on
+## the ground around it. A stone lantern that lights nothing is just a glowing
+## ornament, so it now casts a real pool of warm light.
+##
+## Shadows stay OFF even on desktop: an omni shadow costs a cubemap pass per
+## light, and a garden can hold a lot of lanterns. The pool of light is the whole
+## point; the shadows are not.
+func _add_real_light() -> void:
+	var lamp := OmniLight3D.new()
+	lamp.light_color = GLOW
+	lamp.light_energy = 1.5
+	lamp.omni_range = 4.2
+	lamp.omni_attenuation = 1.6
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0, 0.15, 0)
+	add_child(lamp)
+	_lamp = lamp
+
+var _lamp: OmniLight3D
 
 ## Turn every pale surface into a soft emitter (the paper panels).
 func _light_up(root: Node) -> void:
@@ -63,3 +84,7 @@ func _process(_delta: float) -> void:
 		e += 0.9 * pow(1.0 - StreamManager.beat_phase(), 2.0)
 	for m in _glow_mats:
 		m.emission_energy_multiplier = lerpf(m.emission_energy_multiplier, e, 0.25)
+	# The cast light breathes with the panels, or the pool on the ground would sit
+	# dead still while the lantern itself flickers.
+	if is_instance_valid(_lamp):
+		_lamp.light_energy = lerpf(_lamp.light_energy, e * 1.35, 0.25)

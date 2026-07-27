@@ -100,7 +100,7 @@ static func roof_level(dx: int, dz: int, y: int) -> int:
 ## — has to add this, or it stands at the level of the eaves and ends up buried
 ## inside the roof it is supposed to be sitting on.
 ## Must stay in step with house_block.ROOF_STEP.
-const ROOF_RISE: Array[float] = [0.0, 0.58, 0.87]
+const ROOF_RISE: Array[float] = [0.0, 0.48, 0.72]
 
 static func roof_top_height(cell: Vector3i) -> float:
 	if not is_roof_cell(cell):

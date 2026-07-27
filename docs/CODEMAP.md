@@ -20,6 +20,7 @@ scenes/
   main.tscn             Scene sandbox — camera, ground, PlacementController, UI
   pause_menu.tscn       Instance con trong main.tscn/UI — pause, save/load/xoá, âm lượng, "Về menu chính"
 ui/
+  (`material_ui.gd`: kích thước icon hotbar **TÍNH THEO chiều cao cửa sổ**, không cố định. 17 mục × 40px = 792px, cửa sổ 720p là mất 2-3 công cụ cuối ra ngoài màn — mà cửa sổ trình duyệt luôn thấp hơn màn hình. Nối `size_changed` để co lại khi kéo nhỏ.)
   karakuri_theme.tres   Theme project-wide (`gui/theme/custom`) — **FILE SINH RA, ĐỪNG SỬA TAY**.
                         Nguồn: `tools/gen_theme.gd` (`godot --headless --path . --script tools/gen_theme.gd`).
                         Sửa tay 200 dòng StyleBox là cách 4 trạng thái button lệch nhau.
@@ -189,6 +190,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
   • **lơ lửng + không có nhà kề nào đứng vững → CỘT CHỐNG** (`_build_stilts`) thả xuống tới vật rắn đầu tiên. Góc chung được `owns_corner()` khử trùng: 4 ô của sàn 2×2 chung góc → **9 cột** (lưới góc 3×3), không phải 16 cột chồng lên nhau cùng lỗ. `MAX_STILT=16` chặn nhà thả ở y=200 mọc trụ 200 ô.
   • **lơ lửng + có nhà kề đứng vững → THANH CHỐNG NGHIÊNG** (`_build_corbels`, `is_overhang`/`corbel_sides`): tầng nhô ra là dầm hẫng, phải chống chéo ngược vào bức tường nó mọc ra, KHÔNG phải cắm cột xuống đất.
   `has_above` → **đai tầng** ở đỉnh tường: thiếu nó thì tháp 4 tầng đọc thành 1 cái hộp cao.
+  **GẠCH LÀ HÌNH KHỐI, KHÔNG PHẢI TEXTURE.** Toàn game là flat-shaded không texture, mesh sinh thủ tục gộp qua `MeshBatch` và KHÔNG có UV. Vẽ gạch bằng ảnh sẽ phải thêm cả pipeline UV + atlas cho riêng một loại khối, và ngôi nhà sẽ trông như dán vào giữa những thứ phẳng xung quanh. Nên gạch là **mạch nổi**: hàng gạch nhô khỏi lớp vữa, mạch đứng so le hàng chẵn/lẻ, dùng SẮC ĐỘ TỐI HƠN CỦA CHÍNH MÀU TƯỜNG — thêm chi tiết mà **không thêm màu = không thêm draw call**.
   **TRANG TRÍ — biến thiên phải ở CẤP TOÀ NHÀ, không phải cấp ô.** `building_roll(cell, salt)` hash ô `lo` của component → mọi ô cùng toà nhà ra CÙNG một giá trị. Hash theo từng ô làm 1 căn nhà mỗi mặt một kiểu, nhìn nhiễu; cái vui của Townscaper là mỗi toà nhà nhất quán còn KHÁC BIỆT nằm GIỮA các toà nhà. Thứ thuộc "tính cách căn nhà" (sắc màu chính xác, có vườn mái không, có cửa chớp không) lấy từ đây; chi tiết từng cửa sổ mới dùng `_h`.
   `decor_tier(cell)` = 0 (<3 ô) / 1 (3-7) / 2 (8+) — **lều nhỏ ở trần trụi, toà nhà thật mới được đồ đẹp**; xây thêm khối phải thấy được thưởng.
   Có: ban công (48% tầng trên — cũ 22% = gần như không bao giờ thấy), mái hiên vải tầng TRỆT, cửa chớp (per-building), bồn cây chân tường, vườn chậu trên mái (tier 2 + chỗ mái đủ phẳng).
