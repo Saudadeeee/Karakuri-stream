@@ -14,6 +14,8 @@ extends Node
 var _lite := true
 var _houses := 24
 var _label := "run"
+var _churn := false
+var _wood := 0
 
 func _ready() -> void:
 	var target := "res://scenes/main.tscn"
@@ -22,6 +24,8 @@ func _ready() -> void:
 		elif a.begins_with("lite="): _lite = a.substr(5) != "0"
 		elif a.begins_with("houses="): _houses = int(a.substr(7))
 		elif a.begins_with("label="): _label = a.substr(6)
+		elif a.begins_with("churn="): _churn = a.substr(6) != "0"
+		elif a.begins_with("wood="): _wood = int(a.substr(5))
 
 	# WITHOUT THIS EVERY MEASUREMENT IS A LIE. With vsync on, every configuration
 	# reports exactly the refresh interval (6.95ms on a 144Hz panel) whatever the
@@ -47,20 +51,33 @@ func _ready() -> void:
 		await get_tree().process_frame
 
 	# Measure over a decent window; a single frame is noise.
-	var frames := 180
+	var frames := 420
+	var samples: Array[float] = []
 	var t0: int = Time.get_ticks_usec()
-	var worst := 0
 	var prev: int = t0
 	for _f in range(frames):
+		# Worst case: the isosurface is asked to re-solve as often as its throttle
+		# allows, which is what a machine with flowing water actually does.
+		if _churn:
+			VoxelSurfaceManager._dirty = true
 		await get_tree().process_frame
 		var now: int = Time.get_ticks_usec()
-		worst = maxi(worst, now - prev)
+		samples.append(float(now - prev) / 1000.0)
 		prev = now
 	var total: int = Time.get_ticks_usec() - t0
-
+	samples.sort()
 	var avg_ms: float = float(total) / float(frames) / 1000.0
-	print("PERF[%s] lite=%s houses=%d  avg=%.2fms (%.0f fps)  worst=%.2fms" % [
-		_label, str(_lite), _houses, avg_ms, 1000.0 / maxf(avg_ms, 0.001), float(worst) / 1000.0])
+	var p50: float = samples[int(frames * 0.50)]
+	var p95: float = samples[int(frames * 0.95)]
+	var p99: float = samples[int(frames * 0.99)]
+	var worst_ms: float = samples[frames - 1]
+	# How many frames were at least twice the median — i.e. a visible drop.
+	var spikes := 0
+	for ms in samples:
+		if ms > p50 * 2.0:
+			spikes += 1
+	print("PERF[%s] lite=%s houses=%d  avg=%.2f  p50=%.2f (%.0f fps)  p95=%.2f  p99=%.2f  worst=%.2fms  spikes=%d/%d" % [
+		_label, str(_lite), _houses, avg_ms, p50, 1000.0 / maxf(p50, 0.001), p95, p99, worst_ms, spikes, frames])
 	print("   draw_calls=%d  objects=%d  primitives=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
@@ -141,10 +158,24 @@ func _build(root: Node) -> void:
 	for z in 3:
 		for x in 3:
 			_place(root, Vector3i(2 + x, 0, 1 + z), BlockData.Type.WATER)
+	# Wood and water are the two types drawn as ONE merged isosurface, so their
+	# count is what drives the marching-cubes cost.
+	var side: int = int(ceil(sqrt(float(_wood))))
+	for i in _wood:
+		_place(root, Vector3i(-8 + (i % side), 0, 6 + (i / side)), BlockData.Type.WOOD)
 	_place(root, Vector3i(0, 2, 3), BlockData.Type.SOURCE)
 	_place(root, Vector3i(0, 0, 4), BlockData.Type.BELL)
 	_place(root, Vector3i(-1, 0, 4), BlockData.Type.GEAR)
 	_place(root, Vector3i(-2, 0, 4), BlockData.Type.DRUM)
+	# A machine that keeps CHANGING, which is what a real build does: a
+	# shishi-odoshi fills and tips (add_temp_source -> dirty), a scoop ladles the
+	# pond, and both keep the stream and the isosurface re-solving. A static
+	# scene measures nothing about the drops players actually see.
+	_place(root, Vector3i(4, 3, -2), BlockData.Type.SOURCE)
+	_place(root, Vector3i(4, 1, -2), BlockData.Type.SHISHI)
+	_place(root, Vector3i(4, 0, -2), BlockData.Type.DRUM)
+	_place(root, Vector3i(3, 0, 2), BlockData.Type.SCOOP)
+	_place(root, Vector3i(1, 0, 2), BlockData.Type.GEAR)
 
 func _place(root: Node, c: Vector3i, type: int) -> void:
 	if GridManager.has_block(c):
