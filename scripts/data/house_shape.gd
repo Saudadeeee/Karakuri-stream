@@ -255,6 +255,18 @@ static func _component(cell: Vector3i) -> Dictionary:
 	if _cache.has(cell):
 		return _cache[cell]
 
+	# A cell that is NOT a house must never seed a flood. `queue_free()` is
+	# deferred, so a just-removed house still receives `block_removed` and
+	# rebuilds itself one last time — and the flood, which seeded its start cell
+	# unconditionally, walked from the dead cell back into its old building,
+	# counted itself as a member, and then wrote that wrong answer into the cache
+	# FOR EVERY SURVIVING CELL. That is how deleting the base of a tower left the
+	# top still believing it was four storeys tall, keeping a spire it had no
+	# right to, and why houses came out looking half-built after a delete.
+	# Not cached, either: this answer is about a cell that does not exist.
+	if not is_house(cell):
+		return {"lo": cell, "hi": cell, "size": 0, "capped": false}
+
 	var seen: Dictionary = {}
 	var queue: Array[Vector3i] = [cell]
 	seen[cell] = true

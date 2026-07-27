@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_delete_consistency")
+	await _sec_delete_consistency()
 	print("SECTION _sec_surprises")
 	await _sec_surprises()
 	print("SECTION _sec_theme_switch")
@@ -565,6 +567,53 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7g. DELETING must leave the survivors correct. Reported as "build it, delete
+## something, and a house comes out with no roof".
+##
+## Root cause: queue_free() is deferred, so a just-removed house still receives
+## block_removed and rebuilt itself one last time — and the component flood
+## seeded its start cell unconditionally, so the DEAD cell walked back into its
+## old building, counted itself a member, and wrote that wrong answer into the
+## shared cache for every surviving cell. The whole building then kept deciding
+## its roof, spire and colour from a size that no longer existed.
+func _sec_delete_consistency() -> void:
+	_clear()
+	await get_tree().process_frame
+	for y in 4:
+		_b(Vector3i(0, y, 52), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.component_height(Vector3i(0, 3, 52)) == 4, "tower starts four storeys")
+	_check(HouseShape.has_spire(Vector3i(0, 3, 52)), "and earns a spire")
+
+	GridManager.remove_block(Vector3i(0, 0, 52))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(HouseShape.component_height(Vector3i(0, 3, 52)) == 3,
+		"removing the base drops the measured height")
+	_check(not HouseShape.has_spire(Vector3i(0, 3, 52)),
+		"and the top gives up the spire it no longer earns")
+
+	# A dead cell must never report itself as part of anything.
+	_check(int(HouseShape.context(Vector3i(0, 0, 52))["building_size"]) == 0,
+		"a removed cell belongs to no building")
+
+	# The far arm of an L must notice a deletion at the other end, even though it
+	# shares neither row nor column with it.
+	_clear()
+	await get_tree().process_frame
+	for c in [Vector3i(0,0,54), Vector3i(1,0,54), Vector3i(2,0,54),
+			Vector3i(2,0,55), Vector3i(2,0,56)]:
+		_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(int(HouseShape.context(Vector3i(0,0,54))["building_size"]) == 5, "L starts at five")
+	GridManager.remove_block(Vector3i(2,0,56))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(int(HouseShape.context(Vector3i(0,0,54))["building_size"]) == 4,
+		"the far arm sees a deletion at the other end")
+	_clear()
+	await get_tree().process_frame
 
 ## 7f. The surprises must be EARNED BY A SHAPE, never rolled. Finding the same
 ## thing twice in the same configuration is what turns a prop into a rule the

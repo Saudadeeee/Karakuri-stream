@@ -67,6 +67,7 @@ var grid_cell: Vector3i:
 
 var _placed: bool = false
 var _pop_pending: bool = false
+var _dirty: bool = false
 var _visual: Node3D
 var _batch: MeshBatch
 var _base_palette: int = 0
@@ -119,17 +120,33 @@ func _ready() -> void:
 ## building RUNS along X and Z to pick the ridge direction, so a cell added
 ## several steps down the same row can flip this cell's roof. Any house change
 ## sharing a row or column with us (same y) has to re-trigger the rebuild.
+## Rebuilds are COALESCED to at most one per frame.
+##
+## Almost everything a cell draws — its colour, door, chimney, spire, terrace,
+## courtyard — is decided from the whole BUILDING, not from its neighbours. The
+## old test only refreshed cells sharing a row or column at the same height, so
+## removing the base of a tower never told the top, and knocking a cell off one
+## arm of an L never told the other. Those cells kept stale roofs and stale
+## spires: the "house with no roof after deleting" that got reported.
+##
+## Any house change therefore has to reach every house. Doing that synchronously
+## would rebuild the whole town once per signal; deferring to _process means each
+## cell rebuilds at most once per frame however many signals arrive.
 func _on_grid_changed(cell: Vector3i) -> void:
 	if not _placed:
 		return
-	if cell == grid_cell:
-		refresh_shape()
+	# This cell is gone and is only alive until queue_free lands. Rebuilding it
+	# would put geometry back for a block that no longer exists.
+	if not HouseShape.is_house(grid_cell):
+		return
+	if cell == grid_cell or HouseShape.is_house(cell) or GridManager.get_block(cell) == null:
+		_dirty = true
+		set_process(true)
 		return
 	var d: Vector3i = cell - grid_cell
-	if d.y == 0 and (d.x == 0 or d.z == 0):
-		refresh_shape()
-	elif absi(d.x) <= 1 and absi(d.y) <= 1 and absi(d.z) <= 1:
-		refresh_shape()
+	if absi(d.x) <= 1 and absi(d.y) <= 1 and absi(d.z) <= 1:
+		_dirty = true
+		set_process(true)
 
 func apply_variant(v: Dictionary) -> void:
 	_base_palette = int(v.get("palette", 0)) % PALETTES.size()
@@ -710,6 +727,15 @@ func _pop() -> void:
 ## Night only (see set_process in refresh_shape): windows warm up on the beat,
 ## so a town lit at night pulses gently along with the machine.
 func _process(_delta: float) -> void:
+	if _dirty:
+		_dirty = false
+		refresh_shape()
+		# refresh_shape decides for itself whether the night glow needs _process;
+		# respect that rather than forcing it back on.
+		return
+	if _glow.is_empty():
+		set_process(false)
+		return
 	var t: float = Time.get_ticks_msec() / 1000.0
 	var e: float = 1.0 + sin(t * 1.3 + _phase) * 0.18
 	if StreamManager.is_playing():
