@@ -388,7 +388,7 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 	var vol: float = float(dye.get("vol", 0.0)) + float(weight - 1) * 2.5
 	match type:
 		BlockData.Type.BELL:
-			var node: Node3D = _node_of(cell)
+			var node: Node3D = _node_of(cell, BlockData.Type.BELL)
 			AudioManager.play_chime(node.global_position if node else pos, -1, pitch_mul)
 			if node:
 				FireflyManager.burst_at(node.global_position)
@@ -396,24 +396,24 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 					node.ring()
 		BlockData.Type.JELLY:
 			AudioManager.play_jelly_bounce(pos)
-			var jelly: Node3D = _node_of(cell)
+			var jelly: Node3D = _node_of(cell, BlockData.Type.JELLY)
 			if jelly and jelly.has_method("bounce"):
 				jelly.bounce()
 		# Karakuri targets: the stream OPERATES them instead of just splashing.
 		BlockData.Type.SHISHI:
-			var shishi: Node3D = _node_of(cell)
+			var shishi: Node3D = _node_of(cell, BlockData.Type.SHISHI)
 			if shishi:
 				shishi.fill(color)
 		BlockData.Type.CHIME:
-			var chime: Node3D = _node_of(cell)
+			var chime: Node3D = _node_of(cell, BlockData.Type.CHIME)
 			if chime:
 				chime.ring(pitch_mul)
 		BlockData.Type.DRUM:
-			var drum: Node3D = _node_of(cell)
+			var drum: Node3D = _node_of(cell, BlockData.Type.DRUM)
 			if drum:
 				drum.hit()
 		BlockData.Type.PINWHEEL:
-			var pin: Node3D = _node_of(cell)
+			var pin: Node3D = _node_of(cell, BlockData.Type.PINWHEEL)
 			if pin:
 				pin.splash()
 		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.MUSIC_BOX, \
@@ -486,9 +486,22 @@ func _refresh_source_audio(_sources: Array) -> void:
 			old.queue_free()
 	_source_audio.clear()
 
-func _node_of(cell: Vector3i) -> Node3D:
+## The node at `cell`, but ONLY if it is still the type the impact was scheduled
+## against.
+##
+## `_impacts` records a type when the stream is traced and plays it later, so the
+## block can be swapped in between — replace a shishi with a house while water is
+## falling on it and the pending SHISHI impact would call `fill()` on the house:
+##   Invalid call. Nonexistent function 'fill' in base 'StaticBody3D (house_block.gd)'
+## Checking the live type here fixes every branch at once, rather than sprinkling
+## has_method() guards that each new karakuri block would have to remember.
+func _node_of(cell: Vector3i, expect: int = -1) -> Node3D:
 	var b: BlockData = GridManager.get_block(cell)
-	return b.node if b != null and is_instance_valid(b.node) else null
+	if b == null or not is_instance_valid(b.node):
+		return null
+	if expect >= 0 and b.type != expect:
+		return null
+	return b.node
 
 func _spawn_splash(pos: Vector3, tint: Color = Color(0.7, 0.9, 0.95)) -> void:
 	var p := GPUParticles3D.new()

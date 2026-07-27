@@ -121,7 +121,10 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D) -> void
 		# without punching holes in a pastel picture.
 		sun.shadow_opacity = 0.55
 		sun.shadow_blur = 3.2
-		sun.directional_shadow_blend_splits = true
+		# Blending the cascade splits costs an extra pass over the overlap region.
+		# Measured on a 24-house village: 353 draw calls without shadows, 1254
+		# with them and blended splits. Worth it on desktop, not on a phone.
+		sun.directional_shadow_blend_splits = not QualityManager.lite
 	apply_grade(env)
 
 ## The picture was washing out to near-white: pale mountains, a bleached island,
@@ -150,7 +153,15 @@ static func apply_grade(env: Environment) -> void:
 	env.tonemap_white = 6.0
 	# Keep the glow pass — the night lanterns and the water sparkle need it — but
 	# gate it above white so it stops treating pastel daylight as a light source.
-	env.glow_enabled = true
+	#
+	# NOT on the web LITE profile. Glow is a fullscreen post pass and the single
+	# biggest WebGL cost there is. This check has to live HERE rather than relying
+	# on QualityManager.apply() running afterwards: the menu calls apply() while
+	# building its backdrop and _apply_theme() after, and again on every map
+	# switch — so the grade kept switching glow back on and the whole menu ran at
+	# full quality in the browser. A grade that knows the profile cannot be
+	# undone by call order.
+	env.glow_enabled = not QualityManager.lite
 	env.glow_intensity = 0.55
 	env.glow_bloom = 0.0
 	env.glow_hdr_threshold = GLOW_THRESHOLD

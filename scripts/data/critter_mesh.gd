@@ -12,6 +12,62 @@ extends RefCounted
 
 const EYE := Color("22304a")
 
+## Fold a critter's many little primitives into one mesh per MOVING group.
+##
+## Built naively, a cat is thirteen MeshInstance3D children — thirteen draw calls
+## for an animal a few pixels tall — and draw calls, not triangles, are what the
+## gl_compatibility web target actually chokes on. This is the same problem
+## MeshBatch was written to solve for houses; the animals just needed a version
+## that handles spheres and cylinders rather than boxes.
+##
+## The parts that MOVE independently have to stay separate nodes, so each pivot
+## in `pivots` keeps its own merged mesh: everything under it that is not under a
+## deeper pivot gets baked into that pivot, in that pivot's local space. A cat
+## goes 13 nodes -> 3 (body, head, tail) and animates exactly as before.
+static func collapse(root: Node3D, pivots: Array) -> void:
+	var owners: Array[Node3D] = [root]
+	for p in pivots:
+		owners.append(p as Node3D)
+	for owner in owners:
+		var batch := MeshBatch.new()
+		var doomed: Array[MeshInstance3D] = []
+		_gather(owner, owner, owners, batch, doomed, Transform3D.IDENTITY)
+		if batch.is_empty():
+			continue
+		for d in doomed:
+			# A pivot can itself be a MeshInstance3D — the head is a sphere that
+			# also turns — so it must NOT be freed here: its mesh has already
+			# been baked into the batch, and it is about to become the parent of
+			# the merged node. Empty it instead of deleting it.
+			if d == owner:
+				d.mesh = null
+				d.material_override = null
+				continue
+			d.get_parent().remove_child(d)
+			d.queue_free()
+		var mi := MeshInstance3D.new()
+		mi.mesh = batch.build(func(c: Color) -> StandardMaterial3D: return MeshFit.flat(c))
+		owner.add_child(mi)
+
+## Walk `node`'s subtree collecting meshes into `batch`, stopping at any node
+## that is itself a pivot (it owns its own batch).
+static func _gather(node: Node, owner: Node3D, owners: Array[Node3D],
+		batch: MeshBatch, doomed: Array[MeshInstance3D], xform: Transform3D) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node
+		var mat := mi.material_override as StandardMaterial3D
+		if mi.mesh != null and mat != null:
+			batch.mesh(mi.mesh, xform, mat.albedo_color)
+			doomed.append(mi)
+	# Children are visited even for a doomed mesh node, because parts hang off
+	# other parts (eyes on the head, tip on the tail).
+	for c in node.get_children():
+		if c is Node3D:
+			var child: Node3D = c
+			if child in owners:
+				continue          # a pivot: it batches itself
+			_gather(child, owner, owners, batch, doomed, xform * child.transform)
+
 static func _part(parent: Node3D, mesh: Mesh, pos: Vector3, col: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -67,6 +123,7 @@ static func bird(col: Color, belly: Color) -> Dictionary:
 		wings.append(w)
 	for s in [-1.0, 1.0]:
 		_box(root, Vector3(0.008, 0.035, 0.008), Vector3(0.01, 0.018, 0.022 * s), Color("e8a33d"))
+	collapse(root, [body, head] + wings)
 	return {"root": root, "body": body, "wings": wings}
 
 ## Cat. `tail` swishes, `head` turns to look at things.
@@ -91,6 +148,7 @@ static func cat(col: Color) -> Dictionary:
 	body.add_child(tail)
 	_box(tail, Vector3(0.12, 0.026, 0.026), Vector3(-0.055, 0.03, 0), col.darkened(0.12)).rotation.z = 0.6
 	_ball(tail, 0.02, Vector3(-0.105, 0.075, 0), col.lightened(0.3), 0.9)
+	collapse(root, [body, head, tail])
 	return {"root": root, "body": body, "head": head, "tail": tail}
 
 ## Duck — the one critter that lives on the water, so it floats a little low.
@@ -106,6 +164,7 @@ static func duck(col: Color) -> Dictionary:
 	_box(head, Vector3(0.055, 0.018, 0.038), Vector3(0.042, -0.012, 0), Color("f2a63d"))
 	_eyes(head, Vector3(0.026, 0.014, 0), 0.03)
 	neck.rotation.z = -0.2
+	collapse(root, [body, head])
 	return {"root": root, "body": body, "head": head}
 
 ## Deer — the shy visitor. Tall, thin legs, pale spots.
@@ -129,4 +188,5 @@ static func deer(col: Color) -> Dictionary:
 		for s in [-1.0, 1.0]:
 			_box(root, Vector3(0.022, 0.24, 0.022), Vector3(x, 0.12, 0.05 * s), col.darkened(0.12))
 	_ball(body, 0.028, Vector3(-0.105, 0.03, 0), Color("f6efe2"), 0.9)
+	collapse(root, [body, head])
 	return {"root": root, "body": body, "head": head}

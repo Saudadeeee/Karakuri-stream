@@ -65,6 +65,24 @@ func tri(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
 	_verts[key] = vs
 	_norms[key] = ns
 
+## Bake an arbitrary mesh's triangles into the batch, transformed into batch
+## space. Lets shapes made of PRIMITIVES — the spheres and cylinders the animals
+## are built from — join the same batch as the boxes, instead of each staying its
+## own node and its own draw call.
+func mesh(src: Mesh, xform: Transform3D, col: Color) -> void:
+	for s in src.get_surface_count():
+		var arr: Array = src.surface_get_arrays(s)
+		if arr.is_empty():
+			continue
+		var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var idx = arr[Mesh.ARRAY_INDEX]
+		if idx != null and idx.size() >= 3:
+			for i in range(0, idx.size() - 2, 3):
+				tri(xform * v[idx[i]], xform * v[idx[i + 1]], xform * v[idx[i + 2]], col)
+		else:
+			for i in range(0, v.size() - 2, 3):
+				tri(xform * v[i], xform * v[i + 1], xform * v[i + 2], col)
+
 func is_empty() -> bool:
 	return _verts.is_empty()
 

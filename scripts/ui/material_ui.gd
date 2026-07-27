@@ -93,6 +93,11 @@ func _ready() -> void:
 	placement_controller.material_changed.connect(_on_material_changed)
 	_on_material_changed(BlockData.Type.WOOD)
 
+	if QualityManager.lite:
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		_bake_icons()
+
 	# Hover hint card (name + what the block does), themed like everything else.
 	_hint_panel = PanelContainer.new()
 	_hint_panel.visible = false
@@ -104,6 +109,39 @@ func _ready() -> void:
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.add_theme_font_size_override("font_size", 14)
 	vb.add_child(_hint_label)
+
+## WEB LITE ONLY: freeze every icon to a flat image and throw the 3D away.
+##
+## Each icon is a SubViewport with `own_world_3d`, which is a whole separate
+## World3D — its own scenario, its own render target, its own pair of lights.
+## Sixteen of them is sixteen 3D worlds and thirty-two lights alive for the
+## entire session, purely to draw sixteen thumbnails that are frozen anyway. On
+## desktop that is affordable and the spin is nice; on the WebGL target it is
+## constant cost for something the player is not even looking at.
+##
+## The icons have already rendered one good frame by the time this runs, so we
+## copy that frame into an ImageTexture, hand it to a plain TextureRect, and free
+## the viewport. The strip looks identical — it just stops spinning, which is a
+## fair trade for sixteen fewer worlds on a phone.
+func _bake_icons() -> void:
+	for type in _viewport_by_type.keys():
+		var vp: SubViewport = _viewport_by_type[type]
+		if not is_instance_valid(vp):
+			continue
+		var tex := ImageTexture.create_from_image(vp.get_texture().get_image())
+		var rect := TextureRect.new()
+		rect.texture = tex
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_SCALE
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		var container: Node = vp.get_parent()          # SubViewportContainer
+		var button: Node = container.get_parent()
+		button.add_child(rect)
+		container.queue_free()
+		_viewport_by_type.erase(type)
+		_pivot_by_type.erase(type)
+	_pivots.clear()
 
 func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
