@@ -221,9 +221,27 @@ func _trace(src: Vector3i, interval: float = BASE_BEAT, color: Color = CYAN) -> 
 		var carried_h: Vector3i = dir if dir.y == 0 else st["last_h"]
 
 		var nxt: Vector3i = pos + dir
-		# Off the island / into the void → the stream pours away (into the sea
-		# of clouds below).
-		if Vector2(nxt.x, nxt.z).length() > MAP_RADIUS + 1.0 or nxt.y < -18:
+		# THE LAWN IS NOT IN THE GRID. The island is a sculpted MESH built by
+		# IslandBuilder, not a field of blocks, so GridManager has nothing at
+		# y<0 to stop a falling stream. Water poured onto open ground therefore
+		# used to fall straight THROUGH the island and keep going to y=-18:
+		# eighteen segments of invisible thread under the world, no splash, no
+		# impact — so `is_playing()` stayed false and a lone spout on the grass
+		# was silent and did nothing.
+		#
+		# Anything over the island disc now lands ON it. The struck "cell" is the
+		# first one below ground, because _play_impact splashes at that cell's TOP
+		# face, which is exactly y=0 — the surface.
+		if nxt.y < 0:
+			if Vector2(nxt.x, nxt.z).length() <= MAP_RADIUS + 1.0:
+				_add_seg_world(GridManager.cell_to_world(pos), Vector3(nxt.x, 0.0, nxt.z), st["color"])
+				_impact(nxt, BlockData.Type.WATER, st["interval"], st["phase"], st["color"])
+				continue
+			# Past the rim there is no ground: it pours into the cloud sea.
+			_add_seg(pos, nxt, st["color"])
+			continue
+		# Off the side of the island → the stream pours away into the clouds.
+		if Vector2(nxt.x, nxt.z).length() > MAP_RADIUS + 1.0:
 			_add_seg(pos, nxt, st["color"])
 			continue
 		var block: BlockData = GridManager.get_block(nxt)
@@ -299,7 +317,14 @@ func _entry(st: Dictionary, pos: Vector3i, dir: Vector3i, last_h: Vector3i) -> D
 		"interval": st["interval"], "phase": st["phase"], "color": st["color"]}
 
 func _add_seg(a: Vector3i, b: Vector3i, color: Color = CYAN) -> void:
-	_segments.append({"a": GridManager.cell_to_world(a), "b": GridManager.cell_to_world(b), "color": color})
+	_add_seg_world(GridManager.cell_to_world(a), GridManager.cell_to_world(b), color)
+
+## Segment between two exact WORLD points, for the cases where the endpoint is
+## not a cell centre — water stopping on the island surface has to end at y=0
+## rather than at the centre of the cell below it, or the last half-cell of the
+## stream is drawn buried in the lawn.
+func _add_seg_world(a: Vector3, b: Vector3, color: Color = CYAN) -> void:
+	_segments.append({"a": a, "b": b, "color": color})
 
 func _impact(cell: Vector3i, type: int, interval: float = BASE_BEAT, phase: float = 0.0, color: Color = CYAN) -> void:
 	# Preserve an existing entry's schedule so 0.05s retraces never stutter a
@@ -403,7 +428,12 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 	# paints its melody in the air, in time with the quantized sound.
 	var tint: Color = _impact_tint(cell, type, color)
 	_spawn_splash(pos, tint)
-	_ring_at(pos - Vector3(0, 0.45, 0), tint)
+	# The ring normally sits below the struck face so it hugs the block it ripples
+	# across. A splash on the open LAWN has no block — `pos` is already the island
+	# surface — so that same offset would bury the ring inside the island mesh.
+	# Sit it just above the grass instead.
+	var on_ground: bool = GridManager.get_block(cell) == null
+	_ring_at(pos + Vector3(0, 0.02, 0) if on_ground else pos - Vector3(0, 0.45, 0), tint)
 	# NIGHT runs on light: percussive impacts spark fireflies (throttled).
 	if MapThemes.current == 3 and type in [BlockData.Type.CHIME, BlockData.Type.DRUM, BlockData.Type.WOOD, BlockData.Type.JELLY]:
 		var now: int = Time.get_ticks_msec()

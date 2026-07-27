@@ -35,6 +35,8 @@ func _ready() -> void:
 	await _sec_houses()
 	print("SECTION _sec_wildlife")
 	await _sec_wildlife()
+	print("SECTION _sec_stream_ground")
+	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
 	print("SECTION _sec_theme_switch")
@@ -541,6 +543,55 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7e. Water must land ON the island. The lawn is a sculpted MESH, not grid
+## blocks, so nothing in GridManager stops a falling stream at it — a spout on
+## open ground used to pour straight THROUGH the island and run to y=-18: a long
+## invisible thread under the world, no splash, and `is_playing()` stayed false
+## so the machine never counted as running. Every earlier section passed happily
+## while that was true, because they all put something solid under the water.
+func _sec_stream_ground() -> void:
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 3, 2), BlockData.Type.SOURCE)
+	StreamManager._rebuild()
+	await get_tree().process_frame
+
+	_check(StreamManager._segments.size() <= 6,
+		"a spout over bare ground makes a short stream, not a runaway thread")
+	var lowest := INF
+	for s in StreamManager._segments:
+		lowest = minf(lowest, minf((s["a"] as Vector3).y, (s["b"] as Vector3).y))
+	_check(is_equal_approx(lowest, 0.0), "the stream stops exactly at the island surface")
+	_check(StreamManager._impacts.size() == 1, "landing on the lawn registers an impact")
+	_check(StreamManager.is_playing(), "a spout on the grass counts as a running machine")
+
+	# The impact must be a WATER splash: earth should not clack like a wood block.
+	for cell in StreamManager._impacts:
+		_check(int(StreamManager._impacts[cell]["type"]) == int(BlockData.Type.WATER),
+			"ground impact is a water splash, not a knock")
+		_check(cell.y < 0, "the ground impact sits just below the surface")
+
+	# Something solid under the spout still wins — the ground rule must not
+	# shortcut a block that is actually in the way.
+	_b(Vector3i(0, 0, 2), BlockData.Type.BELL)
+	StreamManager._rebuild()
+	await get_tree().process_frame
+	_check(StreamManager._impacts.has(Vector3i(0, 0, 2)), "a block under the spout is still struck")
+
+	# Off the rim there is no island, so water there must still pour into the
+	# clouds rather than splashing on nothing.
+	_clear()
+	await get_tree().process_frame
+	var far := Vector3i(20, 2, 0)
+	_b(far, BlockData.Type.SOURCE)
+	StreamManager._rebuild()
+	await get_tree().process_frame
+	for cell in StreamManager._impacts:
+		_check(Vector2(cell.x, cell.z).length() <= StreamManager.MAP_RADIUS + 1.0,
+			"nothing splashes out past the island rim")
+	_clear()
+	await get_tree().process_frame
 
 ## 7d. A damaged save file must never cost the player the build they can see.
 ## Before this was fixed, load_game() cleared the grid FIRST and then hit an

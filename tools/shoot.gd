@@ -117,6 +117,15 @@ func _report() -> void:
 		   WildlifeManager._ducks.size(), WildlifeManager._deer.size(),
 		   WildlifeManager._perches.size(), WildlifeManager._walkable.size(),
 		   WildlifeManager._pond.size(), WildlifeManager._houses])
+	print("STREAM segments=%d impacts=%d playing=%s sources=%d visual_children=%d"
+		% [StreamManager._segments.size(), StreamManager._impacts.size(),
+		   str(StreamManager.is_playing()),
+		   GridManager.get_all_cells_of_type(BlockData.Type.SOURCE).size(),
+		   StreamManager._visual_root.get_child_count() if StreamManager._visual_root != null else -1])
+	for s in StreamManager._segments:
+		print("   seg ", s["a"], " -> ", s["b"])
+	for c in StreamManager._impacts:
+		print("   impact at ", c, " type=", StreamManager._impacts[c].get("type"))
 	for b in WildlifeManager._birds:
 		if is_instance_valid(b["root"]):
 			print("   bird at ", b["root"].global_position.snapped(Vector3.ONE * 0.01), " state=", b["state"])
