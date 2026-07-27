@@ -5,6 +5,7 @@ extends Node
 ## actually look at the game from a script.
 ##   godot --path . --rendering-driver opengl3 --resolution 1280x720 tools/shoot.tscn -- scene=... out=...
 var _crop := Rect2i()
+var want_theme := -1
 
 func _ready() -> void:
 	var target := "res://scenes/main_menu.tscn"
@@ -14,9 +15,18 @@ func _ready() -> void:
 		if a.begins_with("scene="): target = a.substr(6)
 		elif a.begins_with("out="): out = "user://" + a.substr(4)
 		elif a == "build": build = true
+		elif a.begins_with("theme="): want_theme = int(a.substr(6))
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
+	# The game scene calls MapThemes.load_current() in _ready, which would stomp
+	# anything set here — so the choice has to go through settings.cfg, and be put
+	# back afterwards so a screenshot never changes the player's chosen map.
+	var prev := MapThemes.current
+	if want_theme >= 0:
+		MapThemes.current = want_theme
+		MapThemes.save_current()
+
 	var s: Node = load(target).instantiate()
 	add_child(s)
 	for _f in range(40):
@@ -34,7 +44,10 @@ func _ready() -> void:
 		# Blow it up so small UI details are actually legible in the saved PNG.
 		img.resize(img.get_width() * 3, img.get_height() * 3, Image.INTERPOLATE_NEAREST)
 	img.save_png(out)
-	print("SHOT ", ProjectSettings.globalize_path(out))
+	print("SHOT ", ProjectSettings.globalize_path(out), "  theme=", MapThemes.name_of(MapThemes.current))
+	if want_theme >= 0:
+		MapThemes.current = prev
+		MapThemes.save_current()
 	get_tree().quit()
 
 ## A small sample build so a screenshot shows the actual game, not empty ground.

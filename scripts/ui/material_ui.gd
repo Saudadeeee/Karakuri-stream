@@ -12,7 +12,11 @@ const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 const ICON_SIZE: int = 40   # 15 entries must fit a ~700px-tall window
 const ICON_GAP: int = 5
 const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
-const FADE_MIN_ALPHA: float = 0.18
+## Faded, not hidden. 0.18 was tuned against the pale spring sky, where a wooden
+## cog bezel still reads at that alpha; on the NIGHT map the same 0.18 over a dark
+## indigo background left the whole hotbar effectively invisible, so a player on
+## that map had no visible way to change material.
+const FADE_MIN_ALPHA: float = 0.42
 const SPIN_SPEED: float = 0.9
 
 ## One-line onboarding hints — hovering an icon tells you what the block DOES
