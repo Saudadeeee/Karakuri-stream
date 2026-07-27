@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_drag_stroke")
+	await _sec_drag_stroke()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
 	print("SECTION _sec_photo_and_misc")
@@ -563,6 +565,46 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7f. A drag lays many blocks but must undo as ONE gesture. Townscaper is fast
+## because you sweep out a terrace in one motion; if Ctrl+Z then rubbed out one
+## cell at a time the player would be mashing undo to take back a single act.
+func _sec_drag_stroke() -> void:
+	_clear()
+	await get_tree().process_frame
+	UndoManager.begin_stroke()
+	for x in 5:
+		var cell := Vector3i(x, 0, 40)
+		_b(cell, BlockData.Type.HOUSE)
+		UndoManager.record_place(cell, GridManager.get_block(cell))
+	UndoManager.end_stroke()
+	await get_tree().process_frame
+	_check(GridManager.get_all_cells_of_type(BlockData.Type.HOUSE).size() == 5, "a stroke lays every cell")
+
+	UndoManager.undo()
+	await get_tree().process_frame
+	_check(GridManager.get_all_cells_of_type(BlockData.Type.HOUSE).is_empty(),
+		"one undo takes back the WHOLE stroke")
+	UndoManager.redo()
+	await get_tree().process_frame
+	_check(GridManager.get_all_cells_of_type(BlockData.Type.HOUSE).size() == 5,
+		"one redo puts the whole stroke back")
+
+	# A single-cell drag must not clutter the stack with one-element strokes: it
+	# should behave exactly like a click.
+	_clear()
+	UndoManager.clear()
+	await get_tree().process_frame
+	UndoManager.begin_stroke()
+	_b(Vector3i(0, 0, 42), BlockData.Type.HOUSE)
+	UndoManager.record_place(Vector3i(0, 0, 42), GridManager.get_block(Vector3i(0, 0, 42)))
+	UndoManager.end_stroke()
+	await get_tree().process_frame
+	UndoManager.undo()
+	await get_tree().process_frame
+	_check(not GridManager.has_block(Vector3i(0, 0, 42)), "a one-cell stroke undoes like a click")
+	_clear()
+	await get_tree().process_frame
 
 ## 7e. Water must land ON the island. The lawn is a sculpted MESH, not grid
 ## blocks, so nothing in GridManager stops a falling stream at it — a spout on

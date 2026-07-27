@@ -138,15 +138,76 @@ func _unhandled_input(event: InputEvent) -> void:
 			select_material(BlockData.Type.MUSIC_BOX)
 		elif event.keycode == KEY_EQUAL:
 			select_material(BlockData.Type.SCOOP)
-	elif event is InputEventMouseButton and event.pressed:
+	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			_place_block()
+			if mb.pressed:
+				_begin_paint(PAINT_PLACE)
+			else:
+				_end_paint()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
-			_remove_block()
+			if mb.pressed:
+				_begin_paint(PAINT_REMOVE)
+			else:
+				_end_paint()
+
+## DRAG TO BUILD. Townscaper is fast because you sweep the mouse and a street
+## appears; clicking once per cell turns building twenty houses into twenty
+## separate decisions and the flow never arrives. Holding the button now paints
+## continuously, one block per NEW cell the cursor enters.
+enum { PAINT_NONE, PAINT_PLACE, PAINT_REMOVE }
+
+var _paint_mode: int = PAINT_NONE
+var _painted: Dictionary = {}      # cells touched by the current stroke
+var _paint_quiet: bool = false     # deep into a sweep: lay blocks without the fanfare
+
+func _begin_paint(mode: int) -> void:
+	_paint_mode = mode
+	_painted.clear()
+	UndoManager.begin_stroke()
+	_paint_step()
+
+func _end_paint() -> void:
+	if _paint_mode == PAINT_NONE:
+		return
+	_paint_mode = PAINT_NONE
+	_painted.clear()
+	_paint_quiet = false
+	UndoManager.end_stroke()
+
+## The occupied cell under the cursor — what a remove-drag would delete. Mirrors
+## the lookup in _remove_block so the stroke guard keys on the same cell the
+## removal will actually act on.
+func _hover_cell() -> Vector3i:
+	var hit: Dictionary = _raycast_from_mouse()
+	if hit.is_empty():
+		return Vector3i(9999, 9999, 9999)
+	return GridManager.world_to_cell(hit["position"] - (hit["normal"] as Vector3) * 0.5)
+
+## One block per cell per stroke: without the `_painted` guard a stationary
+## cursor would re-place the same cell every frame.
+func _paint_step() -> void:
+	if _paint_mode == PAINT_NONE:
+		return
+	if _paint_mode == PAINT_PLACE and not _ghost_valid:
+		return
+	var cell: Vector3i = _ghost_cell if _paint_mode == PAINT_PLACE else _hover_cell()
+	if _painted.has(cell):
+		return
+	_painted[cell] = true
+	# Thin the celebration on a long sweep. Every placement spawns a drop tween
+	# and a particle burst; twenty of those in one gesture is both a hitch and
+	# visual noise. The first few stay fully juicy — that is where the feedback
+	# actually registers — and the rest of the stroke lays quietly.
+	_paint_quiet = _painted.size() > 4
+	if _paint_mode == PAINT_PLACE:
+		_place_block()
+	else:
+		_remove_block()
 
 func _process(_delta: float) -> void:
 	_update_ghost()
+	_paint_step()
 
 func _raycast_from_mouse() -> Dictionary:
 	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
@@ -318,7 +379,8 @@ func _place_block() -> void:
 	# moment of impact — snapped onto the music's beat grid (see _landing_voice).
 	var cell := _ghost_cell
 	var click_phase: float = StreamManager.beat_phase()
-	_spawn_afterimage()
+	if not _paint_quiet:
+		_spawn_afterimage()
 	# Immediate quiet acknowledgment tick so input never feels swallowed while
 	# the landing voice waits for the impact/beat.
 	AudioManager.play_wood_pitch(final_pos, 2.0, -14.0)
@@ -394,7 +456,8 @@ func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type, c
 	# beat), a soft material-tinted light kiss, the landing voice (beat-snapped),
 	# and a sympathy ripple through the neighbours.
 	var on_beat: bool = click_phase < 0.12 or click_phase > 0.88
-	tween.tween_callback(_spawn_place_effect.bind(type, final_pos + Vector3(0.0, -0.45, 0.0)))
+	if not _paint_quiet:
+		tween.tween_callback(_spawn_place_effect.bind(type, final_pos + Vector3(0.0, -0.45, 0.0)))
 	tween.tween_callback(_spawn_ring.bind(final_pos + Vector3(0.0, -0.48, 0.0), on_beat))
 	tween.tween_callback(_spawn_kiss.bind(type, final_pos))
 	tween.tween_callback(_landing_voice.bind(type, final_pos, cell))
@@ -519,7 +582,8 @@ func _remove_block() -> void:
 		get_tree().create_timer(0.09).timeout.connect(
 			AudioManager.play_wood_pitch.bind(pos, AudioManager.PENTATONIC_RATIOS[maxi(degree - 1, 0)] * 0.5, -1.0))
 
-	_spawn_place_effect(BlockData.Type.WOOD, pos, true)   # dust drifts UP
+	if not _paint_quiet:
+		_spawn_place_effect(BlockData.Type.WOOD, pos, true)   # dust drifts UP
 	_spawn_ring(pos + Vector3(0.0, -0.4, 0.0))
 	_ripple_neighbors(hit_cell)
 	PondDecorManager.excite_near(pos)

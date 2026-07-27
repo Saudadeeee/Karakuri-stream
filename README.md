@@ -22,8 +22,8 @@ Use an **official** Godot 4.7.1 binary. The Steam build swallows export error te
 
 | Input | Action |
 |---|---|
-| Left click | place a block |
-| Right click | remove a block |
+| Left click / drag | place blocks — sweep to build a whole terrace in one stroke |
+| Right click / drag | remove blocks |
 | Middle drag | orbit camera |
 | Scroll | zoom |
 | `1`–`0`, `-`, `=` | pick material (Wood, Water, Source, Pipe, Gear, Bell, Jelly, Shishi, Drum, Chime, Music box, Scoop) |
