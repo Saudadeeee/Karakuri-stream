@@ -32,7 +32,7 @@ Everything else — arches, balconies, roof gardens — is decoration hung on th
 | Wall jitter | done | sub-centimetre, from the cell hash |
 | Dormers | done | tier 1+, only where the roof slopes to an outside edge |
 | District colour harmony | done | neighbours share a tone; ~1 in 5 ignores it |
-| Ground-level stairs / plazas | todo | the space *between* buildings is still bare grass |
+| Ground-level paving / plazas | **attempted, reverted** | see below |
 | Walkways between separate buildings | todo | arches only span within one building |
 
 ## Not doing: the irregular grid
@@ -68,13 +68,35 @@ into 4x4 districts rather than searching for neighbours — same curated feel, n
 extra flood fill. One building in five ignores the district on purpose: a town
 where *everything* agrees looks planned rather than grown.
 
-## Next, if this is picked up again
+## Ground level: attempted, reverted, notes for the next attempt
 
-- **Ground level.** The space between buildings is still bare grass. Townscaper
-  fills it with steps, railings and little plazas wherever heights differ. This
-  is now the biggest remaining gap.
-- **Walkways.** Arches currently only span within one building; a bridge between
-  two separate buildings would need the component test relaxed.
+The space between buildings is still bare grass, and it is the biggest remaining
+gap. An attempt at paved aprons — a stone slab along every exposed ground-floor
+wall, so that neighbouring aprons meet and the gap becomes a street — was built
+and then removed rather than shipped half-working. What was learned:
+
+- The island is a **sculpted mesh with a jittered surface**, not a flat plane at
+  y=0. A thin slab laid on y=0 vanishes inside it. Thickening to 0.14 and lifting
+  clear of the sculpting fixed that much.
+- Deriving the paving colour from the building's trim produced a pale grey
+  almost exactly the colour of the lawn: the slab rendered perfectly and was
+  invisible. Paving contrasts with GRASS, which is the same for every building,
+  so it needs a fixed stone colour, not a per-building one.
+- After both fixes the slab still did not appear while the terrace RAIL built
+  beside it did — same batch, same frame, so it is not the batching. The next
+  attempt should start by dumping the built vertex positions rather than
+  adjusting numbers and re-rendering, which is what burned the time here.
+
+**Walkways** between separate buildings turned out to need nothing: a player who
+bridges a gap with house cells makes the two into ONE component, so the existing
+arch rule already spans it.
+
+## What is worth doing next instead
+
+The house itself is in good shape. The bare ground is a SCENERY problem more than
+a house problem — `DecorManager` and `SceneryManager` already place props on and
+around the grid and would be a better home for paving and steps than
+`house_block`, which can only ever see one cell.
 
 ## Rules that must survive any change here
 
