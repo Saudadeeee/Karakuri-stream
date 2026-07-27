@@ -17,19 +17,21 @@ const WALL_T := 0.07          # plaster thickness
 const ROOF_H := 0.58
 const ROOF_OVER := 0.11       # eaves overhang past the wall
 
-## The four original palettes were all pale plaster over a red-brown roof, so
-## whichever one a building picked it came out looking the same — a test town
-## rendered as one uniform grey block, which is exactly why placing houses felt
-## flat. These seven carry real separation in BOTH hue and value while staying
-## inside the clay/pastel family, so a street reads as a street.
+## Townscaper's towns read as towns because the buildings are unmistakably
+## DIFFERENT COLOURS — a red one, a blue one, a yellow one — not eight shades of
+## the same beige. Two earlier passes at this failed for that reason: pale
+## plaster over red-brown roofs, so whichever palette a building picked it looked
+## identical, and the scene grade then desaturated what little difference was
+## left. These are saturated on purpose and survive the grade.
 const PALETTES: Array[Dictionary] = [
-	{"wall": Color("f4ead6"), "roof": Color("b8563c"), "trim": Color("8a6a4a")},   # cream + terracotta
-	{"wall": Color("bcd4dd"), "roof": Color("5f6f86"), "trim": Color("6d7b84")},   # sea blue + slate
-	{"wall": Color("f3cbc2"), "roof": Color("9c4a63"), "trim": Color("8a5f52")},   # blossom + plum
-	{"wall": Color("cfd9b6"), "roof": Color("7d6a3a"), "trim": Color("6f7a5c")},   # sage + olive
-	{"wall": Color("f2d49a"), "roof": Color("a8552f"), "trim": Color("8a6134")},   # ochre + rust
-	{"wall": Color("d8c8e0"), "roof": Color("6a5578"), "trim": Color("7a6a86")},   # lilac + aubergine
-	{"wall": Color("e8e4dd"), "roof": Color("4f5f5a"), "trim": Color("77776f")},   # chalk + pine
+	{"wall": Color("f6ead2"), "roof": Color("c1452f"), "trim": Color("8a6a4a")},   # cream + tile red
+	{"wall": Color("e8503f"), "roof": Color("a8412e"), "trim": Color("6f2c22")},   # tomato
+	{"wall": Color("3f7fa6"), "roof": Color("3d6d8c"), "trim": Color("2d4d61")},   # deep sea blue
+	{"wall": Color("f0b53c"), "roof": Color("b06327"), "trim": Color("8a6134")},   # saffron
+	{"wall": Color("6f9e5a"), "roof": Color("5b7a4e"), "trim": Color("4f6b45")},   # leaf green
+	{"wall": Color("f2f0e8"), "roof": Color("74838c"), "trim": Color("77776f")},   # whitewash + slate
+	{"wall": Color("c76ba0"), "roof": Color("a85280"), "trim": Color("7a4460")},   # rose
+	{"wall": Color("6a5b96"), "roof": Color("5d5081"), "trim": Color("4d4470")},   # violet
 ]
 
 ## Awning cloth. The one saturated accent on an otherwise quiet building, so a
@@ -64,6 +66,7 @@ var grid_cell: Vector3i:
 			refresh_shape()
 
 var _placed: bool = false
+var _pop_pending: bool = false
 var _visual: Node3D
 var _batch: MeshBatch
 var _base_palette: int = 0
@@ -90,10 +93,12 @@ func _resolve_palette() -> void:
 	# The player's variant still leads: it is mixed back in so a deliberately
 	# chosen colour stays recognisable across the street rather than being
 	# overwritten by the building's own roll.
+	# Only a light pull toward the player's variant. At 0.35 the building's own
+	# colour was being averaged back into beige and the street went uniform again.
 	_palette = {
-		"wall": (chosen["wall"] as Color).lerp(base["wall"], 0.35).lightened(light),
-		"roof": (chosen["roof"] as Color).lerp(base["roof"], 0.35).lightened(roof_light),
-		"trim": (chosen["trim"] as Color).lerp(base["trim"], 0.5),
+		"wall": (chosen["wall"] as Color).lerp(base["wall"], 0.12).lightened(light * 0.5),
+		"roof": (chosen["roof"] as Color).lerp(base["roof"], 0.12).lightened(roof_light * 0.5),
+		"trim": chosen["trim"],
 	}
 var _glow: Array[StandardMaterial3D] = []
 var _phase: float = randf() * TAU
@@ -162,6 +167,9 @@ func refresh_shape() -> void:
 	mi.mesh = _batch.build(_material_for)
 	_visual.add_child(mi)
 	_batch = null
+	if _pop_pending:
+		_pop_pending = false
+		_pop()
 
 	# Only night houses breathe; every other map leaves the panes flat, so a big
 	# town costs nothing per frame.
@@ -273,7 +281,13 @@ func _build_underside(ctx: Dictionary, trim_col: Color) -> void:
 	var drop: int = int(ctx["support_drop"])
 	if drop <= 0:
 		return
-	if bool(ctx["overhang"]):
+	# A cell bridging between two supported neighbours gets an ARCH — the thing
+	# that turns a stacked street into an arcade you can see through, and the
+	# single most Townscaper-looking piece of geometry in the game.
+	var axis: Vector3i = HouseShape.arch_axis(grid_cell)
+	if axis != Vector3i.ZERO:
+		_build_arch(axis, trim_col)
+	elif bool(ctx["overhang"]):
 		_build_corbels(trim_col)
 	else:
 		_build_stilts(drop, trim_col)
@@ -309,6 +323,37 @@ func _build_stilts(drop: int, trim_col: Color) -> void:
 			for s in [-1.0, 1.0]:
 				var off: Vector3 = Vector3(0, 0, 0.34 * s) if on_x else Vector3(0.34 * s, 0, 0)
 				_batch.box(size, Vector3(0, mid, 0) + off, trim_col)
+
+## A round-headed arch spanning `axis`, built as a fan of short chords so the
+## curve reads without needing a curved primitive. The springings sit inside the
+## cell's two ends and the crown reaches the cell floor, so neighbouring arch
+## cells in a row line up into a continuous arcade.
+const ARCH_SEGMENTS := 7
+const ARCH_RISE := 0.62
+
+func _build_arch(axis: Vector3i, trim_col: Color) -> void:
+	var along := Vector3(float(axis.x), 0.0, float(axis.z))
+	var across := Vector3(float(axis.z), 0.0, float(axis.x)).normalized()
+	var prev := Vector3.ZERO
+	for i in ARCH_SEGMENTS + 1:
+		var ang: float = PI * float(i) / float(ARCH_SEGMENTS)
+		# Runs end to end along the axis while dipping below the cell floor.
+		var pt: Vector3 = along * (cos(ang) * 0.5) + Vector3(0, -0.5 - ARCH_RISE * sin(ang), 0)
+		if i > 0:
+			var seg: Vector3 = pt - prev
+			# Rotate each chord about the opening's axis so the fan reads as a curve.
+			var tilt: float = atan2(seg.y, along.dot(seg))
+			_batch.box(Vector3(seg.length() + 0.07, 0.15, 0.88), (prev + pt) * 0.5,
+				trim_col, Basis(across, tilt) * _axis_basis(along))
+		prev = pt
+	# Piers at the two ends, so the arch visibly lands on something.
+	for s2 in [-1.0, 1.0]:
+		_batch.box(along.abs() * 0.17 + across.abs() * 0.86 + Vector3(0, 0.44, 0),
+			along * 0.42 * s2 + Vector3(0, -0.74, 0), trim_col)
+
+## Orients a box whose local +X should run along `along` (which is a unit axis).
+func _axis_basis(along: Vector3) -> Basis:
+	return Basis.IDENTITY if absf(along.x) > 0.5 else Basis(Vector3(0, 1, 0), PI / 2.0)
 
 ## Diagonal brackets under a cantilevered storey, one per supported neighbour it
 ## juts out from — the joinery that makes an overhang look deliberate.
@@ -479,6 +524,16 @@ func _dark() -> Color:
 func _tint(c: Color) -> Color:
 	var t: Dictionary = THEME_TINT[clampi(MapThemes.current, 0, THEME_TINT.size() - 1)]
 	return c.lerp(t["mix"], float(t["amount"]))
+
+## A quick squash-and-settle when the building re-forms around a new neighbour.
+## Scale only, on the visual child — never on this StaticBody3D, whose collision
+## shape the placement raycast depends on.
+func _pop() -> void:
+	if not is_inside_tree() or _visual == null:
+		return
+	_visual.scale = Vector3(1.08, 0.9, 1.08)
+	var tw := create_tween()
+	tw.tween_property(_visual, "scale", Vector3.ONE, 0.26) 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## Night only (see set_process in refresh_shape): windows warm up on the beat,
 ## so a town lit at night pulses gently along with the machine.

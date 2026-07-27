@@ -146,6 +146,41 @@ static func is_overhang(cell: Vector3i) -> bool:
 			return true
 	return false
 
+## The axis a cell SPANS, or ZERO. A house cell hanging over open ground with
+## supported house cells on BOTH sides of an axis is a bridge, and a bridge in
+## this kind of town wants an ARCH under it, not a bracket and not a pillar
+## dropped through the gap.
+##
+## Arches are most of what makes a Townscaper street feel like a place rather
+## than a row of boxes: the ground floor turns into an arcade you can see
+## through, and they appear purely because of how the player stacked things.
+## How far an arch will look for a footing. Beyond this a span reads as a long
+## viaduct and wants piers, which is what the stilt path already does.
+const ARCH_SPAN := 4
+
+static func arch_axis(cell: Vector3i) -> Vector3i:
+	if support_drop(cell) == 0:
+		return Vector3i.ZERO
+	# Walk the span in both directions. Requiring the IMMEDIATE neighbours to be
+	# supported only ever caught a gap exactly one cell wide, so a two-cell bridge
+	# — the normal thing a player builds between two towers — grew no arch at all.
+	for axis in [Vector3i(1, 0, 0), Vector3i(0, 0, 1)]:
+		if _reaches_support(cell, axis) and _reaches_support(cell, -axis):
+			return axis
+	return Vector3i.ZERO
+
+## Follow house cells along `dir` and report whether the run lands on one that is
+## standing on something, within a sane distance.
+static func _reaches_support(cell: Vector3i, dir: Vector3i) -> bool:
+	var c: Vector3i = cell + dir
+	for _i in ARCH_SPAN:
+		if not is_house(c):
+			return false
+		if support_drop(c) == 0:
+			return true
+		c += dir
+	return false
+
 ## The horizontal directions an overhang can brace itself against: neighbours
 ## that are house cells standing on something.
 static func corbel_sides(cell: Vector3i) -> Array[Vector3i]:

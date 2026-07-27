@@ -79,14 +79,16 @@ const V: Dictionary = {
 	# it (see house_block._resolve_palette), so a row of one variant is still a
 	# row of individual houses rather than a wall of identical grey.
 	BlockData.Type.HOUSE: [
-		{"name": "Cream house", "palette": 0, "color": "#f4ead6"},
-		{"name": "Sea-blue house", "palette": 1, "color": "#bcd4dd"},
-		{"name": "Blossom house", "palette": 2, "color": "#f3cbc2"},
-		{"name": "Sage house", "palette": 3, "color": "#cfd9b6"},
-		{"name": "Ochre house", "palette": 4, "color": "#f2d49a"},
-		{"name": "Lilac house", "palette": 5, "color": "#d8c8e0"},
-		{"name": "Chalk house", "palette": 6, "color": "#e8e4dd"},
+		{"name": "Cream house", "palette": 0, "color": "#f6ead2"},
+		{"name": "Tomato house", "palette": 1, "color": "#e8503f"},
+		{"name": "Sea-blue house", "palette": 2, "color": "#3f7fa6"},
+		{"name": "Saffron house", "palette": 3, "color": "#f0b53c"},
+		{"name": "Leaf house", "palette": 4, "color": "#6f9e5a"},
+		{"name": "Whitewash house", "palette": 5, "color": "#f2f0e8"},
+		{"name": "Rose house", "palette": 6, "color": "#c76ba0"},
+		{"name": "Violet house", "palette": 7, "color": "#6a5b96"},
 	],
+
 	BlockData.Type.SCOOP: [{"name": "Water scoop"}],
 }
 
