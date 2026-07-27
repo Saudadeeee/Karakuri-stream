@@ -7,30 +7,8 @@ extends Node
 
 const MAX_STACK: int = 200
 
-var _undo: Array = []   # [{op, cell, ...} | {op:"stroke", steps:[...]}]
+var _undo: Array = []   # [{op, cell, type, variant, axis}]
 var _redo: Array = []
-
-## While a drag is painting, every block it lays goes into ONE action. Dragging
-## out a terrace and then pressing Ctrl+Z should put the terrace back the way it
-## was, not rub out one cell and leave the player mashing undo.
-var _stroke: Array = []
-var _in_stroke: bool = false
-
-func begin_stroke() -> void:
-	_stroke = []
-	_in_stroke = true
-
-func end_stroke() -> void:
-	_in_stroke = false
-	if _stroke.is_empty():
-		return
-	# A one-cell drag is just a click; keep it as a plain action so the stack
-	# does not fill with single-element strokes.
-	if _stroke.size() == 1:
-		_push_action(_stroke[0])
-	else:
-		_push_action({"op": "stroke", "steps": _stroke})
-	_stroke = []
 
 func record_place(cell: Vector3i, block: BlockData) -> void:
 	_push({"op": "place", "cell": cell, "type": block.type,
@@ -41,13 +19,6 @@ func record_remove(cell: Vector3i, block: BlockData) -> void:
 		"variant": int(block.state.get("variant", 0)), "axis": block.state.get("axis")})
 
 func _push(action: Dictionary) -> void:
-	if _in_stroke:
-		_stroke.append(action)
-		_redo.clear()
-		return
-	_push_action(action)
-
-func _push_action(action: Dictionary) -> void:
 	_undo.append(action)
 	if _undo.size() > MAX_STACK:
 		_undo.pop_front()
@@ -80,16 +51,6 @@ func redo() -> void:
 ## Undoing a PLACE removes the block; undoing a REMOVE restores it (reversed=
 ## false replays the action as recorded).
 func _apply(a: Dictionary, reversed: bool) -> void:
-	if a["op"] == "stroke":
-		# Unwind a stroke in the opposite order to how it was laid, so undoing
-		# and redoing a drag both leave the grid in the state it was actually in.
-		var steps: Array = a["steps"]
-		var order: Array = steps.duplicate()
-		if reversed:
-			order.reverse()
-		for step in order:
-			_apply(step, reversed)
-		return
 	var placing: bool = (a["op"] == "place") != reversed
 	var cell: Vector3i = a["cell"]
 	if placing:

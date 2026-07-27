@@ -15,10 +15,6 @@ Three properties, in order of how much they matter:
 3. **The town reacts.** Drop one block and the buildings around it visibly
    re-form. The satisfaction is in the ripple, not in the block.
 
-And one thing that is not visual at all: you **sweep** the mouse and a street
-appears. Clicking once per cell turns building twenty houses into twenty separate
-decisions, and the flow never arrives — this was the last real mechanical gap.
-
 Everything else — arches, balconies, roof gardens — is decoration hung on those.
 
 ## Status
@@ -32,7 +28,6 @@ Everything else — arches, balconies, roof gardens — is decoration hung on th
 | Per-building colour | done | 8 saturated colourways, building-level roll |
 | Balcony / awning / shutters / planter / roof garden | done | gated on `decor_tier` |
 | Reflow pop on neighbours | done | the "town reacts" beat |
-| **Drag to build / drag to remove** | done | one stroke = one undo |
 | Corner chamfers | done | 45° post on every corner where two exposed walls meet |
 | Wall jitter | done | sub-centimetre, from the cell hash |
 | Dormers | done | tier 1+, only where the roof slopes to an outside edge |
