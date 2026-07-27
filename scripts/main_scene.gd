@@ -21,6 +21,8 @@ func _ready() -> void:
 	CloudSea.apply_theme()
 	IslandBuilder.rebuild()
 	KarakuriClock.rebuild()
+	# F3 readout — the only way to get real numbers off the web build.
+	add_child(preload("res://scripts/ui/perf_overlay.gd").new())
 	# First run ever (no save yet): a small STARTER GARDEN machine already
 	# running in one corner — spout → shishi-odoshi → drum, a pond turning a
 	# gear — so the blank island never stares back at a new player. One-time:

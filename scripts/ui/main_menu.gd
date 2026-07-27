@@ -28,6 +28,8 @@ func _ready() -> void:
 	# Every button in this menu is built in code above, so one sweep at the end
 	# is simpler and harder to forget than wiring each one at its call site.
 	CuteButton.apply_all(self)
+	# F3 readout — the only way to get real numbers off the web build.
+	add_child(preload("res://scripts/ui/perf_overlay.gd").new())
 
 func _process(delta: float) -> void:
 	if is_instance_valid(_cam_rig):
@@ -182,7 +184,13 @@ const HALO := Color("fff6e8")
 ## times over.
 func _add_haloed(text: String, size: float, y: float, col: Color, depth: float, spread: float) -> void:
 	var face := _letter_mesh(text, size, y, 0.0, col, depth)
-	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+	# Four offsets make a true outline; one makes a drop shadow. The web LITE
+	# profile takes the drop shadow, because each copy re-submits the whole glyph
+	# mesh every frame and the title is the first thing a browser has to draw.
+	var offsets: Array = [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]
+	if QualityManager.lite:
+		offsets = [Vector2(-0.7, -0.7)]
+	for o in offsets:
 		var edge := MeshInstance3D.new()
 		edge.mesh = face.mesh
 		edge.position = Vector3(o.x * spread, y + o.y * spread, -0.12)
@@ -194,12 +202,22 @@ func _add_haloed(text: String, size: float, y: float, col: Color, depth: float, 
 		_title_root.add_child(edge)
 	_title_root.add_child(face)
 
+## TextMesh tessellates glyph curves in proportion to `font_size`, and
+## `pixel_size` then scales the result to world units — so the two together set
+## the DETAIL independently of how big the letters actually look.
+##
+## This was 64, which on a chunky flat-shaded wordmark bought nothing visible and
+## made the title the heaviest object in the game: 245,000 vertices across its
+## copies, six times the entire scenery ring, on the very first screen the player
+## sees. At 26 the curves are still smooth at this size.
+const TITLE_DETAIL := 26.0
+
 func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
 	var tm := TextMesh.new()
 	tm.text = text
 	tm.font = ThemeDB.fallback_font
-	tm.font_size = 64
-	tm.pixel_size = size / 64.0
+	tm.font_size = int(TITLE_DETAIL)
+	tm.pixel_size = size / TITLE_DETAIL
 	tm.depth = depth
 	var mi := MeshInstance3D.new()
 	mi.mesh = tm

@@ -76,7 +76,45 @@ func _ready() -> void:
 		WildlifeManager._birds.size() + WildlifeManager._cats.size()
 			+ WildlifeManager._ducks.size() + WildlifeManager._deer.size(),
 		_count(get_tree().root, "GPUParticles3D")])
+	_breakdown(s)
 	get_tree().quit()
+
+## Which subtree is actually costing draw calls. "Fast enough overall" hides a
+## single group doing most of the work.
+func _breakdown(root: Node) -> void:
+	var rows: Array = []
+	for c in root.get_children():
+		var surf := _surfaces(c)
+		if surf[0] > 0:
+			rows.append([c.name, surf[0], surf[1]])
+	# The autoloads parent their visuals to themselves, not to the scene.
+	for a in ["SceneryManager", "CloudSea", "IslandBuilder", "KarakuriClock",
+			"DecorManager", "PondDecorManager", "WildlifeManager", "StreamManager",
+			"VoxelSurfaceManager", "AmbientLeaves", "FireflyManager"]:
+		var n := get_node_or_null("/root/" + a)
+		if n != null:
+			var surf := _surfaces(n)
+			if surf[0] > 0:
+				rows.append([a, surf[0], surf[1]])
+	rows.sort_custom(func(x, y): return x[1] > y[1])
+	print("   --- surfaces / verts by group ---")
+	for r in rows:
+		print("     %-22s %4d surfaces  %7d verts" % [r[0], r[1], r[2]])
+
+func _surfaces(n: Node) -> Array:
+	var s := 0
+	var v := 0
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		var m: Mesh = (n as MeshInstance3D).mesh
+		s = m.get_surface_count()
+		for i in s:
+			var arr: Array = m.surface_get_arrays(i)
+			if not arr.is_empty():
+				v += (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	for k in n.get_children():
+		var r := _surfaces(k)
+		s += r[0]; v += r[1]
+	return [s, v]
 
 func _env_of(root: Node) -> Environment:
 	var we := root.find_child("WorldEnvironment", true, false)
