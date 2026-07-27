@@ -71,12 +71,15 @@ func _ready() -> void:
 	var p95: float = samples[int(frames * 0.95)]
 	var p99: float = samples[int(frames * 0.99)]
 	var worst_ms: float = samples[frames - 1]
-	# How many frames were at least twice the median — i.e. a visible drop.
+	# Frames over 16.7 ms — i.e. ones a player on a 60 Hz screen would actually
+	# lose. "Twice the median" was scale-dependent and useless: on a scene running
+	# at 1.2 ms it flagged every ordinary 3 ms frame as a drop, which made a
+	# perfectly healthy build look like it had regressed.
 	var spikes := 0
 	for ms in samples:
-		if ms > p50 * 2.0:
+		if ms > 16.7:
 			spikes += 1
-	print("PERF[%s] lite=%s houses=%d  avg=%.2f  p50=%.2f (%.0f fps)  p95=%.2f  p99=%.2f  worst=%.2fms  spikes=%d/%d" % [
+	print("PERF[%s] lite=%s houses=%d  avg=%.2f  p50=%.2f (%.0f fps)  p95=%.2f  p99=%.2f  worst=%.2fms  over16ms=%d/%d" % [
 		_label, str(_lite), _houses, avg_ms, p50, 1000.0 / maxf(p50, 0.001), p95, p99, worst_ms, spikes, frames])
 	print("   draw_calls=%d  objects=%d  primitives=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),

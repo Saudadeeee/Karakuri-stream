@@ -70,6 +70,13 @@ static func _h(cell: Vector3i, salt: int) -> float:
 	var n: int = hash(Vector3i(cell.x * 73856093, cell.y * 19349663, cell.z * 83492791)) ^ (salt * 2654435761)
 	return float(absi(n) % 100003) / 100003.0
 
+## Signed deterministic wobble in [-1,1]. The house builder uses this to break
+## the perfect squareness of the cubic grid; keeping it here alongside `_h` is
+## the reminder that it must stay a HASH — anything random reshuffles the town
+## every time the player reloads.
+static func jitter(cell: Vector3i, salt: int) -> float:
+	return _h(cell, salt) * 2.0 - 1.0
+
 # ------------------------------------------------------------ roof height field
 ## Height level of a roof sample point, in DOUBLED cell coordinates: a cell whose
 ## centre is (cx, cz) covers doubled x in [2cx-1, 2cx+1]. So doubled-even points
@@ -322,6 +329,16 @@ static func building_roll(cell: Vector3i, salt: int) -> float:
 	var lo: Vector3i = _component(cell)["lo"]
 	return _h(lo, salt)
 
+## A roll shared by every building in the same rough patch of island.
+##
+## Fully independent colours read as NOISE rather than as a town — Townscaper
+## looks curated because neighbours tend to agree, with the occasional deliberate
+## outlier. Quantising the anchor cell into districts gives that for free and
+## costs nothing: no extra flood fill, no neighbour search.
+static func district_roll(cell: Vector3i, salt: int) -> float:
+	var lo: Vector3i = _component(cell)["lo"]
+	return _h(Vector3i(floori(lo.x / 4.0), 0, floori(lo.z / 4.0)), salt)
+
 ## How much decoration this cell has earned. A lone hut stays plain and a real
 ## building gets the good stuff — growth is what makes placing another block
 ## feel like it did something.
@@ -363,6 +380,22 @@ static func has_awning(cell: Vector3i, side: Vector3i, ground: bool) -> bool:
 ## rolled per BUILDING so one house doesn't have them on half its windows.
 static func has_shutters(cell: Vector3i) -> bool:
 	return building_roll(cell, 7) < 0.45
+
+## The side a dormer should face, or ZERO. A dormer only makes sense where the
+## roof actually slopes DOWN to an outside edge — pushing one out of a roof that
+## continues into the neighbouring cell would bury it in the next roof along.
+static func dormer_side(cell: Vector3i) -> Vector3i:
+	if decor_tier(cell) < 1 or not is_roof_cell(cell):
+		return Vector3i.ZERO
+	if roof_level(cell.x * 2, cell.z * 2, cell.y) < 1:
+		return Vector3i.ZERO          # eaves-height cell: no slope to sit in
+	if _h(cell, 77) > 0.55:
+		return Vector3i.ZERO
+	# Face the first open direction, so the window looks out over the town.
+	for d in SIDES:
+		if not is_roof_cell(cell + d):
+			return d
+	return Vector3i.ZERO
 
 ## Potted plants on a roof: only on real buildings, and only where the roof is
 ## flat enough to stand a pot on — the top of a wide building, not a narrow ridge.

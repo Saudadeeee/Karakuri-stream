@@ -86,7 +86,14 @@ func _resolve_palette() -> void:
 	# Blending 34% between two pale palettes was invisible — a test town came out
 	# as one uniform grey. A building now takes a WHOLE palette of its own and
 	# then shifts it, so neighbours are obviously different houses.
-	var pick: int = int(HouseShape.building_roll(grid_cell, 3) * PALETTES.size()) % PALETTES.size()
+	# Neighbours lean toward a shared district tone, so a corner of the island
+	# reads as one quarter rather than as confetti — but one building in five
+	# ignores it, because a town with NO outlier looks planned rather than grown.
+	var own: float = HouseShape.building_roll(grid_cell, 3)
+	var district: float = HouseShape.district_roll(grid_cell, 3)
+	var mixed: float = district if own > 0.2 else own
+	var spread: float = (own - 0.5) * (0.9 if own > 0.2 else 3.0)
+	var pick: int = posmod(int((mixed + spread * 0.25) * PALETTES.size()), PALETTES.size())
 	var chosen: Dictionary = PALETTES[pick]
 	var light: float = (HouseShape.building_roll(grid_cell, 5) - 0.5) * 0.26
 	var roof_light: float = (HouseShape.building_roll(grid_cell, 11) - 0.5) * 0.34
@@ -148,6 +155,7 @@ func refresh_shape() -> void:
 
 	for side in ctx["open_sides"]:
 		_build_face(side, ctx, wall_col, trim_col)
+	_build_corners(ctx, wall_col)
 
 	_build_underside(ctx, trim_col)
 	if ctx["has_above"]:
@@ -160,6 +168,9 @@ func refresh_shape() -> void:
 	# enough on top to stand a pot on — a narrow ridge would just float them.
 	if HouseShape.has_roof_garden(grid_cell):
 		_build_roof_garden(trim_col)
+	var dormer: Vector3i = HouseShape.dormer_side(grid_cell)
+	if dormer != Vector3i.ZERO:
+		_build_dormer(dormer, wall_col, trim_col)
 
 	# Everything above went into ONE mesh, grouped by colour: four or five draw
 	# calls per cell instead of one per plank.
@@ -180,7 +191,11 @@ func refresh_shape() -> void:
 func _build_face(side: Vector3i, ctx: Dictionary, wall_col: Color, trim_col: Color) -> void:
 	var horiz := Vector3(float(side.z), 0.0, float(-side.x))   # along the face
 	var out := Vector3(float(side.x), 0.0, float(side.z))
-	_batch.box(_face_size(side, 1.0, WALL_T), out * (0.5 - WALL_T * 0.5), wall_col)
+	# A hair of variation per panel: depth and lateral shift, both sub-centimetre.
+	var wobble: float = _jitter(side.x * 13 + side.z * 29) * 0.014
+	var lean: float = _jitter(side.x * 5 + side.z * 3) * 0.01
+	_batch.box(_face_size(side, 1.0 + wobble, WALL_T),
+		out * (0.5 - WALL_T * 0.5 + wobble * 0.5) + horiz * lean, wall_col)
 
 	var is_door: bool = ctx["door_side"] == side
 	var ground: bool = not bool(ctx["stacked"])
@@ -193,6 +208,34 @@ func _build_face(side: Vector3i, ctx: Dictionary, wall_col: Color, trim_col: Col
 	# Street level meets the grass with something growing, not a hard edge.
 	if HouseShape.has_planter(grid_cell, side, ground) and not is_door:
 		_build_planter(out, horiz, trim_col)
+
+## A 45-degree post down every vertical corner where two exposed walls meet.
+##
+## This is the single biggest remaining "it is a cube" tell. Townscaper has no
+## right-angled corners anywhere — its grid is a relaxed quad mesh — and we
+## cannot change our grid without rewriting stream routing, gear meshing, the
+## water isosurface and the save format along with it. Chamfering fakes the
+## symptom instead: a cube with its corners cut stops reading as a cube from
+## every angle, for one box per corner in the batch we are already building.
+func _build_corners(ctx: Dictionary, wall_col: Color) -> void:
+	var open_sides: Array = ctx["open_sides"]
+	for ax in [-1, 1]:
+		for az in [-1, 1]:
+			# Only where BOTH of the meeting walls actually exist, otherwise the
+			# post hangs in the air off the side of a shared wall.
+			if not (Vector3i(ax, 0, 0) in open_sides and Vector3i(0, 0, az) in open_sides):
+				continue
+			var j: float = _jitter(11 + ax * 3 + az * 7) * 0.012
+			_batch.box(Vector3(0.17, 1.0, 0.17),
+				Vector3(ax * (0.5 - 0.055 + j), 0.0, az * (0.5 - 0.055 + j)),
+				wall_col, Basis(Vector3(0, 1, 0), PI / 4.0))
+
+## Deterministic wobble in [-1,1] for this cell. Individually a few millimetres
+## and invisible; collectively it is the difference between a printed row of
+## boxes and something built by hand. Comes from the cell hash, NEVER randf() —
+## a random source here would reshuffle the whole town on every reload.
+func _jitter(salt: int) -> float:
+	return HouseShape.jitter(grid_cell, salt)
 
 ## Size of a slab covering one face: full across, thin through.
 func _face_size(side: Vector3i, span: float, thick: float) -> Vector3:
@@ -475,6 +518,22 @@ func _build_roof_garden(trim_col: Color) -> void:
 		if i == 0:
 			_batch.box(Vector3(0.05, 0.2, 0.05), at + Vector3(0, 0.3, 0), _dark())
 			_batch.box(Vector3(0.26, 0.2, 0.26), at + Vector3(0, 0.44, 0), leaf)
+
+## A small gabled window pushing out of a roof slope.
+##
+## In a dense town the roofs are the largest unbroken surfaces on screen and they
+## currently say nothing — a dormer is the cheapest thing that makes a roofline
+## look inhabited rather than like a lid. Sits at the eaves end of the slope it
+## faces, so it reads as breaking through the roof rather than floating on it.
+func _build_dormer(side: Vector3i, wall_col: Color, trim_col: Color) -> void:
+	var out := Vector3(float(side.x), 0.0, float(side.z))
+	var at: Vector3 = out * 0.28 + Vector3(0, 0.5 + ROOF_H * 0.36, 0)
+	# Box body, then a little roof over it, then the glass.
+	_batch.box(Vector3(0.30, 0.28, 0.30) + out.abs() * 0.06, at, wall_col)
+	_batch.box(Vector3(0.38, 0.07, 0.38) + out.abs() * 0.06,
+		at + Vector3(0, 0.17, 0), _tint(_palette["roof"]))
+	_batch.box(_slab(out, 0.18, 0.16), at + out * 0.17 + Vector3(0, -0.01, 0), _glass_col())
+	_batch.box(_slab(out, 0.22, 0.04), at + out * 0.18 + Vector3(0, -0.11, 0), trim_col)
 
 func _build_chimney(trim_col: Color) -> void:
 	var at := Vector3(0.26, 0.5 + ROOF_H * 0.55, 0.26)
