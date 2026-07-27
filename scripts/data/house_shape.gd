@@ -88,6 +88,18 @@ static func roof_level(dx: int, dz: int, y: int) -> int:
 		level += 1
 	return level
 
+## How far the roof rises above this cell's top face, at the cell's CENTRE.
+## Anything that stands on a house — a perching bird, a cat crossing the rooftops
+## — has to add this, or it stands at the level of the eaves and ends up buried
+## inside the roof it is supposed to be sitting on.
+## Must stay in step with house_block.ROOF_STEP.
+const ROOF_RISE: Array[float] = [0.0, 0.42, 0.63]
+
+static func roof_top_height(cell: Vector3i) -> float:
+	if not is_roof_cell(cell):
+		return 0.0
+	return ROOF_RISE[roof_level(cell.x * 2, cell.z * 2, cell.y)]
+
 static func _ring_is_roof(dx: int, dz: int, y: int, r: int) -> bool:
 	# Cells whose doubled centre lies within Chebyshev radius r of the sample.
 	var cx0: int = int(ceil(float(dx - r) / 2.0))

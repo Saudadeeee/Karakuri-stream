@@ -115,6 +115,13 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D) -> void
 	if sun != null:
 		sun.light_color = t["sun_color"]
 		sun.light_energy = t["sun_energy"]
+		# The floating mountains are large meshes hanging over the island, so at
+		# full opacity their shadows land on the lawn as hard black ellipses that
+		# read as dirt rather than shade. Soft and partial keeps the depth cue
+		# without punching holes in a pastel picture.
+		sun.shadow_opacity = 0.55
+		sun.shadow_blur = 3.2
+		sun.directional_shadow_blend_splits = true
 	apply_grade(env)
 
 ## The picture was washing out to near-white: pale mountains, a bleached island,

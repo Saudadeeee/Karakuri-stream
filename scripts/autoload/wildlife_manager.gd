@@ -23,6 +23,9 @@ extends Node
 
 const SCAN_INTERVAL := 0.4
 const UP := Vector3i(0, 1, 0)
+const HORIZONTAL: Array[Vector3i] = [
+	Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+]
 
 const BIRD_COLORS: Array[Color] = [Color("6b8fb5"), Color("c98b6b"), Color("7fa87f"), Color("b58fb0")]
 const CAT_COLORS: Array[Color] = [Color("d9a441"), Color("55504e"), Color("e8e2d6")]
@@ -41,6 +44,10 @@ var _perches: Array[Vector3i] = []      # top-free cells a bird may land on
 var _instruments: Array[Vector3i] = []  # subset of the above that make a sound
 var _walkable: Array[Vector3i] = []     # top-free, non-water: cat territory
 var _pond: Array[Vector3i] = []         # top-free water
+## Same cells as _pond, as a set. Ducks test membership every frame, and a linear
+## scan of the array would cost O(pond size) per duck per frame — the same reason
+## GridManager keeps _cells_by_type instead of scanning.
+var _pond_set: Dictionary = {}
 var _houses := 0
 var _lanterns: Array[Vector3i] = []
 
@@ -77,7 +84,7 @@ func _cap(n: int) -> int:
 ## collected here so no creature ever walks the whole grid itself.
 func _scan() -> void:
 	_perches.clear(); _instruments.clear(); _walkable.clear()
-	_pond.clear(); _lanterns.clear()
+	_pond.clear(); _pond_set.clear(); _lanterns.clear()
 	_houses = 0
 	for cell in GridManager.get_all_cells():
 		var b: BlockData = GridManager.get_block(cell)
@@ -91,6 +98,7 @@ func _scan() -> void:
 			continue                      # buried: nothing can stand here
 		if b.type == BlockData.Type.WATER:
 			_pond.append(cell)
+			_pond_set[cell] = true
 			continue
 		_perches.append(cell)
 		if INSTRUMENTS.has(b.type):
@@ -159,8 +167,16 @@ func _poof(c: Dictionary) -> void:
 func _rand_cell(pool: Array[Vector3i]) -> Vector3i:
 	return pool[randi() % pool.size()]
 
+## Where a creature's feet go when it stands on `cell`. Not simply the top face:
+## a house cell carries a pitched ROOF above that face, so standing at the face
+## put birds and cats visibly buried inside the roof they were meant to be
+## sitting on. HouseShape knows how tall its own roof is; ask it.
 func _top_of(cell: Vector3i) -> Vector3:
-	return GridManager.cell_to_world(cell) + Vector3(0, 0.5, 0)
+	var p: Vector3 = GridManager.cell_to_world(cell) + Vector3(0, 0.5, 0)
+	var b: BlockData = GridManager.get_block(cell)
+	if b != null and b.type == BlockData.Type.HOUSE:
+		p.y += HouseShape.roof_top_height(cell)
+	return p
 
 # ------------------------------------------------------------------- birds
 func _make_bird() -> Dictionary:
@@ -198,7 +214,7 @@ func _bird_launch(b: Dictionary) -> void:
 	if _perches.is_empty():
 		return
 	b["from"] = b["root"].position
-	b["cell"] = _rand_cell(_perches)
+	b["cell"] = _free_perch(b)
 	b["to"] = _top_of(b["cell"])
 	b["dur"] = maxf(0.6, b["from"].distance_to(b["to"]) / 3.2)
 	b["t"] = 0.0
@@ -221,6 +237,21 @@ func _bird_flying(b: Dictionary, delta: float) -> void:
 		b["state"] = "perch"
 		b["wait"] = randf_range(2.5, 7.0)
 		_bird_land(b)
+
+## A perch no other bird is already sitting on or flying to. Picking purely at
+## random let two birds occupy the same cell and render as one bird with extra
+## wings — rare with one bird, obvious with three on a small build. Falls back to
+## any perch when they genuinely outnumber the perches.
+func _free_perch(mover: Dictionary) -> Vector3i:
+	var taken: Dictionary = {}
+	for other in _birds:
+		if other != mover and is_instance_valid(other["root"]):
+			taken[other["cell"]] = true
+	var free: Array[Vector3i] = []
+	for cell in _perches:
+		if not taken.has(cell):
+			free.append(cell)
+	return _rand_cell(free) if not free.is_empty() else _rand_cell(_perches)
 
 ## The payoff: a bird that lands on an instrument PLAYS it.
 func _bird_land(b: Dictionary) -> void:
@@ -314,46 +345,87 @@ func look_near(pos: Vector3, radius: float = 4.0) -> void:
 			c["look"] = pos
 
 # ------------------------------------------------------------------- ducks
+## Ducks used to circle the pond's CENTROID. That is only over water if the pond
+## happens to be a convex blob centred on itself — dig an L-shaped or a ring
+## pond and the centroid sits on grass, so the ducks paddled across the lawn.
+##
+## They now hop between actual pond CELLS: pick a neighbouring water cell, swim
+## to it, pick another. Every waypoint is water by construction, so whatever
+## shape the player digs, a duck cannot leave it.
+const DUCK_SPEED := 0.55
+
 func _make_duck() -> Dictionary:
 	var parts: Dictionary = CritterMesh.duck(DUCK_COLORS.pick_random())
 	add_child(parts["root"])
+	var home: Vector3i = _rand_cell(_pond)
+	parts["root"].position = _water_top(home)
 	return {
 		"root": parts["root"], "head": parts["head"],
-		"angle": randf() * TAU, "radius": randf_range(0.3, 0.9),
-		"speed": randf_range(0.25, 0.5), "phase": randf() * TAU,
+		"cell": home, "from": parts["root"].position, "to": parts["root"].position,
+		"t": 1.0, "dur": 1.0, "phase": randf() * TAU,
 		"dip": 0.0, "splashed": false,
 	}
+
+## Sit ON the water surface (the isosurface inflates slightly above the cell
+## top), with a small random offset so a raft of ducks isn't in single file.
+func _water_top(cell: Vector3i) -> Vector3:
+	return GridManager.cell_to_world(cell) + Vector3(randf_range(-0.22, 0.22), 0.52, randf_range(-0.22, 0.22))
 
 func _tick_ducks(delta: float, t: float) -> void:
 	if _pond.is_empty():
 		return
-	var centre := Vector3.ZERO
-	for cell in _pond:
-		centre += GridManager.cell_to_world(cell)
-	centre /= float(_pond.size())
-	# Radius grows with the pond so ducks use the water they actually have.
-	var span: float = clampf(sqrt(float(_pond.size())) * 0.42, 0.3, 3.0)
-
 	for d in _ducks:
 		if not is_instance_valid(d["root"]):
 			continue
-		d["angle"] += delta * d["speed"]
-		var r: float = minf(d["radius"], span)
-		var pos: Vector3 = centre + Vector3(cos(d["angle"]) * r, 0.52, sin(d["angle"]) * r)
+		# The pond can be dug away underneath a duck mid-crossing.
+		if not _pond_set.has(d["cell"]):
+			d["cell"] = _rand_cell(_pond)
+			d["from"] = d["root"].position
+			d["to"] = _water_top(d["cell"])
+			d["t"] = 0.0
+			d["dur"] = 1.0
+
+		d["t"] += delta / d["dur"]
+		if d["t"] >= 1.0:
+			d["t"] = 0.0
+			d["from"] = d["to"]
+			d["cell"] = _next_pond_cell(d["cell"])
+			d["to"] = _water_top(d["cell"])
+			d["dur"] = maxf(0.9, (d["from"] as Vector3).distance_to(d["to"]) / DUCK_SPEED)
+
+		var p: float = clampf(d["t"], 0.0, 1.0)
+		var prev: Vector3 = d["root"].position
+		var pos: Vector3 = (d["from"] as Vector3).lerp(d["to"], smoothstep(0.0, 1.0, p))
 		pos.y += sin(t * 1.4 + d["phase"]) * 0.02      # riding the ripples
 		d["root"].position = pos
-		d["root"].rotation.y = atan2(-cos(d["angle"]), -sin(d["angle"]))
-		# Occasional up-end to feed: head dips, then a splash on the way back.
+		var vel: Vector3 = pos - prev
+		if vel.length() > 0.0001:
+			d["root"].rotation.y = lerp_angle(d["root"].rotation.y, atan2(-vel.z, vel.x), delta * 4.0)
+		# Occasional up-end to feed: tips forward, then splashes coming back up.
 		if d["dip"] <= 0.0 and randf() < delta / 9.0:
 			d["dip"] = 1.0
 			d["splashed"] = false
 		if d["dip"] > 0.0:
-			var p: float = 1.0 - d["dip"]
-			d["root"].rotation.z = sin(p * PI) * 0.9
+			var q: float = 1.0 - d["dip"]
+			d["root"].rotation.z = sin(q * PI) * 0.9
 			d["dip"] = maxf(0.0, d["dip"] - delta / 1.1)
-			if p > 0.8 and not d["splashed"]:
+			if q > 0.8 and not d["splashed"]:
 				d["splashed"] = true
 				StreamManager._spawn_splash(pos, Color(0.85, 0.94, 0.98))
+		else:
+			d["root"].rotation.z = 0.0
+
+## Prefer paddling to a pond cell next door so the path stays over water; fall
+## back to any pond cell when this one is isolated.
+func _next_pond_cell(from: Vector3i) -> Vector3i:
+	var near: Array[Vector3i] = []
+	for d in HORIZONTAL:
+		var n: Vector3i = from + d
+		if _pond_set.has(n):
+			near.append(n)
+	if near.is_empty():
+		return _rand_cell(_pond)
+	return near[randi() % near.size()]
 
 # -------------------------------------------------------------------- deer
 ## The deer is a reward for stillness: it only walks in after the machine has

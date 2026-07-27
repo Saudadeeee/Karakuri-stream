@@ -322,6 +322,8 @@ func _sec_wildlife() -> void:
 	await get_tree().process_frame
 	_check(is_instance_valid(bell), "ringing from a landing does not free the bell")
 
+	await _sec_wildlife_placement()
+
 	# Everything must go when the grid does.
 	_clear()
 	await _wildlife_scan()
@@ -468,6 +470,67 @@ func _sec_house_vertical() -> void:
 	await get_tree().process_frame
 	_check(int(HouseShape.context(Vector3i(0, 40, 34))["support_drop"]) <= HouseShape.MAX_STILT,
 		"leg length is capped")
+	_clear()
+	await get_tree().process_frame
+
+## Three placement bugs found by rendering the game and LOOKING at it, pinned
+## here so they cannot come back quietly. None would ever fail a logic test —
+## the counts were right the whole time, the positions were wrong.
+func _sec_wildlife_placement() -> void:
+	_clear()
+	await get_tree().process_frame
+
+	# 1. A house carries a pitched roof ABOVE its top face. Standing a creature on
+	#    the face buried it inside the roof — a cat sunk to its ears in tiles.
+	for x in 6:
+		_b(Vector3i(x, 0, 24), BlockData.Type.HOUSE)
+	await _wildlife_scan()
+	var roof_cell := Vector3i(2, 0, 24)
+	_check(HouseShape.roof_top_height(roof_cell) > 0.0, "a roofed house reports a roof height")
+	var stand: Vector3 = WildlifeManager._top_of(roof_cell)
+	var face: float = GridManager.cell_to_world(roof_cell).y + 0.5
+	_check(stand.y > face + 0.1, "creatures stand ON the roof, not inside it")
+	# A plain block has no roof, so nothing should be added there.
+	_b(Vector3i(0, 0, 26), BlockData.Type.WOOD)
+	await _wildlife_scan()
+	_check(is_equal_approx(WildlifeManager._top_of(Vector3i(0, 0, 26)).y,
+		GridManager.cell_to_world(Vector3i(0, 0, 26)).y + 0.5), "a plain block gets no roof offset")
+
+	# 2. Ducks used to orbit the pond's CENTROID, which for an L-shaped pond is
+	#    over grass — they paddled across the lawn. Every waypoint must be water.
+	_clear()
+	await get_tree().process_frame
+	var pond: Array[Vector3i] = [
+		Vector3i(0, 0, 28), Vector3i(0, 0, 29), Vector3i(0, 0, 30),
+		Vector3i(1, 0, 30), Vector3i(2, 0, 30), Vector3i(3, 0, 30),
+	]
+	for c in pond:
+		_b(c, BlockData.Type.WATER)
+	await _wildlife_scan()
+	_check(not WildlifeManager._ducks.is_empty(), "L-shaped pond still gets ducks")
+	for _step in 40:
+		for d in WildlifeManager._ducks:
+			_check(WildlifeManager._pond_set.has(d["cell"]), "duck target is always a water cell")
+			d["cell"] = WildlifeManager._next_pond_cell(d["cell"])
+	# _pond_set must track _pond exactly, or the membership test silently rots.
+	_check(WildlifeManager._pond_set.size() == WildlifeManager._pond.size(),
+		"pond lookup set matches the pond list")
+
+	# 3. Two birds picking perches at random landed on the same cell and rendered
+	#    as one bird with extra wings.
+	_clear()
+	await get_tree().process_frame
+	for x in 12:
+		_b(Vector3i(x, 0, 32), BlockData.Type.HOUSE)
+	await _wildlife_scan()
+	_check(WildlifeManager._birds.size() >= 2, "a big village has several birds to collide")
+	for _step in 30:
+		for b in WildlifeManager._birds:
+			WildlifeManager._bird_launch(b)
+		var seen: Dictionary = {}
+		for b in WildlifeManager._birds:
+			_check(not seen.has(b["cell"]), "birds never share a perch")
+			seen[b["cell"]] = true
 	_clear()
 	await get_tree().process_frame
 
