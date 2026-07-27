@@ -31,6 +31,9 @@ Everything else — arches, balconies, roof gardens — is decoration hung on th
 | Corner chamfers | done | 45° post on every corner where two exposed walls meet |
 | Wall jitter | done | sub-centimetre, from the cell hash |
 | Dormers | done | tier 1+, only where the roof slopes to an outside edge |
+| **Spire** | done | 4+ storeys and thin — the reward for building UP |
+| **Courtyard** | done | ring an empty cell and the hole becomes a garden |
+| **Bunting** | done | one cell of air between two equal rooftops |
 | District colour harmony | done | neighbours share a tone; ~1 in 5 ignores it |
 | Ground-level paving / plazas | **attempted, reverted** | see below |
 | Walkways between separate buildings | todo | arches only span within one building |

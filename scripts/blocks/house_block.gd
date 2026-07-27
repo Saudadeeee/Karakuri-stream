@@ -171,6 +171,15 @@ func refresh_shape() -> void:
 	var dormer: Vector3i = HouseShape.dormer_side(grid_cell)
 	if dormer != Vector3i.ZERO:
 		_build_dormer(dormer, wall_col, trim_col)
+	# --- the surprises: geometry the player never asked for, earned by a shape ---
+	if HouseShape.has_spire(grid_cell):
+		_build_spire(trim_col)
+	var court: Vector3i = HouseShape.courtyard_dir(grid_cell)
+	if court != Vector3i.ZERO:
+		_build_courtyard(court, trim_col)
+	var bunt: Vector3i = HouseShape.bunting_dir(grid_cell)
+	if bunt != Vector3i.ZERO:
+		_build_bunting(bunt)
 
 	# Everything above went into ONE mesh, grouped by colour: four or five draw
 	# calls per cell instead of one per plank.
@@ -534,6 +543,56 @@ func _build_dormer(side: Vector3i, wall_col: Color, trim_col: Color) -> void:
 		at + Vector3(0, 0.17, 0), _tint(_palette["roof"]))
 	_batch.box(_slab(out, 0.18, 0.16), at + out * 0.17 + Vector3(0, -0.01, 0), _glass_col())
 	_batch.box(_slab(out, 0.22, 0.04), at + out * 0.18 + Vector3(0, -0.11, 0), trim_col)
+
+## A tall thin tower stops being a house and becomes a landmark: a tapered spire
+## with a weathervane on top. Visible from anywhere on the island, which is the
+## whole point of rewarding someone for building UP.
+func _build_spire(trim_col: Color) -> void:
+	var roof: Color = _tint(_palette["roof"])
+	var base: float = 0.5 + ROOF_STEP[1]
+	var steps := 5
+	for i in steps:
+		var t: float = float(i) / float(steps)
+		var w: float = lerpf(0.46, 0.06, t)
+		_batch.box(Vector3(w, 0.26, w), Vector3(0, base + 0.13 + t * 1.15, 0), roof)
+	var top: float = base + 1.35
+	_batch.box(Vector3(0.05, 0.28, 0.05), Vector3(0, top, 0), trim_col)
+	# Weathervane: a little arrow across the mast, turned by the cell hash so no
+	# two towers in a town point the same way.
+	var ang: float = HouseShape.building_roll(grid_cell, 97) * TAU
+	_batch.box(Vector3(0.34, 0.04, 0.05), Vector3(0, top + 0.16, 0), trim_col,
+		Basis(Vector3(0, 1, 0), ang))
+
+## Ring an empty cell with houses and the hole becomes a planted courtyard.
+## Built INTO the neighbouring empty cell, by whichever surrounding cell owns it,
+## so it appears exactly once however many houses touch it.
+func _build_courtyard(dir: Vector3i, trim_col: Color) -> void:
+	var at := Vector3(float(dir.x), 0.0, float(dir.z))
+	var paving: Color = _tint(Color("b3a68e"))
+	_batch.box(Vector3(0.92, 0.12, 0.92), at + Vector3(0, -0.46, 0), paving)
+	# A small tree in the middle, and a bench against one side.
+	var leaf: Color = _tint(Color("6f9e5a"))
+	_batch.box(Vector3(0.09, 0.34, 0.09), at + Vector3(0, -0.23, 0), trim_col)
+	_batch.box(Vector3(0.44, 0.3, 0.44), at + Vector3(0, 0.02, 0), leaf)
+	_batch.box(Vector3(0.3, 0.24, 0.3), at + Vector3(0, 0.24, 0), leaf)
+	_batch.box(Vector3(0.34, 0.05, 0.13), at + Vector3(-0.28, -0.3, 0.26), trim_col)
+
+## A line of little flags strung across a one-cell gap between two rooftops at
+## the same height. Only the NEAR cell of the pair draws it, so the line appears
+## once rather than twice in the same place.
+func _build_bunting(dir: Vector3i) -> void:
+	var along := Vector3(float(dir.x), 0.0, float(dir.z))
+	var top: float = 0.5 + HouseShape.roof_top_height(grid_cell) + 0.16
+	var cord: Color = _tint(Color("6b5a45"))
+	var flags: Array[Color] = [_tint(ACCENT), _tint(Color("f0b53c")), _tint(Color("bcd4dd"))]
+	var span := 2.0
+	for i in 7:
+		var t: float = (float(i) + 0.5) / 7.0
+		# Sag: the cord dips in the middle the way a real line does.
+		var sag: float = sin(t * PI) * 0.16
+		var at: Vector3 = along * (t * span) + Vector3(0, top - sag, 0)
+		_batch.box(along * 0.3 + Vector3(0.03, 0.03, 0.03), at, cord)
+		_batch.box(Vector3(0.07, 0.13, 0.07), at + Vector3(0, -0.09, 0), flags[i % flags.size()])
 
 func _build_chimney(trim_col: Color) -> void:
 	var at := Vector3(0.26, 0.5 + ROOF_H * 0.55, 0.26)

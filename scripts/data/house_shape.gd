@@ -350,6 +350,75 @@ static func decor_tier(cell: Vector3i) -> int:
 		return 1
 	return 0
 
+# ------------------------------------------------------------------ surprises
+## Things the building does that the player never asked for, but that make sense
+## once they appear. This is where Townscaper's delight actually lives: you stack
+## a few cells a certain way and the town answers with something you did not know
+## was in there. Each of these is EMERGENT — a consequence of a shape, never a
+## dice roll — so finding one twice in the same configuration is reliable, and
+## that is what makes it feel like a discovered rule rather than a random prop.
+
+## How many storeys tall this building is.
+static func component_height(cell: Vector3i) -> int:
+	var info: Dictionary = _component(cell)
+	return int(info["hi"].y) - int(info["lo"].y) + 1
+
+## A SPIRE: build a tower at least four storeys tall and no more than one cell
+## thick and it stops being a house with a roof and becomes a landmark. The
+## reward for building UP rather than out, and the one piece of the town that is
+## visible from anywhere on the island.
+static func has_spire(cell: Vector3i) -> bool:
+	if not is_roof_cell(cell) or component_height(cell) < 4:
+		return false
+	var wide := 0
+	for d in SIDES:
+		if is_house(cell + d):
+			wide += 1
+	return wide <= 1
+
+## A COURTYARD: ring house cells around an empty one and the gap becomes a
+## planted courtyard rather than a hole. Returns the direction to the enclosed
+## cell, or ZERO. Ownership goes to the lexicographically first of the four
+## surrounding cells so the courtyard is built exactly once.
+static func courtyard_dir(cell: Vector3i) -> Vector3i:
+	for d in SIDES:
+		var gap: Vector3i = cell + d
+		if GridManager.has_block(gap):
+			continue
+		var ring: Array[Vector3i] = []
+		var enclosed := true
+		for e in SIDES:
+			var n: Vector3i = gap + e
+			if not is_house(n):
+				enclosed = false
+				break
+			ring.append(n)
+		if not enclosed:
+			continue
+		var owner: Vector3i = ring[0]
+		for r in ring:
+			if _less(r, owner):
+				owner = r
+		if owner == cell:
+			return d
+	return Vector3i.ZERO
+
+## BUNTING: leave exactly one cell of air between two rooftops at the same height
+## and a line of little flags gets strung across it. Rewards building a street
+## with a gap in it instead of one solid block, and it is the detail that makes a
+## town look inhabited rather than constructed.
+static func bunting_dir(cell: Vector3i) -> Vector3i:
+	if not is_roof_cell(cell):
+		return Vector3i.ZERO
+	for d in [Vector3i(1, 0, 0), Vector3i(0, 0, 1)]:
+		var gap: Vector3i = cell + d
+		var far: Vector3i = cell + d * 2
+		if GridManager.has_block(gap):
+			continue
+		if is_roof_cell(far) and roof_top_height(far) == roof_top_height(cell):
+			return d          # only the NEAR cell owns it, so the line is drawn once
+	return Vector3i.ZERO
+
 ## Windows for one exposed face: 0-2 of them, biased so ground floors (which
 ## usually carry the door) stay plainer than the storeys above. Returns local
 ## X offsets across the face.

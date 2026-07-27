@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_surprises")
+	await _sec_surprises()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
 	print("SECTION _sec_photo_and_misc")
@@ -563,6 +565,69 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7f. The surprises must be EARNED BY A SHAPE, never rolled. Finding the same
+## thing twice in the same configuration is what turns a prop into a rule the
+## player can learn and then play with on purpose.
+func _sec_surprises() -> void:
+	# SPIRE: four storeys and thin. Three storeys must NOT get one, or the
+	# reward for building up stops meaning anything.
+	_clear()
+	await get_tree().process_frame
+	for y in 3:
+		_b(Vector3i(0, y, 44), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(not HouseShape.has_spire(Vector3i(0, 2, 44)), "three storeys is not yet a landmark")
+	_b(Vector3i(0, 3, 44), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.has_spire(Vector3i(0, 3, 44)), "a four-storey tower earns its spire")
+	_check(HouseShape.component_height(Vector3i(0, 0, 44)) == 4, "building height counts storeys")
+	# Widening it takes the spire away again: a landmark has to be a TOWER.
+	_b(Vector3i(1, 3, 44), BlockData.Type.HOUSE)
+	_b(Vector3i(-1, 3, 44), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(not HouseShape.has_spire(Vector3i(0, 3, 44)), "a fat top is a roof, not a spire")
+
+	# COURTYARD: ring an empty cell and it becomes a garden — owned by exactly
+	# ONE of the four surrounding cells so it is never built twice.
+	_clear()
+	await get_tree().process_frame
+	var ring := [Vector3i(1, 0, 46), Vector3i(-1, 0, 46), Vector3i(0, 0, 47), Vector3i(0, 0, 45)]
+	for c in ring:
+		_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var owners := 0
+	for c in ring:
+		if HouseShape.courtyard_dir(c) != Vector3i.ZERO:
+			owners += 1
+	_check(owners == 1, "an enclosed gap grows exactly one courtyard")
+	# Fill the hole and the courtyard has nowhere to be.
+	_b(Vector3i(0, 0, 46), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var still := 0
+	for c in ring:
+		if HouseShape.courtyard_dir(c) != Vector3i.ZERO:
+			still += 1
+	_check(still == 0, "filling the gap removes the courtyard")
+
+	# BUNTING: exactly one cell of air between two rooftops of equal height, and
+	# only the near side draws it so the line is not doubled.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 48), BlockData.Type.HOUSE)
+	_b(Vector3i(2, 0, 48), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.bunting_dir(Vector3i(0, 0, 48)) == Vector3i(1, 0, 0), "a one-cell gap strings bunting")
+	_check(HouseShape.bunting_dir(Vector3i(2, 0, 48)) == Vector3i.ZERO, "only one end draws the line")
+	# Two cells apart is a street, not a washing line.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 48), BlockData.Type.HOUSE)
+	_b(Vector3i(3, 0, 48), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.bunting_dir(Vector3i(0, 0, 48)) == Vector3i.ZERO, "a wider gap gets no bunting")
+	_clear()
+	await get_tree().process_frame
 
 ## 7e. Water must land ON the island. The lawn is a sculpted MESH, not grid
 ## blocks, so nothing in GridManager stops a falling stream at it — a spout on

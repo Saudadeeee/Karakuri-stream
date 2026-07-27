@@ -65,14 +65,12 @@ func _ready() -> void:
 ## A small sample build so a screenshot shows the actual game, not empty ground.
 func _village(root: Node) -> void:
 	var plan := []
-	# Two supported towers with a span between them -> arches, plus a coloured row.
+	# One of each surprise: a 5-storey thin TOWER (spire), a ring of cells around
+	# an empty middle (courtyard), and two rooftops one cell apart (bunting).
 	for e in [
-		[0,0,0],[0,1,0],[0,2,0],
-		[3,0,0],[3,1,0],[3,2,0],
-		[1,2,0],[2,2,0],
-		[1,1,0],[2,1,0],
-		[0,0,3],[1,0,3],[2,0,3],[1,1,3],
-		[5,0,1],[5,0,2],[5,1,1],
+		[0,0,0],[0,1,0],[0,2,0],[0,3,0],[0,4,0],
+		[3,0,0],[4,0,0],[5,0,0],[3,0,1],[5,0,1],[3,0,2],[4,0,2],[5,0,2],
+		[0,0,4],[2,0,4],
 	]:
 		plan.append([Vector3i(e[0]-2, e[1], e[2]-1), BlockData.Type.HOUSE])
 	for e in plan:

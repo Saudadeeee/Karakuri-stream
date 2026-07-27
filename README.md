@@ -60,6 +60,17 @@ Each building gets exactly one front door and one chimney however odd its shape,
 and everything places itself the *same way every time*, so a village looks
 identical after you reload it.
 
+Some shapes are worth more than others, and the town will tell you so:
+
+- Build **four storeys straight up, one cell thick** and the roof becomes a
+  **spire** — the one landmark visible from anywhere on the island.
+- **Ring an empty cell** with houses and the hole becomes a planted **courtyard**.
+- Leave **exactly one cell of air** between two rooftops of the same height and
+  **bunting** is strung across the gap.
+
+None of these are random. The same shape gives the same answer every time, so
+once you find one you can go and build it on purpose.
+
 ### Animals
 
 Wildlife arrives because of what you built, and does something back:
