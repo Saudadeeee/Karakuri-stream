@@ -65,14 +65,20 @@ func _ready() -> void:
 ## A small sample build so a screenshot shows the actual game, not empty ground.
 func _village(root: Node) -> void:
 	var plan := []
-	# One of each surprise: a 5-storey thin TOWER (spire), a ring of cells around
-	# an empty middle (courtyard), and two rooftops one cell apart (bunting).
+	# The four reported cases, side by side and well separated:
+	#  A x=-6  four-storey tower  -> spire (is it a house with a spike on top?)
+	#  B x=-2  base + ONE cell out -> what supports a 1-cell overhang?
+	#  C x=1   base + TWO cells out -> columns
+	#  D x=5   two towers + a 2-cell span -> arch underside
 	for e in [
-		[0,0,0],[0,1,0],[0,2,0],[0,3,0],[0,4,0],
-		[3,0,0],[4,0,0],[5,0,0],[3,0,1],[5,0,1],[3,0,2],[4,0,2],[5,0,2],
-		[0,0,4],[2,0,4],
+		[-6,0,0],[-6,1,0],[-6,2,0],[-6,3,0],
+		[-2,0,0],[-2,1,0],[-1,1,0],
+		[1,0,0],[1,1,0],[2,1,0],[3,1,0],
+		[5,0,0],[5,1,0],[5,2,0], [8,0,0],[8,1,0],[8,2,0], [6,2,0],[7,2,0],
+		[-6,0,3],[-6,1,3],[-6,2,3],[-5,0,3],
 	]:
-		plan.append([Vector3i(e[0]-2, e[1], e[2]-1), BlockData.Type.HOUSE])
+
+		plan.append([Vector3i(e[0], e[1], e[2]), BlockData.Type.HOUSE])
 	for e in plan:
 		var c: Vector3i = e[0]
 		var n: Node3D = BlockFactory.instantiate(e[1])

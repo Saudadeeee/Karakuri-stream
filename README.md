@@ -64,6 +64,8 @@ Some shapes are worth more than others, and the town will tell you so:
 
 - Build **four storeys straight up, one cell thick** and the roof becomes a
   **spire** — the one landmark visible from anywhere on the island.
+- Put a roof **in the shadow of a taller part** and it becomes a railed
+  **roof terrace** instead of a pitched roof.
 - **Ring an empty cell** with houses and the hole becomes a planted **courtyard**.
 - Leave **exactly one cell of air** between two rooftops of the same height and
   **bunting** is strung across the gap.

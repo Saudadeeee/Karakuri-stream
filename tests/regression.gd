@@ -582,6 +582,32 @@ func _sec_surprises() -> void:
 	await get_tree().process_frame
 	_check(HouseShape.has_spire(Vector3i(0, 3, 44)), "a four-storey tower earns its spire")
 	_check(HouseShape.component_height(Vector3i(0, 0, 44)) == 4, "building height counts storeys")
+
+	# A TERRACE, not a spire, when something taller stands beside this roof — and
+	# a terraced cell must never also try to be a spire, or the tower grows both.
+	_b(Vector3i(1, 0, 44), BlockData.Type.HOUSE)
+	_b(Vector3i(1, 1, 44), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.is_terrace(Vector3i(1, 0, 44)) == false, "a roof under its own stack is not a terrace")
+	_b(Vector3i(2, 0, 44), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(HouseShape.is_terrace(Vector3i(2, 0, 44)), "a roof beside a taller part becomes a terrace")
+	_check(not HouseShape.has_spire(Vector3i(2, 0, 44)), "a terrace never doubles as a spire")
+
+	# An arch across a two-cell gap is ONE curve: both cells agree on the span
+	# and each knows which slice of it to draw. Per-cell semicircles produced a
+	# row of bumps under a bridge instead of an arch.
+	_clear()
+	await get_tree().process_frame
+	for c in [Vector3i(0, 0, 50), Vector3i(0, 1, 50), Vector3i(3, 0, 50), Vector3i(3, 1, 50),
+			Vector3i(1, 1, 50), Vector3i(2, 1, 50)]:
+		_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var r1: Dictionary = HouseShape.arch_run(Vector3i(1, 1, 50))
+	var r2: Dictionary = HouseShape.arch_run(Vector3i(2, 1, 50))
+	_check(not r1.is_empty() and int(r1["length"]) == 2, "a two-cell span is one arch of length 2")
+	_check(int(r1["index"]) == 0 and int(r2["index"]) == 1, "each cell knows its slice of the span")
+	_check(r1["axis"] == r2["axis"], "both halves agree on the span axis")
 	# Widening it takes the spire away again: a landmark has to be a TOWER.
 	_b(Vector3i(1, 3, 44), BlockData.Type.HOUSE)
 	_b(Vector3i(-1, 3, 44), BlockData.Type.HOUSE)

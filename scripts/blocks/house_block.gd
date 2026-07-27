@@ -160,8 +160,14 @@ func refresh_shape() -> void:
 	_build_underside(ctx, trim_col)
 	if ctx["has_above"]:
 		_build_storey_band(ctx, trim_col)
-	if ctx["roof"]:
+	# A spire is not an ornament bolted to a roof — it IS the top of the tower.
+	# Building both gave a normal pitched house with a spike stuck through it.
+	var spire: bool = HouseShape.has_spire(grid_cell)
+	var terrace: bool = HouseShape.is_terrace(grid_cell)
+	if ctx["roof"] and not spire and not terrace:
 		_build_roof(ctx)
+	elif terrace:
+		_build_terrace(ctx, trim_col)
 	if ctx["chimney"]:
 		_build_chimney(trim_col)
 	# Only a real building earns a roof garden, and only where its roof is flat
@@ -172,7 +178,7 @@ func refresh_shape() -> void:
 	if dormer != Vector3i.ZERO:
 		_build_dormer(dormer, wall_col, trim_col)
 	# --- the surprises: geometry the player never asked for, earned by a shape ---
-	if HouseShape.has_spire(grid_cell):
+	if spire:
 		_build_spire(trim_col)
 	var court: Vector3i = HouseShape.courtyard_dir(grid_cell)
 	if court != Vector3i.ZERO:
@@ -384,24 +390,39 @@ const ARCH_SEGMENTS := 7
 const ARCH_RISE := 0.62
 
 func _build_arch(axis: Vector3i, trim_col: Color) -> void:
+	var run: Dictionary = HouseShape.arch_run(grid_cell)
+	if run.is_empty():
+		return
+	var length: int = int(run["length"])
+	var index: int = int(run["index"])
 	var along := Vector3(float(axis.x), 0.0, float(axis.z))
 	var across := Vector3(float(axis.z), 0.0, float(axis.x)).normalized()
+	# One semicircle spans the WHOLE run; this cell draws only its own slice of
+	# it, in the run's local coordinates, so the pieces join into a single curve.
+	var span: float = float(length)
+	var rise: float = ARCH_RISE * clampf(span * 0.55, 0.7, 1.6)
 	var prev := Vector3.ZERO
-	for i in ARCH_SEGMENTS + 1:
-		var ang: float = PI * float(i) / float(ARCH_SEGMENTS)
-		# Runs end to end along the axis while dipping below the cell floor.
-		var pt: Vector3 = along * (cos(ang) * 0.5) + Vector3(0, -0.5 - ARCH_RISE * sin(ang), 0)
+	var segs: int = ARCH_SEGMENTS
+	for i in segs + 1:
+		# u runs 0..1 across the whole span; this cell covers [index, index+1].
+		var u: float = (float(index) + float(i) / float(segs)) / span
+		var ang: float = PI * u
+		# Position along the arch relative to THIS cell's centre.
+		var offset: float = (u * span) - (float(index) + 0.5)
+		var pt: Vector3 = along * offset + Vector3(0, -0.5 - rise * sin(ang), 0)
 		if i > 0:
 			var seg: Vector3 = pt - prev
-			# Rotate each chord about the opening's axis so the fan reads as a curve.
 			var tilt: float = atan2(seg.y, along.dot(seg))
 			_batch.box(Vector3(seg.length() + 0.07, 0.15, 0.88), (prev + pt) * 0.5,
 				trim_col, Basis(across, tilt) * _axis_basis(along))
 		prev = pt
-	# Piers at the two ends, so the arch visibly lands on something.
-	for s2 in [-1.0, 1.0]:
+	# Piers only at the ENDS of the run, where the arch actually lands.
+	if index == 0:
 		_batch.box(along.abs() * 0.17 + across.abs() * 0.86 + Vector3(0, 0.44, 0),
-			along * 0.42 * s2 + Vector3(0, -0.74, 0), trim_col)
+			along * -0.42 + Vector3(0, -0.74, 0), trim_col)
+	if index == length - 1:
+		_batch.box(along.abs() * 0.17 + across.abs() * 0.86 + Vector3(0, 0.44, 0),
+			along * 0.42 + Vector3(0, -0.74, 0), trim_col)
 
 ## Orients a box whose local +X should run along `along` (which is a unit axis).
 func _axis_basis(along: Vector3) -> Basis:
@@ -410,17 +431,28 @@ func _axis_basis(along: Vector3) -> Basis:
 ## Diagonal brackets under a cantilevered storey, one per supported neighbour it
 ## juts out from — the joinery that makes an overhang look deliberate.
 func _build_corbels(trim_col: Color) -> void:
+	# The bracket springs FROM the wall that holds this cell up, so it sits on the
+	# +out side — toward the support. It used to be placed at -out and a full cell
+	# below the floor, which put it on the far side hanging in open air, i.e.
+	# invisible. A one-cell overhang therefore appeared to be supported by nothing
+	# while a two-cell one got proper columns.
 	for d in HouseShape.corbel_sides(grid_cell):
 		var out := Vector3(float(d.x), 0.0, float(d.z))
 		var along := Vector3(float(d.z), 0.0, float(-d.x))
-		for s in [-0.3, 0.3]:
-			var at: Vector3 = -out * 0.34 + along * s + Vector3(0, -0.62, 0)
-			var size := Vector3(0.42, 0.1, 0.12) if absf(out.x) > 0.5 else Vector3(0.12, 0.1, 0.42)
-			var tilt := Basis(Vector3(0, 0, 1), 0.6 * signf(out.x)) if absf(out.x) > 0.5 \
-				else Basis(Vector3(1, 0, 0), -0.6 * signf(out.z))
+		# Chunky and steeply raked, so a one-cell overhang reads as SUPPORTED at a
+		# glance. Slim brackets were technically there and told the player nothing:
+		# beside a two-cell overhang on obvious columns they looked like the
+		# building was simply floating.
+		for s2 in [-0.3, 0.3]:
+			var at: Vector3 = out * 0.24 + along * s2 + Vector3(0, -0.62, 0)
+			var size := Vector3(0.66, 0.2, 0.2) if absf(out.x) > 0.5 else Vector3(0.2, 0.2, 0.66)
+			var tilt := Basis(Vector3(0, 0, 1), -0.72 * signf(out.x)) if absf(out.x) > 0.5 				else Basis(Vector3(1, 0, 0), 0.72 * signf(out.z))
 			_batch.box(size, at, trim_col, tilt)
-	# A sill under the overhanging floor so the corbels have something to carry.
-	_batch.box(Vector3(0.92, 0.08, 0.92), Vector3(0, -0.52, 0), trim_col)
+			# A short post at the bracket's outer foot: the visual "this is
+			# carrying weight" cue that the columns give for free.
+			_batch.box(Vector3(0.12, 0.3, 0.12), out * -0.16 + along * s2 + Vector3(0, -0.78, 0), trim_col)
+	# Sill under the overhanging floor, for the brackets to carry.
+	_batch.box(Vector3(0.96, 0.1, 0.96), Vector3(0, -0.5, 0), trim_col)
 
 ## Belt course at the top of a wall that has another storey above it. A tower
 ## without one is a single tall box; with one it reads as floors stacked up.
@@ -544,18 +576,40 @@ func _build_dormer(side: Vector3i, wall_col: Color, trim_col: Color) -> void:
 	_batch.box(_slab(out, 0.18, 0.16), at + out * 0.17 + Vector3(0, -0.01, 0), _glass_col())
 	_batch.box(_slab(out, 0.22, 0.04), at + out * 0.18 + Vector3(0, -0.11, 0), trim_col)
 
+## A flat, railed roof terrace: paving, a low balustrade on every open edge, and
+## a couple of pots. Built where a taller neighbour stands over this roof, so a
+## stepped town grows usable ledges instead of a staircase of pitched roofs.
+func _build_terrace(ctx: Dictionary, trim_col: Color) -> void:
+	var deck: Color = _tint(Color("b3a68e"))
+	_batch.box(Vector3(1.04, 0.1, 1.04), Vector3(0, 0.5, 0), deck)
+	for side in ctx["open_sides"]:
+		var out := Vector3(float(side.x), 0.0, float(side.z))
+		# Balustrade: a capped low wall, only on edges that face out.
+		_batch.box(_face_size(side, 1.04, 0.09), out * 0.48 + Vector3(0, 0.68, 0), trim_col)
+		_batch.box(_face_size(side, 1.04, 0.13), out * 0.48 + Vector3(0, 0.79, 0), deck)
+	var leaf: Color = _tint(Color("6f9e5a"))
+	for i in 2:
+		var a: float = HouseShape.building_roll(grid_cell, 41 + i) * TAU
+		var at := Vector3(cos(a) * 0.28, 0.6, sin(a) * 0.28)
+		_batch.box(Vector3(0.16, 0.14, 0.16), at, trim_col)
+		_batch.box(Vector3(0.13, 0.2, 0.13), at + Vector3(0, 0.16, 0), leaf)
+
 ## A tall thin tower stops being a house and becomes a landmark: a tapered spire
 ## with a weathervane on top. Visible from anywhere on the island, which is the
 ## whole point of rewarding someone for building UP.
 func _build_spire(trim_col: Color) -> void:
 	var roof: Color = _tint(_palette["roof"])
-	var base: float = 0.5 + ROOF_STEP[1]
-	var steps := 5
+	# The spire IS the roof now, so it starts at the wall head and carries a proper
+	# eaves course — a bare needle on a flat top read as a spike stuck through a
+	# house rather than as the top of a tower.
+	_batch.box(Vector3(1.16, 0.1, 1.16), Vector3(0, 0.54, 0), roof)
+	var base: float = 0.59
+	var steps := 6
 	for i in steps:
 		var t: float = float(i) / float(steps)
-		var w: float = lerpf(0.46, 0.06, t)
-		_batch.box(Vector3(w, 0.26, w), Vector3(0, base + 0.13 + t * 1.15, 0), roof)
-	var top: float = base + 1.35
+		var w: float = lerpf(0.92, 0.14, t)
+		_batch.box(Vector3(w, 0.3, w), Vector3(0, base + 0.15 + t * 1.5, 0), roof)
+	var top: float = base + 1.72
 	_batch.box(Vector3(0.05, 0.28, 0.05), Vector3(0, top, 0), trim_col)
 	# Weathervane: a little arrow across the mast, turned by the cell hash so no
 	# two towers in a town point the same way.

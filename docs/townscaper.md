@@ -24,14 +24,15 @@ Everything else — arches, balconies, roof gardens — is decoration hung on th
 | Merged walls | done | shared walls vanish; a row is one building |
 | Roof as a height field | done | gable / hip / pyramid / valley from one rule |
 | One door, one chimney per building | done | via component flood, cached on grid version |
-| Stilts, corbels, arches | done | arch spans up to 4 cells |
+| Stilts, corbels, arches | done | one arch per SPAN, not per cell |
 | Per-building colour | done | 8 saturated colourways, building-level roll |
 | Balcony / awning / shutters / planter / roof garden | done | gated on `decor_tier` |
 | Reflow pop on neighbours | done | the "town reacts" beat |
 | Corner chamfers | done | 45° post on every corner where two exposed walls meet |
 | Wall jitter | done | sub-centimetre, from the cell hash |
 | Dormers | done | tier 1+, only where the roof slopes to an outside edge |
-| **Spire** | done | 4+ storeys and thin — the reward for building UP |
+| **Spire** | done | 4+ storeys and thin; REPLACES the roof, never sits on one |
+| **Roof terrace** | done | a roof in the shelter of a taller part becomes a railed deck |
 | **Courtyard** | done | ring an empty cell and the hole becomes a garden |
 | **Bunting** | done | one cell of air between two equal rooftops |
 | District colour harmony | done | neighbours share a tone; ~1 in 5 ignores it |

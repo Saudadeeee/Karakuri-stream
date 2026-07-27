@@ -165,6 +165,30 @@ static func is_overhang(cell: Vector3i) -> bool:
 ## viaduct and wants piers, which is what the stilt path already does.
 const ARCH_SPAN := 4
 
+## Where this cell sits inside a spanning run: {axis, index, length}. An arch has
+## to be drawn as ONE curve over the WHOLE gap — each cell rendering its own
+## complete semicircle produced a row of separate bumps under a bridge instead of
+## an arch, which is what a two-cell span actually looked like.
+static func arch_run(cell: Vector3i) -> Dictionary:
+	var axis: Vector3i = arch_axis(cell)
+	if axis == Vector3i.ZERO:
+		return {}
+	# Walk back to the first airborne cell of the run, then measure it.
+	var start: Vector3i = cell
+	while is_house(start - axis) and support_drop(start - axis) > 0:
+		start -= axis
+	var length := 0
+	var c: Vector3i = start
+	while is_house(c) and support_drop(c) > 0:
+		length += 1
+		c += axis
+	var index := 0
+	c = start
+	while c != cell:
+		index += 1
+		c += axis
+	return {"axis": axis, "index": index, "length": length}
+
 static func arch_axis(cell: Vector3i) -> Vector3i:
 	if support_drop(cell) == 0:
 		return Vector3i.ZERO
@@ -363,12 +387,27 @@ static func component_height(cell: Vector3i) -> int:
 	var info: Dictionary = _component(cell)
 	return int(info["hi"].y) - int(info["lo"].y) + 1
 
+## A ROOF TERRACE. A rooftop that sits in the shelter of a TALLER part of the
+## town becomes a flat railed terrace instead of a pitched roof — which is both
+## what a real builder would do with that space and the thing that gives a
+## stepped Townscaper silhouette its usable ledges.
+##
+## The test is deliberately about the NEIGHBOURHOOD, not the cell: a roof only
+## becomes a terrace when something next to it stands over it.
+static func is_terrace(cell: Vector3i) -> bool:
+	if not is_roof_cell(cell):
+		return false
+	for d in SIDES:
+		if is_house(cell + d + UP):
+			return true
+	return false
+
 ## A SPIRE: build a tower at least four storeys tall and no more than one cell
 ## thick and it stops being a house with a roof and becomes a landmark. The
 ## reward for building UP rather than out, and the one piece of the town that is
 ## visible from anywhere on the island.
 static func has_spire(cell: Vector3i) -> bool:
-	if not is_roof_cell(cell) or component_height(cell) < 4:
+	if not is_roof_cell(cell) or component_height(cell) < 4 or is_terrace(cell):
 		return false
 	var wide := 0
 	for d in SIDES:
