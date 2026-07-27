@@ -76,8 +76,21 @@ func _on_cleared() -> void:
 				c["root"].queue_free()
 		herd.clear()
 
+## Halve a population for the web LITE profile, but never round a real count
+## down to nothing — one bird is the whole point of birds.
+##
+## The floor used to be unconditional: `maxi(1, n / 2)`, which turned a wanted
+## count of ZERO into ONE. On an empty grid every pool is empty, so the forced
+## spawn called _rand_cell() on an empty array — `randi() % 0`.
+##
+## Desktop GDScript logs "Modulo by zero" and carries on. WebAssembly does not:
+## it TRAPS, and the trap kills the Godot main loop outright. The web build was
+## therefore dying on the main menu every time, leaving the last rendered frame
+## frozen on screen — which reads exactly like "0 fps, stuck, still LITE".
 func _cap(n: int) -> int:
-	return maxi(1, n / 2) if QualityManager.lite else n
+	if n <= 0 or not QualityManager.lite:
+		return n
+	return maxi(1, n / 2)
 
 # --------------------------------------------------------------- world scan
 ## One pass over the grid, throttled. Everything the species rules need is
@@ -164,7 +177,13 @@ func _poof(c: Dictionary) -> void:
 		SceneryManager.burst(c["root"].global_position + Vector3(0, 0.2, 0), Color(0.9, 0.9, 0.85))
 		c["root"].queue_free()
 
+## Second line of defence. `randi() % 0` is a hard WASM trap that takes the whole
+## engine down, so this must never be reachable with an empty pool even if a
+## future caller forgets to check.
 func _rand_cell(pool: Array[Vector3i]) -> Vector3i:
+	if pool.is_empty():
+		push_warning("wildlife: _rand_cell on an empty pool")
+		return Vector3i.ZERO
 	return pool[randi() % pool.size()]
 
 ## Where a creature's feet go when it stands on `cell`. Not simply the top face:

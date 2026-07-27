@@ -279,6 +279,26 @@ func _sec_wildlife() -> void:
 	_check(WildlifeManager._birds.is_empty(), "no birds without a house")
 	_check(WildlifeManager._cats.is_empty(), "no cats without a village")
 
+	# The LITE profile must not conjure creatures out of an empty world. _cap()
+	# halved populations with an unconditional maxi(1, n/2), so a wanted count of
+	# ZERO became ONE, and the forced spawn drew from an empty pool: randi() % 0.
+	# Desktop logs "Modulo by zero" and shrugs; WebAssembly TRAPS and kills the
+	# engine, so the web build died on the menu every single time.
+	var was_lite: bool = QualityManager.lite
+	QualityManager.lite = true
+	_check(WildlifeManager._cap(0) == 0, "lite must not turn zero creatures into one")
+	_check(WildlifeManager._cap(1) == 1, "lite still keeps a lone creature")
+	_check(WildlifeManager._cap(4) == 2, "lite halves a real population")
+	WildlifeManager._dirty = true
+	WildlifeManager._timer = 999.0
+	await _wildlife_scan()
+	_check(WildlifeManager._birds.is_empty() and WildlifeManager._cats.is_empty()
+		and WildlifeManager._ducks.is_empty(), "empty world spawns nothing on lite")
+	# And the pool draw itself must be safe even if a caller ever slips through.
+	_check(WildlifeManager._rand_cell([] as Array[Vector3i]) == Vector3i.ZERO,
+		"drawing from an empty pool cannot divide by zero")
+	QualityManager.lite = was_lite
+
 	# One house earns ONE bird — that first bird is the whole point of the
 	# feature, since it can land on a bell and play it — but nothing more, and
 	# no cat yet: two houses is not a village.
