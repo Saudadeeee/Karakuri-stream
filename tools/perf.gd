@@ -15,6 +15,10 @@ var _lite := true
 var _houses := 24
 var _label := "run"
 var _churn := false
+## Place and remove a block during the sample window, i.e. actually play.
+var _build_churn := true
+var _scene: Node
+var _probe_type: int = BlockData.Type.HOUSE
 var _wood := 0
 
 func _ready() -> void:
@@ -25,6 +29,8 @@ func _ready() -> void:
 		elif a.begins_with("houses="): _houses = int(a.substr(7))
 		elif a.begins_with("label="): _label = a.substr(6)
 		elif a.begins_with("churn="): _churn = a.substr(6) != "0"
+		elif a.begins_with("place="): _build_churn = a.substr(6) != "0"
+		elif a.begins_with("ptype="): _probe_type = int(a.substr(6))
 		elif a.begins_with("wood="): _wood = int(a.substr(5))
 
 	# WITHOUT THIS EVERY MEASUREMENT IS A LIE. With vsync on, every configuration
@@ -40,6 +46,7 @@ func _ready() -> void:
 	QualityManager.lite = _lite
 
 	var s: Node = load(target).instantiate()
+	_scene = s
 	add_child(s)
 	for _f in range(45):
 		await get_tree().process_frame
@@ -55,11 +62,23 @@ func _ready() -> void:
 	var samples: Array[float] = []
 	var t0: int = Time.get_ticks_usec()
 	var prev: int = t0
-	for _f in range(frames):
+	var build_cell := Vector3i(-6, 0, -5)
+	for f in range(frames):
 		# Worst case: the isosurface is asked to re-solve as often as its throttle
 		# allows, which is what a machine with flowing water actually does.
 		if _churn:
 			VoxelSurfaceManager._dirty = true
+		# And the player BUILDS. `churn` used to only dirty the isosurface, so
+		# every run measured a finished garden being looked at — never the act of
+		# placing something, which is the only thing the player ever does. A cost
+		# that scaled with the size of the town was invisible here for exactly
+		# that reason. Place and remove a house on the edge of the village, on a
+		# beat, so the spike lands inside the sample window.
+		if _build_churn and f % 30 == 0:
+			if GridManager.has_block(build_cell):
+				GridManager.remove_block(build_cell)
+			else:
+				_place(_scene, build_cell, _probe_type)
 		await get_tree().process_frame
 		var now: int = Time.get_ticks_usec()
 		samples.append(float(now - prev) / 1000.0)

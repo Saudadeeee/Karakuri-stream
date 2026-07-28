@@ -41,6 +41,13 @@ const PALETTES: Array[Dictionary] = [
 ## Awning cloth. The one saturated accent on an otherwise quiet building, so a
 ## street reads as lived-in rather than as a colour swatch.
 const ACCENT := Color("e07a5f")
+## One green for every leaf on the building. `MeshBatch` cuts a surface per
+## colour, so each shade a cell uses is a draw call it keeps forever — and
+## planter, roof garden and courtyard had each grown their own foliage green,
+## three shades within 0.03 per channel of one another. No two of them ever sit
+## side by side, so the split bought nothing and cost a surface. The deliberate
+## two-tone that IS visible — dark tufts on a lighter planter box — stays.
+const FOLIAGE := Color("8cb369")
 const GLASS_DAY := Color("6f8794")
 const GLASS_NIGHT := Color("ffd79a")
 const SNOW_THEME := 2
@@ -75,6 +82,7 @@ var _dirty: bool = false
 var _visual: Node3D
 var _batch: MeshBatch
 var _base_palette: int = 0
+var _digest_cache: String = ""
 var _palette: Dictionary = PALETTES[0]
 
 ## The player's variant picks a FAMILY; the building picks its own exact shade
@@ -143,14 +151,54 @@ func _on_grid_changed(cell: Vector3i) -> void:
 	# would put geometry back for a block that no longer exists.
 	if not HouseShape.is_house(grid_cell):
 		return
-	if cell == grid_cell or HouseShape.is_house(cell) or GridManager.get_block(cell) == null:
-		_dirty = true
-		set_process(true)
+	if cell != grid_cell and not HouseShape.affects(grid_cell, cell):
 		return
-	var d: Vector3i = cell - grid_cell
-	if absi(d.x) <= 1 and absi(d.y) <= 1 and absi(d.z) <= 1:
-		_dirty = true
-		set_process(true)
+	_dirty = true
+	set_process(true)
+
+## Every answer this cell's geometry is built from, in one string. Anything the
+## build asks `HouseShape` must appear here — leave a query out and the cell
+## keeps stale geometry when only that query's answer changed. `_sec_no_stale_
+## geometry` in the regression suite is the guard: it rebuilds a town by editing
+## and again from scratch and demands the two match exactly, which is precisely
+## the failure a missing entry produces.
+func _digest(ctx: Dictionary) -> String:
+	var d: Array = [ctx, _base_palette, _palette, MapThemes.current]
+	if not _placed:
+		return str(d)
+	d.append([HouseShape.has_spire(grid_cell), HouseShape.is_terrace(grid_cell),
+			HouseShape.has_roof_garden(grid_cell), HouseShape.has_shutters(grid_cell)])
+	d.append([HouseShape.dormer_side(grid_cell), HouseShape.courtyard_dir(grid_cell),
+			HouseShape.bunting_dir(grid_cell)])
+	d.append([HouseShape.arch_axis(grid_cell), HouseShape.arch_run(grid_cell),
+			HouseShape.corbel_sides(grid_cell), HouseShape.roof_top_height(grid_cell)])
+	var corners: Array = []
+	for ax in [-1, 1]:
+		for az in [-1, 1]:
+			corners.append(HouseShape.owns_corner(grid_cell, ax, az))
+	d.append(corners)
+	# The roof surface is stitched from the height field and from which sides the
+	# roof runs off, so both go in.
+	var roof: Array = []
+	for a in [-1, 0, 1]:
+		for b in [-1, 0, 1]:
+			roof.append(HouseShape.roof_level(grid_cell.x * 2 + a, grid_cell.z * 2 + b, grid_cell.y))
+	for n in [Vector3i(-1, 0, 0), Vector3i(1, 0, 0), Vector3i(0, 0, -1), Vector3i(0, 0, 1)]:
+		roof.append(HouseShape.is_roof_cell(grid_cell + n))
+	d.append(roof)
+	# Per-face trim. These take the side and the ground/stacked flags, so they
+	# cannot be inferred from anything already in the list.
+	var ground: bool = not bool(ctx["stacked"])
+	var faces: Array = []
+	for side in ctx["open_sides"]:
+		var is_door: bool = ctx["door_side"] == side
+		faces.append([side, is_door,
+				HouseShape.window_offsets(grid_cell, side, is_door),
+				HouseShape.has_balcony(grid_cell, side, ctx["stacked"]),
+				HouseShape.has_planter(grid_cell, side, ground),
+				HouseShape.has_awning(grid_cell, side, true)])
+	d.append(faces)
+	return str(d)
 
 func apply_variant(v: Dictionary) -> void:
 	_base_palette = int(v.get("palette", 0)) % PALETTES.size()
@@ -159,14 +207,31 @@ func apply_variant(v: Dictionary) -> void:
 
 # ----------------------------------------------------------------- assembly
 func refresh_shape() -> void:
+	var ctx: Dictionary = HouseShape.context(grid_cell) if _placed else HouseShape.lone_context()
+	_resolve_palette()
+
+	# Most cells told to refresh have nothing to change. A building's door,
+	# chimney and storey count come from the whole component, so adding one cell
+	# to an 80-cell building legitimately concerns all 80 — but only the two
+	# nearest the change actually LOOK different, and the other 78 were throwing
+	# away a finished mesh and generating an identical one. At ~1.75 ms a cell
+	# that was 140 ms in the frame after every click, which is the hitch a player
+	# feels as the town gets big.
+	#
+	# So: work out what this cell has decided, and if it has decided exactly what
+	# it decided last time, keep the geometry. The decisions are dictionary
+	# lookups over a cached flood; the geometry is ~1000 triangles and ten
+	# surface uploads.
+	var digest := _digest(ctx)
+	if digest == _digest_cache and _visual != null and is_instance_valid(_visual):
+		return
+	_digest_cache = digest
+
 	if _visual != null and is_instance_valid(_visual):
 		_visual.queue_free()
 	_glow.clear()
 	_visual = Node3D.new()
 	add_child(_visual)
-
-	var ctx: Dictionary = HouseShape.context(grid_cell) if _placed else HouseShape.lone_context()
-	_resolve_palette()
 	_batch = MeshBatch.new()
 	var wall_col: Color = _tint(_palette["wall"])
 	var trim_col: Color = _tint(_palette["trim"])
@@ -295,7 +360,7 @@ func _build_window(out: Vector3, offset: Vector3, trim_col: Color, ground: bool 
 	_batch.box(_slab(out, 0.22, 0.22), centre + out * 0.03, _glass_col())
 	# Flower box under the sill — small, but it's what makes a wall look lived-in.
 	_batch.box(_slab(out, 0.26, 0.07), centre + out * 0.05 + Vector3(0, -0.19, 0), trim_col)
-	_batch.box(_slab(out, 0.22, 0.06), centre + out * 0.06 + Vector3(0, -0.14, 0), _tint(Color("8cb369")))
+	_batch.box(_slab(out, 0.22, 0.06), centre + out * 0.06 + Vector3(0, -0.14, 0), _tint(FOLIAGE))
 	var across := Vector3(absf(out.z), 0.0, absf(out.x))
 	# Shutters are a per-BUILDING trait, so a house either has them everywhere or
 	# nowhere — half-shuttered walls look like an unfinished job, not a style.
@@ -353,7 +418,7 @@ func _side_of(out: Vector3) -> Vector3i:
 func _build_planter(out: Vector3, horiz: Vector3, trim_col: Color) -> void:
 	var at: Vector3 = out * 0.56 + Vector3(0, -0.44, 0)
 	_batch.box(_slab(out, 0.5, 0.14) + out.abs() * 0.1, at, trim_col)
-	_batch.box(_slab(out, 0.44, 0.1) + out.abs() * 0.08, at + Vector3(0, 0.08, 0), _tint(Color("8cb369")))
+	_batch.box(_slab(out, 0.44, 0.1) + out.abs() * 0.08, at + Vector3(0, 0.08, 0), _tint(FOLIAGE))
 	for s2 in [-0.14, 0.13]:
 		_batch.box(Vector3(0.07, 0.16, 0.07), at + horiz * s2 + Vector3(0, 0.16, 0), _tint(Color("7aa85c")))
 
@@ -610,7 +675,7 @@ func _emit_roof_rim(top: Array, under: Array, col: Color) -> void:
 ## the normal play camera, so it sits on the highest surface the building has.
 func _build_roof_garden(trim_col: Color) -> void:
 	var top: float = 0.5 + ROOF_STEP[HouseShape.ROOF_LEVELS] + 0.02
-	var leaf: Color = _tint(Color("8cb369"))
+	var leaf: Color = _tint(FOLIAGE)
 	for i in 3:
 		var a: float = HouseShape.building_roll(grid_cell, 31 + i) * TAU
 		var at := Vector3(cos(a) * 0.22, top, sin(a) * 0.22)
@@ -655,7 +720,7 @@ func _build_terrace(ctx: Dictionary, trim_col: Color) -> void:
 		# _slab is the helper for a low, wide, thin panel on a face.
 		_batch.box(_slab(out, 1.04, 0.18), out * 0.46 + Vector3(0, 0.63, 0), trim_col)
 		_batch.box(_slab(out, 1.04, 0.06) + out.abs() * 0.05, out * 0.46 + Vector3(0, 0.73, 0), deck)
-	var leaf: Color = _tint(Color("6f9e5a"))
+	var leaf: Color = _tint(FOLIAGE)
 	for i in 2:
 		var a: float = HouseShape.building_roll(grid_cell, 41 + i) * TAU
 		var at := Vector3(cos(a) * 0.28, 0.6, sin(a) * 0.28)
@@ -693,7 +758,7 @@ func _build_courtyard(dir: Vector3i, trim_col: Color) -> void:
 	var paving: Color = _tint(Color("b3a68e"))
 	_batch.box(Vector3(0.92, 0.12, 0.92), at + Vector3(0, -0.46, 0), paving)
 	# A small tree in the middle, and a bench against one side.
-	var leaf: Color = _tint(Color("6f9e5a"))
+	var leaf: Color = _tint(FOLIAGE)
 	_batch.box(Vector3(0.09, 0.34, 0.09), at + Vector3(0, -0.23, 0), trim_col)
 	_batch.box(Vector3(0.44, 0.3, 0.44), at + Vector3(0, 0.02, 0), leaf)
 	_batch.box(Vector3(0.3, 0.24, 0.3), at + Vector3(0, 0.24, 0), leaf)

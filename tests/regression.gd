@@ -41,6 +41,14 @@ func _ready() -> void:
 	await _sec_save_corruption()
 	print("SECTION _sec_house_audit")
 	await _sec_house_audit()
+	print("SECTION _sec_no_stale_geometry")
+	await _sec_no_stale_geometry()
+	print("SECTION _sec_house_among_other_blocks")
+	await _sec_house_among_other_blocks()
+	print("SECTION _sec_house_geometry_sane")
+	await _sec_house_geometry_sane()
+	print("SECTION _sec_place_cost_is_flat")
+	await _sec_place_cost_is_flat()
 	print("SECTION _sec_terrace_is_flat")
 	await _sec_terrace_is_flat()
 	print("SECTION _sec_delete_consistency")
@@ -665,6 +673,281 @@ func _audit_build(label: String, cells: Array, drop: int) -> void:
 ## terrace rendered as a ring of roofless walls standing around an empty cell.
 ## That is only visible in a screenshot or in a bounding box; no logic test would
 ## ever have caught it.
+## A house only rebuilds when an edit can concern it, and `HouseShape.affects`
+## decides that from the building's bounding box grown by `REACH`. Get that
+## boundary wrong and a house keeps geometry describing a town that has changed
+## — a stale door, a chimney on a building that was cut in half.
+##
+## The check is not "did the right cells go dirty", which just restates the
+## rule. It is: after an edit, every house must look EXACTLY like a house built
+## from scratch into the same final shape. Editing is required to be a shortcut,
+## never a different answer.
+##
+## Why it earns its runtime: the old rule was "any house anywhere went dirty",
+## which was always correct and cost ~10 ms per house already standing — 800 ms
+## for one click in an 80-house town.
+func _sec_no_stale_geometry() -> void:
+	var z := 74
+	# Each case: the cells to build, then the single cell to edit afterwards.
+	# The long row is the point — its far end is well outside REACH, yet
+	# removing it changes the building, so it must still propagate.
+	var cases := [
+		{"n": "long row, far end removed",
+			"cells": _row(Vector3i(0, 0, z), Vector3i(1, 0, 0), 12), "drop": Vector3i(11, 0, z)},
+		{"n": "long row, middle removed",
+			"cells": _row(Vector3i(0, 0, z + 2), Vector3i(1, 0, 0), 12), "drop": Vector3i(6, 0, z + 2)},
+		{"n": "tall stack, base removed",
+			"cells": _row(Vector3i(0, 0, z + 4), Vector3i(0, 1, 0), 5), "drop": Vector3i(0, 0, z + 4)},
+		{"n": "L wing removed",
+			"cells": [Vector3i(0,0,z+6), Vector3i(1,0,z+6), Vector3i(2,0,z+6),
+					Vector3i(2,0,z+7), Vector3i(2,0,z+8)], "drop": Vector3i(2, 0, z + 8)},
+		# A solid two-storey blob is where terraces, roof gardens and the roof
+		# height field all fire at once, so it is the shape that punishes a
+		# `_digest` entry left out — a cell can keep a terrace, a spire or a whole
+		# roof surface that the edit should have taken away.
+		{"n": "3x3x2 blob, corner removed", "cells": _blob(Vector3i(0, 0, z + 10), 3, 2, 3),
+			"drop": Vector3i(2, 1, z + 12)},
+		{"n": "tower beside a wing, tower topped",
+			"cells": [Vector3i(0,0,z+14), Vector3i(0,1,z+14), Vector3i(0,2,z+14), Vector3i(0,3,z+14),
+					Vector3i(1,0,z+14), Vector3i(1,0,z+15), Vector3i(0,0,z+15)],
+			"drop": Vector3i(0, 3, z + 14)},
+	]
+	for case in cases:
+		var cells: Array = case["cells"]
+		var drop: Vector3i = case["drop"]
+		var left: Array = []
+		for c in cells:
+			if c != drop:
+				left.append(c)
+
+		# Route A: build everything, then edit.
+		_clear()
+		await get_tree().process_frame
+		for c in cells:
+			_b(c, BlockData.Type.HOUSE)
+		for _f in range(3):
+			await get_tree().process_frame
+		GridManager.remove_block(drop)
+		for _f in range(4):
+			await get_tree().process_frame
+		var edited := _house_print(left)
+
+		# Route B: build only the survivors, from nothing.
+		_clear()
+		await get_tree().process_frame
+		for c in left:
+			_b(c, BlockData.Type.HOUSE)
+		for _f in range(4):
+			await get_tree().process_frame
+		var fresh := _house_print(left)
+
+		_check(edited == fresh, "stale geometry after '%s'\n    edited %s\n    fresh  %s" % [case["n"], edited, fresh])
+
+	# The same rule must also SKIP work. Two buildings far apart cannot touch,
+	# and if this stops holding the frame-drop comes straight back.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, z + 10), BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	_check(not HouseShape.affects(Vector3i(0, 0, z + 10), Vector3i(40, 0, z + 10)),
+			"a house 40 cells away is still considered relevant")
+	_check(HouseShape.affects(Vector3i(0, 0, z + 10), Vector3i(0, -9, z + 10)),
+			"the ground a house stands on is not considered relevant")
+
+## Two things a logic test can never see, both of which have already shipped as
+## bugs: geometry that wanders outside the cell it belongs to, and colours that
+## drift apart until near-identical shades each cost their own draw call.
+##
+## The envelope check is the general form of the balustrade bug — `_face_size`
+## used where `_slab` was meant, which stood a 1.04-TALL wall where a 0.09-thick
+## rail belonged. Nothing about that is wrong logically; it is only wrong in
+## space. Anything reaching well past its own cell is now caught by measurement
+## rather than by someone noticing it in a screenshot.
+func _sec_house_geometry_sane() -> void:
+	var z := 88
+	var shapes := {
+		"lone": [Vector3i(0, 0, z)],
+		"terrace": [Vector3i(0,0,z), Vector3i(0,1,z), Vector3i(0,2,z), Vector3i(1,0,z)],
+		"spire": [Vector3i(0,0,z), Vector3i(0,1,z), Vector3i(0,2,z), Vector3i(0,3,z)],
+		"stilts": [Vector3i(0, 3, z)],
+		"bridge": [Vector3i(0,0,z), Vector3i(0,1,z), Vector3i(3,0,z), Vector3i(3,1,z),
+				Vector3i(1,1,z), Vector3i(2,1,z)],
+	}
+	for name in shapes:
+		_clear()
+		await get_tree().process_frame
+		for c in shapes[name]:
+			_b(c, BlockData.Type.HOUSE)
+		for _f in range(3):
+			await get_tree().process_frame
+		for c in shapes[name]:
+			if not GridManager.has_block(c):
+				continue
+			# Per CELL, because that is the unit MeshBatch batches. Two buildings
+			# holding near-identical shades is the point of the palette jitter and
+			# costs nothing; one CELL holding two is a wasted draw call.
+			#
+			# Only the FIXED decoration colours are policed. A building's own
+			# wall/roof/trim are jittered per building on purpose, and a derived
+			# shade landing near the trim is that jitter working, not an accident —
+			# the accident this catches is a hand-written colour drifting into a
+			# near-copy of another, which is how planter, roof garden and courtyard
+			# each ended up with their own foliage green.
+			var own: Array[Color] = []
+			var pal = GridManager.get_block(c).node.get("_palette")
+			if pal != null:
+				for k in ["wall", "roof", "trim"]:
+					own.append(pal[k])
+			var seen: Array[Color] = []
+			for mi in _all_meshes(GridManager.get_block(c).node):
+				var ab: AABB = mi.mesh.get_aabb()
+				var hi: Vector3 = ab.position + ab.size
+				var fin: bool = is_finite(ab.position.x) and is_finite(ab.size.x) \
+						and is_finite(ab.position.y) and is_finite(ab.size.y)
+				_check(fin, "%s %s: mesh bounds are not finite" % [name, c])
+				if not fin:
+					continue
+				_check(hi.y <= 2.6, "%s %s: geometry reaches y=%.2f above its cell" % [name, c, hi.y])
+				_check(ab.position.y >= -float(HouseShape.MAX_STILT) - 1.5,
+						"%s %s: geometry reaches y=%.2f below its cell" % [name, c, ab.position.y])
+				var reach: float = maxf(maxf(absf(ab.position.x), absf(hi.x)),
+						maxf(absf(ab.position.z), absf(hi.z)))
+				_check(reach <= 2.4, "%s %s: geometry reaches %.2f sideways" % [name, c, reach])
+				# Near-duplicate colours: invisible to the eye, but MeshBatch cuts
+				# a surface per colour, so each one is a permanent draw call.
+				for i in mi.mesh.get_surface_count():
+					var m: StandardMaterial3D = mi.mesh.surface_get_material(i)
+					if m == null:
+						continue
+					var col: Color = m.albedo_color
+					if _near_any(col, own, 0.12):
+						continue
+					for s in seen:
+						var d: float = _cdist(s, col)
+						_check(d == 0.0 or d > 0.12,
+								"%s %s: %s and %s differ by %.3f — one colour, two draw calls"
+								% [name, c, s.to_html(false), col.to_html(false), d])
+					if not seen.has(col):
+						seen.append(col)
+
+## Placing a house must cost the same whether the island is empty or covered.
+##
+## It did not. Every house rebuilt whenever any house ANYWHERE was placed or
+## removed, so one click cost ~10 ms per house already standing: 33 ms on an
+## empty island, 818 ms in an 80-house town — the frame drop that got reported
+## as "FPS falls from 80-90 to 30-40". `HouseShape.affects` now bounds it. This
+## check exists because that regression is a one-line mistake away and is
+## invisible until a save file gets big.
+func _sec_place_cost_is_flat() -> void:
+	var z := 96
+	var cost: Array[float] = []
+	for n in [0, 60]:
+		_clear()
+		await get_tree().process_frame
+		for i in n:
+			_b(Vector3i((i % 10) * 3 - 15, 0, z + (i / 10) * 3), BlockData.Type.HOUSE)
+		for _f in range(6):
+			await get_tree().process_frame
+		var t0: int = Time.get_ticks_usec()
+		_b(Vector3i(0, 0, z - 4), BlockData.Type.HOUSE)
+		for _f in range(3):
+			await get_tree().process_frame
+		cost.append((Time.get_ticks_usec() - t0) / 1000.0)
+	# Generous: the fix makes it flat, the bug made it 25x. Anything under 4x
+	# means the work is still bounded by the building, not by the town.
+	_check(cost[1] < maxf(cost[0] * 4.0, 60.0),
+			"placing into a 60-house town costs %.1f ms against %.1f ms empty — the rebuild is town-wide again"
+			% [cost[1], cost[0]])
+
+## A house next to blocks that are NOT houses, and a cell built and rebuilt in
+## place. Both are ordinary play — dropping a house on a wood platform, undoing
+## and redoing the same corner while deciding — and both walk paths the shape
+## fuzz never touches, because it only ever builds houses and only ever builds
+## them once.
+func _sec_house_among_other_blocks() -> void:
+	var z := 104
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, z), BlockData.Type.WOOD)
+	_b(Vector3i(0, 1, z), BlockData.Type.HOUSE)
+	_b(Vector3i(1, 1, z), BlockData.Type.WATER)
+	_b(Vector3i(2, 1, z), BlockData.Type.HOUSE)
+	for _f in range(3):
+		await get_tree().process_frame
+	_check(HouseShape.support_drop(Vector3i(0, 1, z)) == 0,
+			"a house standing on a wood block grew legs it does not need")
+	_check(int(HouseShape.context(Vector3i(0, 1, z))["building_size"]) == 1,
+			"a wood block was counted as part of a building")
+	_check(HouseShape.support_drop(Vector3i(2, 1, z)) != 0,
+			"a house over open air thinks something is holding it up")
+
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, z + 2), BlockData.Type.HOUSE)
+	_b(Vector3i(1, 0, z + 2), BlockData.Type.HOUSE)
+	for _f in range(3):
+		await get_tree().process_frame
+	var before := _house_print([Vector3i(0, 0, z + 2)])
+	for i in 5:
+		GridManager.remove_block(Vector3i(1, 0, z + 2))
+		for _f in range(2):
+			await get_tree().process_frame
+		_b(Vector3i(1, 0, z + 2), BlockData.Type.HOUSE)
+		for _f in range(3):
+			await get_tree().process_frame
+	_check(_house_print([Vector3i(0, 0, z + 2)]) == before,
+			"a neighbour drifted after the cell beside it was rebuilt five times")
+
+func _cdist(a: Color, b: Color) -> float:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)
+
+func _near_any(c: Color, pool: Array, tol: float) -> bool:
+	for p in pool:
+		if _cdist(c, p) <= tol:
+			return true
+	return false
+
+func _blob(origin: Vector3i, sx: int, sy: int, sz: int) -> Array:
+	var out: Array = []
+	for x in sx:
+		for y in sy:
+			for zz in sz:
+				out.append(origin + Vector3i(x, y, zz))
+	return out
+
+func _row(start: Vector3i, step: Vector3i, n: int) -> Array:
+	var out: Array = []
+	for i in n:
+		out.append(start + step * i)
+	return out
+
+## Triangle and surface counts per cell — enough to catch a door, chimney, roof
+## or storey line that did not move when it should have.
+func _house_print(cells: Array) -> String:
+	var parts: Array[String] = []
+	for c in cells:
+		if not GridManager.has_block(c):
+			parts.append("%s:gone" % c)
+			continue
+		var tris := 0
+		var surf := 0
+		for mi in _all_meshes(GridManager.get_block(c).node):
+			surf += mi.mesh.get_surface_count()
+			for i in mi.mesh.get_surface_count():
+				var a: Array = mi.mesh.surface_get_arrays(i)
+				var idx = a[Mesh.ARRAY_INDEX]
+				tris += (idx.size() / 3) if idx != null else (a[Mesh.ARRAY_VERTEX].size() / 3)
+		parts.append("%s:%d/%d" % [c, tris, surf])
+	return " ".join(parts)
+
+func _all_meshes(n: Node) -> Array:
+	var out: Array = []
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append(n)
+	for c in n.get_children():
+		out += _all_meshes(c)
+	return out
+
 func _sec_terrace_is_flat() -> void:
 	_clear()
 	await get_tree().process_frame
@@ -1019,8 +1302,23 @@ func _sec_theme_switch() -> void:
 	MapThemes.current = 0
 	SceneryManager.rebuild()
 	AmbientLeaves.rebuild()
-	# same prop count each time = no accumulation/leak
-	_check(counts.min() == counts.max(), "scenery node count stable across themes (%s)" % [counts])
+	# What this is for is leak detection: a rebuild must dispose of the props it
+	# replaces. It used to demand the count be IDENTICAL across themes, which is
+	# not true and never was — scenery is scattered randomly, so a theme landing
+	# one prop up or down is the generator working. That made the suite fail
+	# roughly one run in three for no reason, which is worse than not checking.
+	# A leak shows up as growth, so measure growth.
+	_check(counts.max() - counts.min() <= 3,
+			"scenery count swings across themes (%s)" % [counts])
+	var repeat: Array[int] = []
+	for i in 4:
+		SceneryManager.rebuild()
+		AmbientLeaves.rebuild()
+		for _f in range(4):
+			await get_tree().process_frame
+		repeat.append(SceneryManager.get_child_count())
+	_check(repeat.max() - repeat.min() <= 3,
+			"rebuilding one theme repeatedly accumulates props (%s)" % [repeat])
 
 ## 9. Photo mode, sun walk, pause volume settings preservation.
 func _sec_photo_and_misc() -> void:

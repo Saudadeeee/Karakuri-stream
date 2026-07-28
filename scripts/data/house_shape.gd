@@ -265,30 +265,73 @@ static func _component(cell: Vector3i) -> Dictionary:
 	# right to, and why houses came out looking half-built after a delete.
 	# Not cached, either: this answer is about a cell that does not exist.
 	if not is_house(cell):
-		return {"lo": cell, "hi": cell, "size": 0, "capped": false}
+		return {"lo": cell, "hi": cell, "bmin": cell, "bmax": cell, "size": 0, "capped": false}
 
 	var seen: Dictionary = {}
 	var queue: Array[Vector3i] = [cell]
 	seen[cell] = true
 	var lo: Vector3i = cell
 	var hi: Vector3i = cell
+	# `lo`/`hi` are LEXICOGRAPHIC extremes — they name the building's first and
+	# last cell, which is what makes "exactly one door" well defined. They are
+	# not a bounding box. `bmin`/`bmax` are the real per-axis box; see
+	# `component_box`, which is what tells a house whether a distant edit can
+	# possibly concern it.
+	var bmin: Vector3i = cell
+	var bmax: Vector3i = cell
 	while not queue.is_empty() and seen.size() < MAX_BUILDING:
 		var c: Vector3i = queue.pop_back()
 		if _less(c, lo):
 			lo = c
 		if _less(hi, c):
 			hi = c
+		bmin = Vector3i(mini(bmin.x, c.x), mini(bmin.y, c.y), mini(bmin.z, c.z))
+		bmax = Vector3i(maxi(bmax.x, c.x), maxi(bmax.y, c.y), maxi(bmax.z, c.z))
 		for d in GridManager.DIRECTIONS:
 			var n: Vector3i = c + d
 			if not seen.has(n) and is_house(n):
 				seen[n] = true
 				queue.append(n)
 
-	var info := {"lo": lo, "hi": hi, "size": seen.size(), "capped": seen.size() >= MAX_BUILDING}
+	var info := {"lo": lo, "hi": hi, "bmin": bmin, "bmax": bmax,
+			"size": seen.size(), "capped": seen.size() >= MAX_BUILDING}
 	# Every cell of the building gets the same answer, so one flood serves them all.
 	for c in seen:
 		_cache[c] = info
 	return info
+
+## How far from a building an edit can still change how it looks. The widest
+## reach is an arch, which hunts `ARCH_SPAN` cells for something to land on;
+## bunting reaches 2 and the roof height field reaches `ROOF_LEVELS`. One spare
+## cell on top of the largest.
+const REACH := ARCH_SPAN + 1
+
+## Does an edit at `changed` concern the building that `cell` belongs to?
+##
+## A house is NOT a local thing: its door, chimney and storey count come from
+## the whole connected component, so a cell removed at the far end of a long
+## terrace really does move the door at this end. But that is the *component*,
+## not the map. Every house used to rebuild whenever any house anywhere was
+## placed or removed, which made one click cost ~10 ms per house already
+## standing — 800 ms in an 80-house town, felt as a hard frame drop the moment
+## a garden got big. Everything a building depends on lies inside its own
+## bounding box grown by `REACH`, plus the columns beneath it that its stilts
+## stand on, so anything outside that can be ignored outright.
+static func affects(cell: Vector3i, changed: Vector3i) -> bool:
+	var info := _component(cell)
+	if int(info["size"]) == 0:
+		return false
+	var lo: Vector3i = info["bmin"]
+	var hi: Vector3i = info["bmax"]
+	if changed.x < lo.x - REACH or changed.x > hi.x + REACH:
+		return false
+	if changed.z < lo.z - REACH or changed.z > hi.z + REACH:
+		return false
+	# Upward, only the neighbourhood matters. Downward, a house on stilts cares
+	# about whatever it is standing on, however far below that turns out to be.
+	if changed.y > hi.y + REACH or changed.y < lo.y - (MAX_STILT + 2):
+		return false
+	return true
 
 ## Lexicographic order on cells, so "the building's first cell" is well defined
 ## for any shape — that is what makes exactly one door possible.
