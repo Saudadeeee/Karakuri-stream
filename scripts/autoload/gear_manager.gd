@@ -16,7 +16,7 @@ const HALF_TOOTH: float = TAU / (2.0 * TOOTH_COUNT)
 const POWER_RECHECK: float = 0.2
 
 var _rotation_progress: Dictionary = {} # Vector3i -> float, radians since last full turn
-var _sparkles: Dictionary = {} # Vector3i -> GPUParticles3D
+var _sparkles: Dictionary = {} # Vector3i -> CPUParticles3D
 var _creaks: Dictionary = {}   # Vector3i -> AudioStreamPlayer3D (wooden rattle loop)
 var _phased: Dictionary = {}   # Vector3i -> true, gears whose mesh phase is set
 var _powered: Dictionary = {}  # Vector3i -> bool, cached drive-train result
@@ -166,20 +166,18 @@ func _strike_adjacent_bells(cell: Vector3i) -> void:
 func _ensure_sparkle(cell: Vector3i, parent: Node3D) -> void:
 	if _sparkles.has(cell):
 		return
-	var particles := GPUParticles3D.new()
+	var particles := CPUParticles3D.new()
 	particles.amount = 10
 	particles.lifetime = 1.0
 	particles.explosiveness = 0.0
 
-	var process_material := ParticleProcessMaterial.new()
-	process_material.direction = Vector3(0.0, 1.0, 0.0)
-	process_material.spread = 50.0
-	process_material.initial_velocity_min = 0.15
-	process_material.initial_velocity_max = 0.4
-	process_material.gravity = Vector3(0.0, 0.25, 0.0)
-	process_material.scale_min = 0.02
-	process_material.scale_max = 0.05
-	particles.process_material = process_material
+	particles.direction = Vector3(0.0, 1.0, 0.0)
+	particles.spread = 50.0
+	particles.initial_velocity_min = 0.15
+	particles.initial_velocity_max = 0.4
+	particles.gravity = Vector3(0.0, 0.25, 0.0)
+	particles.scale_amount_min = 0.02
+	particles.scale_amount_max = 0.05
 
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.05, 0.05)
@@ -187,10 +185,9 @@ func _ensure_sparkle(cell: Vector3i, parent: Node3D) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.albedo_color = Color(1.0, 0.95, 0.6, 0.9)
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.emission_enabled = true
-	particle_material.emission = Color(1.0, 0.9, 0.5)
+	ShaderBudget.glow(particle_material, Color(1.0, 0.9, 0.5))
 	quad.material = particle_material
-	particles.draw_pass_1 = quad
+	particles.mesh = quad
 
 	parent.add_child(particles)
 	_sparkles[cell] = particles
@@ -198,7 +195,7 @@ func _ensure_sparkle(cell: Vector3i, parent: Node3D) -> void:
 func _remove_sparkle(cell: Vector3i) -> void:
 	if not _sparkles.has(cell):
 		return
-	var particles: GPUParticles3D = _sparkles[cell]
+	var particles: CPUParticles3D = _sparkles[cell]
 	if is_instance_valid(particles):
 		particles.queue_free()
 	_sparkles.erase(cell)

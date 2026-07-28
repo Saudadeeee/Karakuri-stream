@@ -7,8 +7,13 @@ extends Node
 ## an "union of rounded boxes": each cell fills its cube with soft edges and the
 ## fields SUM so neighbours merge into one solid mass.
 
-const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
-const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
+## Timber and water are ONE shader with a `surface_mode` uniform. Two shaders
+## meant two programs, and on gl_compatibility a program is compiled the first
+## time it is drawn — through ANGLE that measured 7.8 seconds EACH from cold.
+## See `shaders/surface.gdshader`.
+const SURFACE_SHADER: Shader = preload("res://shaders/surface.gdshader")
+const MODE_WOOD := 0
+const MODE_WATER := 1
 
 const HALF: float = 0.5
 const ROUND_R: float = 0.16
@@ -100,7 +105,8 @@ func _material_for(key: String) -> ShaderMaterial:
 		return _materials[mkey]
 	var mat := ShaderMaterial.new()
 	if parts[0] == "wood":
-		mat.shader = WOOD_SHADER
+		mat.shader = SURFACE_SHADER
+		mat.set_shader_parameter("surface_mode", MODE_WOOD)
 		mat.set_shader_parameter("base_color", col)
 		mat.set_shader_parameter("grain_color", col.darkened(0.28))
 		mat.set_shader_parameter("grain_scale", 4.0)
@@ -109,7 +115,8 @@ func _material_for(key: String) -> ShaderMaterial:
 		mat.set_shader_parameter("rim_power", 4.0)
 		mat.set_shader_parameter("rim_strength", 0.26)
 	else:
-		mat.shader = WATER_SHADER
+		mat.shader = SURFACE_SHADER
+		mat.set_shader_parameter("surface_mode", MODE_WATER)
 		mat.set_shader_parameter("water_color", Color(col.r, col.g, col.b, 1.0))
 		var deep: Color = col.darkened(0.24)
 		mat.set_shader_parameter("deep_color", Color(deep.r, deep.g, deep.b, 1.0))

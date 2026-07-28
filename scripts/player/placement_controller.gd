@@ -8,8 +8,13 @@ signal material_changed(type: BlockData.Type, variant: int)
 @onready var camera: Camera3D = get_node(camera_path)
 @onready var ghost: MeshInstance3D = $GhostBlock
 
-const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
-const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
+## Timber and water are ONE shader with a `surface_mode` uniform. Two shaders
+## meant two programs, and on gl_compatibility a program is compiled the first
+## time it is drawn — through ANGLE that measured 7.8 seconds EACH from cold.
+## See `shaders/surface.gdshader`.
+const SURFACE_SHADER: Shader = preload("res://shaders/surface.gdshader")
+const MODE_WOOD := 0
+const MODE_WATER := 1
 const PipeBlock := preload("res://scripts/blocks/pipe_block.gd")
 const GearBlock := preload("res://scripts/blocks/gear_block.gd")
 
@@ -407,16 +412,15 @@ func _animate_drop(instance: Node3D, final_pos: Vector3, type: BlockData.Type, c
 ## bright droplets, gear/bell throws a couple of metallic sparks. `rise` flips
 ## gravity so removal dust drifts UP after the ascending block.
 func _spawn_place_effect(type: BlockData.Type, pos: Vector3, rise: bool = false) -> void:
-	var particles := GPUParticles3D.new()
+	var particles := CPUParticles3D.new()
 	particles.one_shot = true
 	particles.explosiveness = 0.9
 	particles.position = pos
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
-	var mat := ParticleProcessMaterial.new()
-	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	mat.emission_sphere_radius = 0.25
-	mat.direction = Vector3(0.0, 1.0, 0.0)
+	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	particles.emission_sphere_radius = 0.25
+	particles.direction = Vector3(0.0, 1.0, 0.0)
 	var draw_mesh: Mesh
 	var particle_mat := StandardMaterial3D.new()
 	particle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -425,42 +429,40 @@ func _spawn_place_effect(type: BlockData.Type, pos: Vector3, rise: bool = false)
 		BlockData.Type.WATER:
 			particles.amount = 12
 			particles.lifetime = 0.55
-			mat.spread = 55.0
-			mat.initial_velocity_min = 0.8
-			mat.initial_velocity_max = 1.6
-			mat.gravity = Vector3(0.0, -4.0, 0.0)
-			mat.scale_min = 0.03
-			mat.scale_max = 0.06
+			particles.spread = 55.0
+			particles.initial_velocity_min = 0.8
+			particles.initial_velocity_max = 1.6
+			particles.gravity = Vector3(0.0, -4.0, 0.0)
+			particles.scale_amount_min = 0.03
+			particles.scale_amount_max = 0.06
 			var s := SphereMesh.new()
 			s.radius = 0.05; s.height = 0.1; s.radial_segments = 6; s.rings = 3
 			draw_mesh = s
 			particle_mat.albedo_color = Color(0.7, 0.92, 0.95, 0.95)
-			particle_mat.emission_enabled = true
-			particle_mat.emission = Color(0.6, 0.85, 0.9)
+			ShaderBudget.glow(particle_mat, Color(0.6, 0.85, 0.9))
 		BlockData.Type.GEAR, BlockData.Type.BELL:
 			particles.amount = 8
 			particles.lifetime = 0.4
-			mat.spread = 60.0
-			mat.initial_velocity_min = 0.5
-			mat.initial_velocity_max = 1.0
-			mat.gravity = Vector3(0.0, -2.0, 0.0)
-			mat.scale_min = 0.02
-			mat.scale_max = 0.04
+			particles.spread = 60.0
+			particles.initial_velocity_min = 0.5
+			particles.initial_velocity_max = 1.0
+			particles.gravity = Vector3(0.0, -2.0, 0.0)
+			particles.scale_amount_min = 0.02
+			particles.scale_amount_max = 0.04
 			var q := QuadMesh.new()
 			q.size = Vector2(0.05, 0.05)
 			draw_mesh = q
 			particle_mat.albedo_color = Color(1.0, 0.92, 0.6)
-			particle_mat.emission_enabled = true
-			particle_mat.emission = Color(1.0, 0.85, 0.4)
+			ShaderBudget.glow(particle_mat, Color(1.0, 0.85, 0.4))
 		_: # WOOD (and default): earthy dust puff
 			particles.amount = 14
 			particles.lifetime = 0.7
-			mat.spread = 80.0
-			mat.initial_velocity_min = 0.3
-			mat.initial_velocity_max = 0.9
-			mat.gravity = Vector3(0.0, -1.2, 0.0)
-			mat.scale_min = 0.04
-			mat.scale_max = 0.09
+			particles.spread = 80.0
+			particles.initial_velocity_min = 0.3
+			particles.initial_velocity_max = 0.9
+			particles.gravity = Vector3(0.0, -1.2, 0.0)
+			particles.scale_amount_min = 0.04
+			particles.scale_amount_max = 0.09
 			var q := QuadMesh.new()
 			q.size = Vector2(0.08, 0.08)
 			draw_mesh = q
@@ -468,17 +470,14 @@ func _spawn_place_effect(type: BlockData.Type, pos: Vector3, rise: bool = false)
 			particle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 	if rise:
-		mat.gravity = Vector3(0.0, 1.0, 0.0)
+		particles.gravity = Vector3(0.0, 1.0, 0.0)
 
 	var scale_curve := Curve.new()
 	scale_curve.add_point(Vector2(0.0, 1.0))
 	scale_curve.add_point(Vector2(1.0, 0.0))
-	var ct := CurveTexture.new()
-	ct.curve = scale_curve
-	mat.scale_curve = ct
-	particles.process_material = mat
+	particles.scale_amount_curve = scale_curve
 	(draw_mesh as PrimitiveMesh).material = particle_mat
-	particles.draw_pass_1 = draw_mesh
+	particles.mesh = draw_mesh
 
 	add_sibling_block(particles)
 	particles.emitting = true

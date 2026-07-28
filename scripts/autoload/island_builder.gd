@@ -57,9 +57,7 @@ func rebuild() -> void:
 	_root.add_child(_heart_gear)
 	if float(mech["glow"]) > 0.0:
 		var gm: StandardMaterial3D = _heart_gear.material_override
-		gm.emission_enabled = true
-		gm.emission = wood
-		gm.emission_energy_multiplier = float(mech["glow"]) * 0.5
+		ShaderBudget.glow(gm, wood, float(mech["glow"]) * 0.5)
 
 	# Main body + root rocks + shards.
 	_root.add_child(_island_mesh(top_col, base_col, rng, 9.0, Vector3(0.8, -7.0, 0.5)))

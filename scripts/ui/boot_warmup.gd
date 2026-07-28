@@ -106,13 +106,11 @@ func _jobs() -> Array:
 	var jobs: Array = [
 		{"say": "Waking the island", "make": func(): return _lit(false, false)},
 		{"say": "Mixing the paint", "make": func(): return _lit(true, false)},
-		{"say": "Lighting the lanterns", "make": func(): return _lit(false, true)},
-		{"say": "Filling the pond", "make": func(): return _shader_box(load("res://shaders/water.gdshader"))},
-		{"say": "Laying the deck", "make": func(): return _shader_box(load("res://shaders/wood.gdshader"))},
-		{"say": "Starting the stream", "make": func(): return _shader_box(load("res://shaders/stream.gdshader"))},
+		{"say": "Lighting the lanterns", "make": func(): return _unshaded(false)},
+		{"say": "Filling the pond and the stream", "make": func(): return _shader_box(load("res://shaders/surface.gdshader"))},
 		{"say": "Hanging the clouds", "make": func(): return _shader_box(load("res://shaders/cloudsea.gdshader"))},
-		{"say": "Catching the light", "make": func(): return _blended(BaseMaterial3D.BLEND_MODE_ADD)},
-		{"say": "Clearing the glass", "make": func(): return _blended(BaseMaterial3D.BLEND_MODE_MIX)},
+		{"say": "Catching the light", "make": func(): return _additive()},
+		{"say": "Clearing the glass", "make": func(): return _unshaded(true)},
 		{"say": "Letting the leaves go", "make": func(): return _leaf_particles()},
 	]
 	# The island's heart cog is vertex-coloured AND emissive, a combination
@@ -121,8 +119,11 @@ func _jobs() -> Array:
 	# and skipping it saves everyone else several seconds of first visit. Left
 	# out entirely, a Night player instead pays for it as a stall the first time
 	# the cog comes into view, which is worse for being unexplained.
-	if float(MapThemes.mechanism().get("glow", 0.0)) > 0.0:
-		jobs.append({"say": "Turning the heart cog", "make": func(): return _lit(true, true)})
+	# Emissive used to be warmed here, and on a glowing map a vertex-coloured
+	# emissive one too. Neither exists on this profile any more: `ShaderBudget.glow`
+	# turns every glow into an unshaded material when bloom is off, because bloom
+	# is what emission was FOR. That took 8.6 s off the first visit — the single
+	# largest thing on the bill this game had any say over.
 	return jobs
 
 # ------------------------------------------------------------------ warm items
@@ -146,11 +147,27 @@ func _lit(vertex_colour: bool, emissive: bool) -> MeshInstance3D:
 	ShaderBudget.normalise(m)
 	return _box(m)
 
-func _blended(mode: int) -> MeshInstance3D:
+## Unshaded, opaque or alpha-blended. Everything that glows wears the opaque one
+## on this profile — see `ShaderBudget.glow`, which turns emission into unshaded
+## because the web build has no bloom for emission to feed.
+func _unshaded(transparent: bool) -> MeshInstance3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if transparent:
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color = Color(0.6, 0.85, 1.0, 0.4)
+	else:
+		m.albedo_color = Color(1.0, 0.86, 0.6)
+	ShaderBudget.normalise(m)
+	return _box(m)
+
+## The stream's glint: unshaded, transparent AND additively blended, which is a
+## program of its own.
+func _additive() -> MeshInstance3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.blend_mode = mode
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	m.albedo_color = Color(0.6, 0.85, 1.0, 0.4)
 	ShaderBudget.normalise(m)
 	return _box(m)
@@ -162,18 +179,20 @@ func _shader_box(sh: Shader) -> MeshInstance3D:
 	m.shader = sh
 	return _box(m)
 
-## Particle quads are their own program — billboarding is a feature flag — and
-## the process material is a second shader again.
-func _leaf_particles() -> GPUParticles3D:
-	var p := GPUParticles3D.new()
+## The particle quad's billboarding is a material feature flag, so it is still a
+## program of its own — but only one now. Every particle system in the game runs
+## on `CPUParticles3D`, which needs no `ParticleProcessMaterial`; that was a
+## second shader, and on the web it cost 7.4 s of cold compile on its own.
+## Nothing here emits more than a few dozen quads, and the web profile already
+## halves the counts, so the simulation itself is not worth a GPU pass.
+func _leaf_particles() -> CPUParticles3D:
+	var p := CPUParticles3D.new()
 	p.amount = 4
 	p.lifetime = 1.0
 	p.emitting = true
-	var pm := ParticleProcessMaterial.new()
-	pm.direction = Vector3(0, 1, 0)
-	pm.initial_velocity_min = 0.4
-	pm.initial_velocity_max = 0.6
-	p.process_material = pm
+	p.direction = Vector3(0, 1, 0)
+	p.initial_velocity_min = 0.4
+	p.initial_velocity_max = 0.6
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.2, 0.2)
 	var qm := StandardMaterial3D.new()
@@ -181,7 +200,7 @@ func _leaf_particles() -> GPUParticles3D:
 	qm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	qm.albedo_color = Color(0.8, 0.9, 0.7)
 	quad.material = qm
-	p.draw_pass_1 = quad
+	p.mesh = quad
 	return p
 
 # ------------------------------------------------------------------------- UI

@@ -133,26 +133,24 @@ func _shatter(root: Node3D, kind: String) -> void:
 ## Public: a small coloured leaf/chip puff (DecorManager reuses it for the
 ## flowers/sprouts a placed block buries).
 func burst(pos: Vector3, tint: Color) -> void:
-	var p := GPUParticles3D.new()
+	var p := CPUParticles3D.new()
 	p.amount = QualityManager.particles(14)
 	p.lifetime = 0.7
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.position = pos
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := ParticleProcessMaterial.new()
-	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	mat.emission_sphere_radius = 0.3
-	mat.direction = Vector3(0, 1, 0)
-	mat.spread = 75.0
-	mat.initial_velocity_min = 1.2
-	mat.initial_velocity_max = 2.4
-	mat.gravity = Vector3(0, -3.2, 0)
-	mat.angular_velocity_min = -220.0
-	mat.angular_velocity_max = 220.0
-	mat.scale_min = 0.05
-	mat.scale_max = 0.11
-	p.process_material = mat
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.3
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 75.0
+	p.initial_velocity_min = 1.2
+	p.initial_velocity_max = 2.4
+	p.gravity = Vector3(0, -3.2, 0)
+	p.angular_velocity_min = -220.0
+	p.angular_velocity_max = 220.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.11
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.13, 0.13)
 	var qm := StandardMaterial3D.new()
@@ -160,7 +158,7 @@ func burst(pos: Vector3, tint: Color) -> void:
 	qm.albedo_color = tint
 	qm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	quad.material = qm
-	p.draw_pass_1 = quad
+	p.mesh = quad
 	add_child(p)
 	p.emitting = true
 	get_tree().create_timer(1.0).timeout.connect(p.queue_free)

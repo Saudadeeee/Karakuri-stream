@@ -3,9 +3,11 @@
 One goal: a garden that runs smoothly in a browser tab. Everything below is a
 decision made against that, with the measurement that justified it.
 
-The short version: **the web build's problem was never triangles.** It was the
-number of distinct shader programs, and it cost 41 seconds of frozen tab before
-anyone saw a single pixel.
+The short version: **the web build's problem was never triangles.** It is the
+number of distinct shader programs the browser has to compile before it can draw
+anything, and it started as 41 seconds of frozen tab before anyone saw a pixel.
+A first visit now reaches the menu in about 31 seconds with a progress bar the
+whole way, and every visit after that in about 4.
 
 ## What was cut, and what it bought
 
@@ -56,8 +58,10 @@ What was merged and why:
   uniform instead, which is free. Flag versus uniform is the whole distinction
   this file is about.
 
-The six that remain: lit opaque, lit emissive, lit vertex-coloured, unshaded
-alpha, unshaded additive, and the particle billboard.
+The six that remain: lit opaque, lit vertex-coloured, unshaded opaque, unshaded
+alpha, unshaded additive, and the particle billboard. Emissive is not among them
+— see below; it turned out to be the most expensive single feature in the whole
+build.
 
 ### The boot screen
 
@@ -65,36 +69,7 @@ alpha, unshaded additive, and the particle billboard.
 browser. It draws one thing per frame so the driver compiles one program per
 frame, with a progress bar between each.
 
-Measured in real Chrome, ANGLE → D3D11, RTX 3060, served locally:
-
-| | first ever visit | every visit after |
-|---|---|---|
-| first picture on screen | 6.0 s | 1.7 s |
-| menu up and interactive | 42.3 s | **3.8 s** |
-
-The second column is the important one. Chrome keeps ANGLE's compiled program
-binaries in the browser profile, so **the compile is a one-off per machine**, not
-per visit. The screen's "first visit only" line is literally true.
-
-The first column is not fast, but it is now 42 seconds of a title and a moving
-bar rather than 41 seconds of a blank tab, which anyone sensible reads as broken
-and closes.
-
-Per-item costs, which is where any further work should start:
-
-| item | ms |
-|---|---|
-| first lit program | 13 849 |
-| particle billboard | 4 596 |
-| `wood.gdshader` | 4 490 |
-| lit emissive | 4 376 |
-| `water.gdshader` | 4 226 |
-| `stream.gdshader` | 3 957 |
-| unshaded additive | 368 |
-| unshaded alpha | 85 |
-| lit vertex-coloured | 13 |
-
-Two mistakes were made building this and both are worth not repeating:
+Two mistakes were made building it and both are worth not repeating:
 
 1. **The warm-up light had shadows on.** The web profile runs without them, so it
    was compiling the depth-pass variant of every material — a second full set of
@@ -103,6 +78,82 @@ Two mistakes were made building this and both are worth not repeating:
    target it was compiled for. Warming somewhere with a different size or format
    risks paying twice. It now warms in the main viewport, behind the opaque
    background panel.
+
+## Where the first visit actually goes
+
+`tools/floor.gd` is the harness that answered this. It boots a scene that adds
+one thing at a time and reports what each cost, so an engine floor can be told
+apart from something the game chose.
+
+The answer was not what any amount of staring at the game would have suggested:
+
+    FLOOR 2d-only                180 ms
+    FLOOR camera only         26 229 ms      <- a Camera3D. Nothing drawn yet.
+    FLOOR environment, colour     19 ms
+    FLOOR procedural sky       1 091 ms
+    FLOOR fog                    712 ms
+    FLOOR tonemap AGX             27 ms
+    FLOOR colour adjustment      742 ms
+    FLOOR glow                   172 ms
+    FLOOR directional light      708 ms
+    FLOOR one lit box             19 ms      <- the first actual geometry
+    FLOOR second box, colour      21 ms      <- colour is free, as promised
+    FLOOR unshaded               673 ms
+    FLOOR emissive             8 611 ms      <- one material feature
+    FLOOR omni light           1 477 ms
+
+So: the sky, the fog, the grade, the lights and the meshes together cost about
+four seconds. A **camera** costs twenty-six, and **emissive** costs nine.
+
+That reframed everything. Cutting geometry was never going to help.
+
+## What was cut after that, and what each was worth
+
+**Emissive → unshaded.** `ShaderBudget.glow()` is now the only way anything in
+the game says "this glows", and it answers differently per profile. Emission
+exists to feed bloom; the web profile has no bloom, so emission there only makes
+a surface brighter — which is what unshaded already does, for a program that was
+already paid for. Measured: 8.6 s → 0.6 s.
+
+**Three custom shaders → one.** `wood`, `water` and `stream` became
+`surface.gdshader` with a `surface_mode` uniform. A uniform does not multiply
+programs and the branch is dynamically uniform, so the GPU picks one side per
+draw. Two of them only ever differed by `diffuse_burley` vs `diffuse_lambert`;
+the stream was held apart by `blend_mix`, which is a render_mode and therefore
+compile-time — but its alpha was 0.98, and this game's water has been
+deliberately opaque since the isosurface rewrite, so making it honestly opaque
+let it join. 7.8 + 7.8 + 7.4 s of compile became 7.4 s.
+
+**GPU particles → CPU particles.** Every `GPUParticles3D` became
+`CPUParticles3D`, which needs no `ParticleProcessMaterial` — that was a whole
+shader, 7.4 s of it. Nothing in this game emits more than a few dozen quads and
+the web profile already halves the counts, so the simulation is not worth a GPU
+pass. Measured after: 0.5 s.
+
+## Result
+
+Real Chrome, ANGLE → D3D11, RTX 3060, served locally, whole flow driven by
+script — load, boot, menu, Play, place blocks:
+
+| | before this pass | after |
+|---|---|---|
+| menu, first ever visit | 66–74 s | **31–33 s** |
+| game running, first visit | 70 s | **36 s** |
+| menu, returning visit | 5 s | **4 s** |
+| frame rate while playing | 103 fps | 116–122 fps |
+
+The returning number is the one most players see: Chrome keeps ANGLE's compiled
+binaries in the browser profile, so **the compile is a one-off per machine**.
+
+What is left on a first visit is roughly 8 s of WASM (37.7 MB, 9.6 MB gzipped),
+14 s of engine baseline, and 7.4 s for the one remaining custom shader. Serving
+Brotli instead of gzip would take the download to about 7 MB.
+
+> A caution about the numbers above: this machine was running exports throughout,
+> and the same build measured anywhere from 13.8 s to 25.2 s for the identical
+> first item across the session. Per-item costs and the totals were re-measured
+> back to back at the end, but treat any single figure as ±50%, and the ratios as
+> the real result.
 
 ## Known console noise, and why it is left alone
 
@@ -140,15 +191,16 @@ exit` is shutdown ordering. Both expected.
 
 Not done, with the measurement that says what each is worth:
 
-- **Emissive → unshaded on LITE (−4.4 s).** Glow is disabled in the web profile,
-  so emission only makes a surface brighter regardless of lighting — which is
-  exactly what unshaded already does, and unshaded is already compiled (85 ms).
-  Lanterns and fireflies would look the same.
-- **`wood.gdshader` → a plain material on LITE (−4.5 s).** The deck loses its
-  grain. A real look-versus-boot trade; worth rendering both before choosing.
-- **The first lit program is 13.8 s on its own** and nothing here touches it. It
-  is probably not one program but Godot's scene shader plus ANGLE's first-ever
-  pipeline setup. Splitting that apart is the next real investigation.
+- **The engine baseline is ~14 s and nothing here touches it.** `tools/floor.gd`
+  pins it to the moment a `Camera3D` exists, before a single triangle is drawn,
+  so it is Godot's own shader set rather than anything the game asked for. No
+  project setting found so far moves it; `rendering/shader_compiler/shader_cache`
+  is for the RD renderers and does nothing on compat.
+- **`surface.gdshader` still costs ~7.4 s.** It is now one program doing timber,
+  water and stream, so the only way to cut it further is to give one of those
+  looks up.
+- **Brotli instead of gzip** would take the 9.6 MB download to roughly 7 MB. A
+  hosting choice, not a code one.
 - **~21 ms per click goes to `VoxelSurfaceManager`** re-solving its isosurface.
   Identical for placing and removing, and flat in the number of blocks, so it is
   not the blocks — it is the marching-cubes pass itself.

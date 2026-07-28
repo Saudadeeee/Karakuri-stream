@@ -66,9 +66,7 @@ func _light_up(root: Node) -> void:
 		var m: Material = mi.get_active_material(s)
 		if m is StandardMaterial3D and (m as StandardMaterial3D).albedo_color.get_luminance() > 0.72:
 			var d: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
-			d.emission_enabled = true
-			d.emission = GLOW
-			d.emission_energy_multiplier = 1.1
+			ShaderBudget.glow(d, GLOW, 1.1)
 			mi.set_surface_override_material(s, d)
 			_glow_mats.append(d)
 

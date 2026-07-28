@@ -114,7 +114,7 @@ func _ready() -> void:
 		_count(get_tree().root, "SubViewport"),
 		WildlifeManager._birds.size() + WildlifeManager._cats.size()
 			+ WildlifeManager._ducks.size() + WildlifeManager._deer.size(),
-		_count(get_tree().root, "GPUParticles3D")])
+		_count(get_tree().root, "GPUParticles3D") + _count(get_tree().root, "CPUParticles3D")])
 	_breakdown(s)
 	get_tree().quit()
 

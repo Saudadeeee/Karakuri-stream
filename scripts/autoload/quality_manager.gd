@@ -12,7 +12,12 @@ extends Node
 var lite: bool = false
 
 func _ready() -> void:
-	lite = OS.has_feature("web")
+	# `--  lite` forces the web profile on a desktop run. Not a convenience: this
+	# autoload is second in the list, so it decides BEFORE every other autoload
+	# builds its materials, and a tool that flips the flag from its own _ready is
+	# already too late — it measures the FULL profile and reports it as the web
+	# one. Which is exactly what happened while counting shader variants.
+	lite = OS.has_feature("web") or OS.get_cmdline_user_args().has("lite")
 
 ## Called by each scene root after it builds its environment/lights.
 func apply(root: Node, env: Environment, sun: DirectionalLight3D, fill: DirectionalLight3D = null) -> void:

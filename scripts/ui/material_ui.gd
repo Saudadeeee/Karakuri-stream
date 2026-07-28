@@ -6,8 +6,13 @@ extends Control
 ## in-world (they only exist as merged occupancy isosurfaces), so their icons
 ## use a stand-in rounded box carrying the same wood/water shader material.
 
-const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
-const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
+## Timber and water are ONE shader with a `surface_mode` uniform. Two shaders
+## meant two programs, and on gl_compatibility a program is compiled the first
+## time it is drawn — through ANGLE that measured 7.8 seconds EACH from cold.
+## See `shaders/surface.gdshader`.
+const SURFACE_SHADER: Shader = preload("res://shaders/surface.gdshader")
+const MODE_WOOD := 0
+const MODE_WATER := 1
 
 ## Icon size is COMPUTED, not fixed. The strip was sized by hand for 15 entries
 ## in a ~700px window; at 17 entries and 40px it needs 792px, so on a 720p window
@@ -255,11 +260,13 @@ func _build_icon_visual(type: BlockData.Type, variant: int) -> Node3D:
 
 	var mat := ShaderMaterial.new()
 	if type == BlockData.Type.WATER:
-		mat.shader = WATER_SHADER
+		mat.shader = SURFACE_SHADER
+		mat.set_shader_parameter("surface_mode", MODE_WATER)
 		mat.set_shader_parameter("water_color", Color(vcol.r, vcol.g, vcol.b, 0.97))
 		mat.set_shader_parameter("deep_color", Color(vcol.darkened(0.2).r, vcol.darkened(0.2).g, vcol.darkened(0.2).b, 0.99))
 	else:
-		mat.shader = WOOD_SHADER
+		mat.shader = SURFACE_SHADER
+		mat.set_shader_parameter("surface_mode", MODE_WOOD)
 		mat.set_shader_parameter("base_color", vcol)
 		mat.set_shader_parameter("grain_color", vcol.darkened(0.28))
 		mat.set_shader_parameter("grain_scale", 4.0)

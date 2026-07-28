@@ -6,21 +6,19 @@ extends Node
 ## as a one-shot burst instead (fade-out via particle lifetime, not a true
 ## sine-wave flicker).
 func burst_at(pos: Vector3) -> void:
-	var particles := GPUParticles3D.new()
+	var particles := CPUParticles3D.new()
 	particles.amount = 8
 	particles.lifetime = 2.5
 	particles.one_shot = true
 	particles.explosiveness = 0.8
 
-	var process_material := ParticleProcessMaterial.new()
-	process_material.direction = Vector3(0.0, 1.0, 0.0)
-	process_material.spread = 180.0
-	process_material.initial_velocity_min = 0.05
-	process_material.initial_velocity_max = 0.2
-	process_material.gravity = Vector3.ZERO
-	process_material.scale_min = 0.03
-	process_material.scale_max = 0.06
-	particles.process_material = process_material
+	particles.direction = Vector3(0.0, 1.0, 0.0)
+	particles.spread = 180.0
+	particles.initial_velocity_min = 0.05
+	particles.initial_velocity_max = 0.2
+	particles.gravity = Vector3.ZERO
+	particles.scale_amount_min = 0.03
+	particles.scale_amount_max = 0.06
 
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.06, 0.06)
@@ -28,11 +26,9 @@ func burst_at(pos: Vector3) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.albedo_color = Color(1.0, 0.95, 0.4, 1.0)
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.emission_enabled = true
-	particle_material.emission = Color(1.0, 0.9, 0.3)
-	particle_material.emission_energy_multiplier = 2.0
+	ShaderBudget.glow(particle_material, Color(1.0, 0.9, 0.3), 2.0)
 	quad.material = particle_material
-	particles.draw_pass_1 = quad
+	particles.mesh = quad
 
 	add_child(particles)
 	particles.global_position = pos

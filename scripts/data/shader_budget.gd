@@ -47,6 +47,38 @@ static func tame(node: Node, keep_double_sided: bool = false) -> void:
 	for c in node.get_children():
 		tame(c, keep_double_sided)
 
+## "This thing glows." Say it through here rather than by setting `emission`
+## directly, because what glowing COSTS depends on the profile.
+##
+## On a build with bloom, emission is the right answer: the glow pass finds the
+## bright pixels and blooms them. The web profile has no bloom — `QualityManager`
+## disables it — so emission there does nothing but raise the surface's
+## brightness, which is exactly what an unshaded material already does.
+##
+## And it is not a small saving. Measured cold in Chrome (ANGLE → D3D11, RTX
+## 3060), the emissive program cost **8.6 seconds** to compile, against 0.67 s
+## for unshaded — and unshaded is already paid for, because the transparent UI
+## bits use it. It was the single largest thing on the first-visit bill that this
+## game had any say over.
+static func glow(m: StandardMaterial3D, colour: Color, energy: float = 1.0) -> void:
+	if m == null:
+		return
+	if QualityManager.lite:
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var lit: Color = Color(colour.r, colour.g, colour.b) * maxf(energy, 1.0)
+		m.albedo_color = Color(minf(lit.r, 1.0), minf(lit.g, 1.0), minf(lit.b, 1.0), m.albedo_color.a)
+		m.emission_enabled = false
+		# Painting the whole surface one bright colour makes any per-vertex tint
+		# underneath it invisible — and leaving the flag on would buy a separate
+		# program for a difference nobody can see. The island's heart cog is the
+		# one thing this applies to, and it is what made the Night map cost a
+		# seventh variant.
+		m.vertex_color_use_as_albedo = false
+		return
+	m.emission_enabled = true
+	m.emission = colour
+	m.emission_energy_multiplier = energy
+
 ## Flatten one material onto the branch's fixed feature set.
 static func normalise(sm: StandardMaterial3D, keep_double_sided: bool = false) -> void:
 	if sm == null:

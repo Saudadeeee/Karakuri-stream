@@ -19,7 +19,11 @@ const REBUILD_INTERVAL := 0.05
 const BASE_BEAT := 0.55
 const STREAM_RADIUS := 0.09
 
-const STREAM_SHADER: Shader = preload("res://shaders/stream.gdshader")
+## The stream wears the same program as the pond and the deck, switched by a
+## `surface_mode` uniform. See `shaders/surface.gdshader`: a separate shader is a
+## separate compile, and through ANGLE that is seconds off the first visit.
+const SURFACE_SHADER: Shader = preload("res://shaders/surface.gdshader")
+const MODE_STREAM := 2
 const CYAN := Color(0.282, 0.792, 0.894, 0.98)   # #48CAE4, the default water
 
 ## DYED STREAMS: a scoop ladling a coloured pond pours THAT colour, and the
@@ -78,7 +82,8 @@ func _stream_mat_for(color: Color) -> ShaderMaterial:
 	if _stream_mats.has(key):
 		return _stream_mats[key]
 	var m := ShaderMaterial.new()
-	m.shader = STREAM_SHADER
+	m.shader = SURFACE_SHADER
+	m.set_shader_parameter("surface_mode", MODE_STREAM)
 	m.set_shader_parameter("water_color", Color(color.r, color.g, color.b, 0.98))
 	_stream_mats[key] = m
 	return m
@@ -504,21 +509,19 @@ func _node_of(cell: Vector3i, expect: int = -1) -> Node3D:
 	return b.node
 
 func _spawn_splash(pos: Vector3, tint: Color = Color(0.7, 0.9, 0.95)) -> void:
-	var p := GPUParticles3D.new()
+	var p := CPUParticles3D.new()
 	p.amount = 8
 	p.lifetime = 0.5
 	p.one_shot = true
 	p.explosiveness = 0.9
 	p.position = pos
-	var mat := ParticleProcessMaterial.new()
-	mat.direction = Vector3(0, 1, 0)
-	mat.spread = 55.0
-	mat.initial_velocity_min = 0.7
-	mat.initial_velocity_max = 1.4
-	mat.gravity = Vector3(0, -4.0, 0)
-	mat.scale_min = 0.03
-	mat.scale_max = 0.06
-	p.process_material = mat
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 55.0
+	p.initial_velocity_min = 0.7
+	p.initial_velocity_max = 1.4
+	p.gravity = Vector3(0, -4.0, 0)
+	p.scale_amount_min = 0.03
+	p.scale_amount_max = 0.06
 	var s := SphereMesh.new()
 	s.radius = 0.05
 	s.height = 0.1
@@ -526,10 +529,9 @@ func _spawn_splash(pos: Vector3, tint: Color = Color(0.7, 0.9, 0.95)) -> void:
 	s.rings = 3
 	var dm := StandardMaterial3D.new()
 	dm.albedo_color = tint.lerp(Color.WHITE, 0.3)   # note colour, kept pastel
-	dm.emission_enabled = true
-	dm.emission = tint * 0.4
+	ShaderBudget.glow(dm, tint * 0.4)
 	s.material = dm
-	p.draw_pass_1 = s
+	p.mesh = s
 	add_child(p)
 	p.emitting = true
 	get_tree().create_timer(0.9).timeout.connect(p.queue_free)

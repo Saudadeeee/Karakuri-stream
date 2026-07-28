@@ -46,7 +46,7 @@ const REVEAL_INTERVAL: float = 0.09
 var _active_flows: Dictionary = {} # Vector3i -> true (set of currently wet cells)
 var _source_audio: Dictionary = {} # Vector3i (source cell) -> AudioStreamPlayer3D
 var _pour_candidates: Dictionary = {} # Vector3i -> true, rim cells that spill off the island edge
-var _waterfalls: Dictionary = {} # Vector3i (pour cell) -> GPUParticles3D
+var _waterfalls: Dictionary = {} # Vector3i (pour cell) -> CPUParticles3D
 
 ## BFS discovery order of the most recently computed flow (Vector3i -> from_dir).
 ## Dictionaries preserve insertion order in GDScript, so iterating this in
@@ -198,29 +198,25 @@ func _activate_cell(cell: Vector3i, from_dir: Vector3i) -> void:
 		_spawn_splash(GridManager.cell_to_world(cell) + Vector3(0.0, -0.5, 0.0))
 
 func _spawn_splash(pos: Vector3) -> void:
-	var particles := GPUParticles3D.new()
+	var particles := CPUParticles3D.new()
 	particles.amount = 8
 	particles.lifetime = 0.6
 	particles.one_shot = true
 	particles.explosiveness = 0.9
 	particles.position = pos
 
-	var mat := ParticleProcessMaterial.new()
-	mat.direction = Vector3(0.0, 1.0, 0.0)
-	mat.spread = 45.0
-	mat.initial_velocity_min = 0.6
-	mat.initial_velocity_max = 1.2
-	mat.gravity = Vector3(0.0, -3.0, 0.0)
-	mat.scale_min = 0.04
-	mat.scale_max = 0.08
+	particles.direction = Vector3(0.0, 1.0, 0.0)
+	particles.spread = 45.0
+	particles.initial_velocity_min = 0.6
+	particles.initial_velocity_max = 1.2
+	particles.gravity = Vector3(0.0, -3.0, 0.0)
+	particles.scale_amount_min = 0.04
+	particles.scale_amount_max = 0.08
 	# Round droplet that shrinks to nothing (scale-to-0) as it falls back.
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 1.0))
 	curve.add_point(Vector2(1.0, 0.0))
-	var scale_curve := CurveTexture.new()
-	scale_curve.curve = curve
-	mat.scale_curve = scale_curve
-	particles.process_material = mat
+	particles.scale_amount_curve = curve
 
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.05
@@ -229,11 +225,9 @@ func _spawn_splash(pos: Vector3) -> void:
 	sphere.rings = 3
 	var drop_mat := StandardMaterial3D.new()
 	drop_mat.albedo_color = Color(0.9, 0.97, 0.95)
-	drop_mat.emission_enabled = true
-	drop_mat.emission = Color(0.7, 0.9, 0.88)
-	drop_mat.emission_energy_multiplier = 0.2
+	ShaderBudget.glow(drop_mat, Color(0.7, 0.9, 0.88), 0.2)
 	sphere.material = drop_mat
-	particles.draw_pass_1 = sphere
+	particles.mesh = sphere
 
 	add_child(particles)
 	particles.emitting = true
@@ -272,7 +266,7 @@ func _refresh_waterfalls() -> void:
 
 	for cell in _waterfalls.keys():
 		if not desired.has(cell):
-			var old: GPUParticles3D = _waterfalls[cell]
+			var old: CPUParticles3D = _waterfalls[cell]
 			if is_instance_valid(old):
 				old.queue_free()
 			_waterfalls.erase(cell)
@@ -288,8 +282,8 @@ func _refresh_waterfalls() -> void:
 
 ## A long, thin downward stream of water droplets — a cheap endless waterfall
 ## that reads as water pouring off the diorama into the sky.
-func _make_waterfall() -> GPUParticles3D:
-	var particles := GPUParticles3D.new()
+func _make_waterfall() -> CPUParticles3D:
+	var particles := CPUParticles3D.new()
 	particles.amount = 26
 	particles.lifetime = 2.2
 	particles.explosiveness = 0.0
@@ -297,17 +291,15 @@ func _make_waterfall() -> GPUParticles3D:
 	# Big visibility box so it isn't culled while the long stream falls.
 	particles.visibility_aabb = AABB(Vector3(-0.6, -14.0, -0.6), Vector3(1.2, 15.0, 1.2))
 
-	var mat := ParticleProcessMaterial.new()
-	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	mat.emission_box_extents = Vector3(0.35, 0.05, 0.35)
-	mat.direction = Vector3(0.0, -1.0, 0.0)
-	mat.spread = 8.0
-	mat.initial_velocity_min = 1.2
-	mat.initial_velocity_max = 2.2
-	mat.gravity = Vector3(0.0, -9.0, 0.0)
-	mat.scale_min = 0.05
-	mat.scale_max = 0.11
-	particles.process_material = mat
+	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	particles.emission_box_extents = Vector3(0.35, 0.05, 0.35)
+	particles.direction = Vector3(0.0, -1.0, 0.0)
+	particles.spread = 8.0
+	particles.initial_velocity_min = 1.2
+	particles.initial_velocity_max = 2.2
+	particles.gravity = Vector3(0.0, -9.0, 0.0)
+	particles.scale_amount_min = 0.05
+	particles.scale_amount_max = 0.11
 
 	var drop := SphereMesh.new()
 	drop.radius = 0.06
@@ -317,9 +309,7 @@ func _make_waterfall() -> GPUParticles3D:
 	var drop_mat := StandardMaterial3D.new()
 	drop_mat.albedo_color = Color(0.7, 0.9, 0.95, 0.9)
 	drop_mat.roughness = 0.15
-	drop_mat.emission_enabled = true
-	drop_mat.emission = Color(0.55, 0.8, 0.85)
-	drop_mat.emission_energy_multiplier = 0.15
+	ShaderBudget.glow(drop_mat, Color(0.55, 0.8, 0.85), 0.15)
 	drop.material = drop_mat
-	particles.draw_pass_1 = drop
+	particles.mesh = drop
 	return particles
