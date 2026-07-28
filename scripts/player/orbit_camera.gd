@@ -18,10 +18,19 @@ const ZOOM_LERP: float = 9.0        # zoom smoothing speed
 @onready var spring_arm: SpringArm3D = $SpringArm3D
 
 var _dragging: bool = false
-var _pitch: float = deg_to_rad(45.0)
+## A little lower than a plan view: 38° keeps the silhouettes of the blocks and
+## the mountains behind them, where 45° flattens everything into a map.
+var _pitch: float = deg_to_rad(38.0)
 var _yaw_vel: float = 0.0           # rad/s carried after release
 var _pitch_vel: float = 0.0
-var _target_zoom: float = 15.0
+## Only a fallback — `_ready` takes the real starting distance from the scene's
+## SpringArm3D, which is where it must be changed (`scenes/main.tscn`). Editing
+## this constant alone does nothing, which cost a render to work out.
+## Close enough that the opening shot is the GARDEN, not the lawn around it. At
+## 15 the whole island fitted the frame and the starter machine was a few specks
+## on one edge — a bad first second for something meant to look inviting. The
+## player can still pull back to `max_zoom`.
+var _target_zoom: float = 7.0
 var _touches: Dictionary = {}       # index -> position (pinch tracking)
 var _pinch_dist: float = -1.0
 

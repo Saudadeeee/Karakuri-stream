@@ -7,6 +7,7 @@ extends Node
 var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
+var _wood_test := false
 var _pitch := -1.0
 
 func _ready() -> void:
@@ -20,6 +21,7 @@ func _ready() -> void:
 		elif a.begins_with("theme="): want_theme = int(a.substr(6))
 		elif a.begins_with("zoom="): _zoom = float(a.substr(5))
 		elif a.begins_with("pitch="): _pitch = float(a.substr(6))
+		elif a == "woodtest": _wood_test = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -36,6 +38,15 @@ func _ready() -> void:
 	for _f in range(40):
 		await get_tree().process_frame
 	_frame(s)
+	if _wood_test:
+		GridManager.clear_all()
+		await get_tree().process_frame
+		for i in 4:
+			var n: Node3D = BlockFactory.instantiate(BlockData.Type.WOOD)
+			s.add_child(n)
+			var c := Vector3i(i - 2, 0, 0)
+			n.position = GridManager.cell_to_world(c)
+			GridManager.set_block(c, BlockData.new(BlockData.Type.WOOD, n))
 	if build:
 		# main.tscn auto-loads the last save on entry ("seamless continue"), so a
 		# test shot would otherwise be the sample build PLUS whatever was lying in
@@ -49,6 +60,13 @@ func _ready() -> void:
 		# instrument in it and no birds, which is the harness being early, not the
 		# game being wrong.
 		await get_tree().create_timer(1.2).timeout
+	# The placement ghost follows the mouse, which in a headless-driven shot sits
+	# at the middle of the screen — a big translucent cube parked over whatever
+	# the shot was meant to show. Photo mode is what the P key uses; use it here
+	# too so a screenshot shows the GARDEN.
+	var pc := s.find_child("PlacementController", true, false)
+	if pc != null:
+		pc.set("photo_mode", true)
 	for _f in range(30):
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw

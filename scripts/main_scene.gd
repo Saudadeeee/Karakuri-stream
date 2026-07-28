@@ -125,22 +125,47 @@ func _toast(text: String) -> void:
 ## The demo machine: ~12 blocks in the -X/-Z corner showing the core loop
 ## (falling water plays percussion; still water powers gears) while leaving
 ## the island centre free to build on.
+## The first thing anyone ever sees. It is not a tutorial and it is not a save —
+## it is the game already running, so a new player arrives to water falling,
+## something knocking on the beat, and a bird deciding whether to land.
+##
+## Built TIGHT and around the origin on purpose. The old one was scattered from
+## x=-5 to x=-1 with the camera at zoom 15, which framed the whole island: a
+## bare green disc with a few specks on one edge. Everything here now sits inside
+## five cells of the middle so the opening shot is the machine, not the lawn.
 func _build_starter_garden() -> void:
-	# Tower: spout pours onto a shishi-odoshi that tips onto a drum. Cốc… tùm!
-	_starter(Vector3i(-4, 0, -3), BlockData.Type.DRUM)
-	_starter(Vector3i(-4, 1, -3), BlockData.Type.SHISHI)
-	_starter(Vector3i(-4, 3, -3), BlockData.Type.SOURCE)
-	# A chime beside the drum catches splashes of the same rhythm visually.
-	_starter(Vector3i(-3, 0, -3), BlockData.Type.CHIME, 2)
-	# Pond driving a gear (with a mill beside it so both models show).
-	_starter(Vector3i(-2, 0, 2), BlockData.Type.WOOD)
-	_starter(Vector3i(-3, 0, 2), BlockData.Type.WOOD, 2)
-	_starter(Vector3i(-3, 1, 2), BlockData.Type.WATER)
-	_starter(Vector3i(-2, 1, 2), BlockData.Type.GEAR)
-	_starter(Vector3i(-1, 1, 2), BlockData.Type.GEAR, 1)
-	# A little life in the corner: lantern + jelly greeter.
-	_starter(Vector3i(-5, 0, 0), BlockData.Type.STONE_LANTERN)
-	_starter(Vector3i(-4, 0, 0), BlockData.Type.JELLY, 1)
+	# The pour, and what it lands on. Spout → shishi-odoshi → drum: cốc… tùm.
+	_starter(Vector3i(0, 3, 0), BlockData.Type.SOURCE)
+	_starter(Vector3i(0, 1, 0), BlockData.Type.SHISHI)
+	_starter(Vector3i(0, 0, 0), BlockData.Type.DRUM)
+	# Three notes in a row, so the first thing a player hears is a phrase rather
+	# than a single sound, and the first thing they see is that blocks LINE UP.
+	_starter(Vector3i(-2, 0, -1), BlockData.Type.CHIME, 0)
+	_starter(Vector3i(-2, 0, 0), BlockData.Type.CHIME, 2)
+	_starter(Vector3i(-2, 0, 1), BlockData.Type.CHIME, 4)
+	# A pond, because water is the best-looking thing in the game and the old
+	# opening shot had almost none of it.
+	for z in [1, 2]:
+		for x in [2, 3]:
+			_starter(Vector3i(x, 0, z), BlockData.Type.WATER)
+	# The pond turns a wheel, the wheel plays a box: the whole machine idea in
+	# two blocks, running before anyone touches anything.
+	#
+	# Both sit ON THE GROUND beside the water, not above it. Putting the gear a
+	# level up over a water cell is mechanically fine — it still touches the pond
+	# — but it renders as a heap of sticks hovering on the surface, and the music
+	# box next to it looked half-sunk in the bank. A gear only reads as a gear
+	# when it is standing on something.
+	_starter(Vector3i(1, 0, 1), BlockData.Type.GEAR)          # touches (2,0,1)
+	_starter(Vector3i(1, 0, 2), BlockData.Type.MUSIC_BOX)     # beside the gear
+	# A short deck along the near bank, so the pond has an edge rather than
+	# stopping in mid-lawn.
+	_starter(Vector3i(1, 0, 0), BlockData.Type.WOOD)
+	_starter(Vector3i(2, 0, 0), BlockData.Type.WOOD)
+	# Quiet things around the edge that reward looking.
+	_starter(Vector3i(-1, 0, 2), BlockData.Type.STONE_LANTERN)
+	_starter(Vector3i(1, 0, -2), BlockData.Type.JELLY, 1)
+	_starter(Vector3i(-1, 0, -2), BlockData.Type.PINWHEEL, 1)
 
 func _starter(cell: Vector3i, type: int, variant: int = 0) -> void:
 	if GridManager.has_block(cell):

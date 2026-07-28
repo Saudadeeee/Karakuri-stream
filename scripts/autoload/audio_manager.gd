@@ -10,11 +10,11 @@ extends Node
 
 const POOL_SIZE: int = 24
 
-const WOOD_HIT: AudioStream = preload("res://assets/sounds/218460__thomasjaunism__wood-block-hit.wav")
-const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__chimes-5.wav")
+const WOOD_HIT: AudioStream = preload("res://assets/sounds/218460__thomasjaunism__wood-block-hit.ogg")
+const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__chimes-5.ogg")
 var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.ogg")
 var _water_flow := preload("res://assets/sounds/249666__tymorafarr__water-stream-looped.ogg")
-const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.wav")
+const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.ogg")
 
 # Equal-tempered ratios for C D E G A relative to root note (pentatonic scale).
 const PENTATONIC_RATIOS: Array[float] = [1.0, 1.1225, 1.2599, 1.4983, 1.6818]

@@ -137,9 +137,10 @@ script — load, boot, menu, Play, place blocks:
 
 | | before this pass | after |
 |---|---|---|
-| menu, first ever visit | 66–74 s | **31–33 s** |
-| game running, first visit | 70 s | **36 s** |
+| menu, first ever visit | 66–74 s | **22–33 s** |
+| game running, first visit | 70 s | **26–36 s** |
 | menu, returning visit | 5 s | **4 s** |
+| on the wire | 14.35 MB | **10.01 MB** |
 | frame rate while playing | 103 fps | 116–122 fps |
 
 The returning number is the one most players see: Chrome keeps ANGLE's compiled
@@ -154,6 +155,66 @@ Brotli instead of gzip would take the download to about 7 MB.
 > first item across the session. Per-item costs and the totals were re-measured
 > back to back at the end, but treat any single figure as ±50%, and the ratios as
 > the real result.
+
+## Making it a demo: weight, and a look worth showing
+
+**Audio: 3.72 MB → 0.92 MB.** Everything that plays through an
+`AudioStreamPlayer3D` is now mono — Godot cannot pan a stereo stream on a 3D
+player, so this is smaller *and* more correct — at 32 kHz and a low Vorbis
+quality. The two uncompressed WAVs went to Vorbis (460 KB → 17 KB for the
+chimes). Music and rain keep their stereo width because they are 2D. Filenames
+still carry the Freesound IDs, so `CREDITS.md` can still be checked against them.
+
+**Brotli instead of gzip: 9.59 MB → 7.56 MB for the engine.** `tools/serve_web.py`
+compresses once, caches it, and falls back to gzip if `brotli` is not on PATH.
+
+    total on the wire   14.35 MB  ->  10.01 MB
+
+**The opening shot.** The starter garden used to be scattered from x=-5 to x=-1
+with the camera at `spring_length = 15`, which framed the whole island: a bare
+green disc with a few specks on one edge. It is now built tight around the
+origin — spout, shishi, drum, three chimes, a pond turning a gear that plays a
+music box — and the camera starts at 7. The starting distance lives on the
+scene's `SpringArm3D`, not in `orbit_camera.gd`; `_ready` reads it from the node,
+so editing the script constant alone does nothing.
+
+## The isosurface was lit from behind
+
+Wood and water — the two most-placed block types — had been rendering at **42% of
+their own albedo** for the entire life of the project. A wooden deck came out a
+flat chocolate-brown hole in the lawn where `#D4A373` warm sand was intended, and
+the pond was a dull teal rather than the bright `#48CAE4` the art direction asks
+for.
+
+Found by elimination, each step a render:
+
+1. `ALBEDO = base_color` alone — still dark. So not the shader's maths.
+2. Printed the uniform: `#D4A373`, correct. So not the colour being fed in.
+3. Sampled the pixel: `(89, 58, 30)` against an expected `(212, 163, 115)`.
+4. `ALBEDO = v_world_normal * 0.5 + 0.5` — the top face of a flat deck reported
+   `(-0.69, -0.40, -0.25)` where `(0, 1, 0)` belonged.
+
+The vertex normals are summed from face normals, which come from the
+marching-cubes winding, and that winding is not consistent between the two
+orientation cases — neighbouring triangles cancel, leaving short scattered
+normals. `cull_disabled` on both isosurface materials is why no hole ever opened
+and gave the game away.
+
+The fix takes the normal from the surface itself:
+`normalize(cross(dFdx(v_world_pos), dFdy(v_world_pos)))`, oriented against
+`CAMERA_POSITION_WORLD`. Note the spaces: that normal is in WORLD space while
+Godot's `VIEW` and `NORMAL` built-ins are VIEW space, and mixing them flips about
+half the faces — which showed up as a deck whose sunlit top was its darkest part.
+
+It is also faceted, which every other surface in this game already is.
+
+The baked vertex AO was broken in the same area for the same kind of reason: it
+probed a fixed set of offsets rather than looking outward along the normal, so on
+any flat surface it just walked into the block's own neighbours and returned a
+CONSTANT 0.52 — no crevice detail, just a flat 22% darkening. It now probes along
+the vertex normal, with three rays rather than seven: each ray is a dictionary
+lookup per vertex, and on an 80-block deck the bake alone was 19 ms of the 74 ms
+a single block placement cost.
 
 ## Known console noise, and why it is left alone
 
@@ -201,9 +262,19 @@ Not done, with the measurement that says what each is worth:
   looks up.
 - **Brotli instead of gzip** would take the 9.6 MB download to roughly 7 MB. A
   hosting choice, not a code one.
-- **~21 ms per click goes to `VoxelSurfaceManager`** re-solving its isosurface.
-  Identical for placing and removing, and flat in the number of blocks, so it is
-  not the blocks — it is the marching-cubes pass itself.
+- **`VoxelSurfaceManager` re-solves its whole group on every edit**, and that is
+  now the one thing standing between this and "smooth whatever you build".
+  Measured, LITE, a block placed with a deck already down:
+
+  | wood/water cells | p50 | worst frame | frames over 16.7 ms |
+  |---|---|---|---|
+  | the starter garden's 6 | 3.0 ms | 11.4 ms | 0 / 420 |
+  | 40 | 2.9 ms | 45 ms | 14 / 420 |
+  | 80 | 2.5 ms | 60 ms | 14 / 420 |
+
+  Steady state is fine at every size — it is the rebuild. One edit re-solves the
+  entire connected group, so the fix is to chunk the field and re-solve only the
+  chunk that changed. That is a real change to the manager, not a tuning knob.
 
 ## Frame times
 

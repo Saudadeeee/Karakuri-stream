@@ -128,6 +128,30 @@ void vertex() {
 }
 
 void fragment() {
+	// Take the normal from the SURFACE ITSELF rather than from the mesh.
+	//
+	// The isosurface's vertex normals are summed from face normals, and the
+	// marching-cubes winding is not consistent between the two orientation
+	// cases, so neighbouring triangles cancel: the normals came out short and
+	// scattered instead of pointing out. Measured on a flat wooden deck, the
+	// upward face reported (-0.69, -0.40, -0.25) where (0, 1, 0) belonged, and
+	// the timber lit to 42% of its own albedo — a chocolate-brown hole in the
+	// lawn where #D4A373 warm sand was meant to be. `cull_disabled` on both
+	// isosurface materials is why nobody ever saw a hole and caught it.
+	//
+	// Screen-space derivatives of the world position give the true geometric
+	// normal of the triangle being drawn, whatever the mesh claims. It is also
+	// faceted, which is what every other surface in this game already is.
+	// Both of these live in WORLD space. `VIEW` and `NORMAL` are Godot's
+	// VIEW-space built-ins, so orienting against `VIEW` or assigning straight to
+	// `NORMAL` mixes two spaces and flips roughly half the faces the wrong way —
+	// which showed up as a deck whose sunlit top was the darkest part of it.
+	vec3 geo = normalize(cross(dFdx(v_world_pos), dFdy(v_world_pos)));
+	vec3 to_cam = normalize(CAMERA_POSITION_WORLD - v_world_pos);
+	if (dot(geo, to_cam) < 0.0) {
+		geo = -geo;
+	}
+	NORMAL = normalize((VIEW_MATRIX * vec4(geo, 0.0)).xyz);
 	vec3 sun = normalize(FIXED_SUN);
 	if (surface_mode == 2) {
 		// Two scrolling foam-streak layers at different speeds — the read of
@@ -156,7 +180,7 @@ void fragment() {
 
 		// Foam gathers along the silhouette rim and on the upper crests, kept
 		// subtle so the body stays teal rather than washing out to white.
-		float up = clamp(v_world_normal.y, 0.0, 1.0);
+		float up = clamp(geo.y, 0.0, 1.0);
 		float foam = clamp(fresnel * 0.6 + smoothstep(0.7, 1.0, v_crest) * up, 0.0, 1.0) * foam_amount;
 
 		// Caustic shimmer crawling across the top.
@@ -170,7 +194,7 @@ void fragment() {
 		// Sky sheen at grazing angles — strongest on the flat top, so a pond
 		// mirrors the horizon like glass while the body stays cyan.
 		albedo = mix(albedo, sky_tint.rgb, fresnel * sky_reflect * (0.35 + 0.65 * up));
-		float wl = dot(v_world_normal, sun) * 0.5 + 0.5;
+		float wl = dot(geo, sun) * 0.5 + 0.5;
 		albedo *= mix(0.66, 1.12, wl);
 
 		float sparkle = smoothstep(0.85, 1.0, v_crest) * sparkle_strength * up;
@@ -196,7 +220,7 @@ void fragment() {
 		// Baked directional shade: top bright, sun-side bright, shadow-side dark,
 		// underside darkest. This is the cue that stops a flat-lit rounded blob
 		// reading as concave.
-		float lambert = dot(v_world_normal, sun) * 0.5 + 0.5;
+		float lambert = dot(geo, sun) * 0.5 + 0.5;
 		albedo *= mix(1.0 - top_shade, 1.0 + top_shade * 0.35, lambert);
 
 		// Rim light: fresnel toward the silhouette, for the soft toy-diorama edge
@@ -204,8 +228,10 @@ void fragment() {
 		float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), rim_power);
 		albedo = mix(albedo, rim_color, fres * rim_strength);
 
-		// Baked vertex AO from the isosurface builder (crevices darken).
-		ALBEDO = albedo * mix(0.55, 1.0, COLOR.r);
+		// Baked vertex AO from the isosurface builder (crevices darken). Gentle:
+		// the bake now reports real occlusion rather than a constant, so this no
+		// longer has to be tuned around a permanent 0.5 sitting in COLOR.r.
+		ALBEDO = albedo * mix(0.78, 1.0, COLOR.r);
 		ALPHA = 1.0;
 		ROUGHNESS = 0.85;
 		METALLIC = 0.0;

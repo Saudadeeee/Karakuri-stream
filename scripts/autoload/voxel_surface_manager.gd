@@ -197,29 +197,45 @@ func _build(mi: MeshInstance3D, centers: Array, iso: float, bake_ao: bool = fals
 	mi.mesh = mesh
 	mi.position = region_min
 
-## Cheap baked AO: for each vertex, count occupied grid cells at a handful of
-## probe offsets around/above it — more neighbours = deeper crevice = darker
-## vertex colour (the wood shader multiplies it in). Grid-dict lookups only,
-## no field re-sampling, so a few thousand verts stay well under the rebuild
-## throttle.
-const AO_PROBES: Array[Vector3] = [
-	Vector3(0, 0.7, 0),
-	Vector3(0.7, 0.35, 0), Vector3(-0.7, 0.35, 0),
-	Vector3(0, 0.35, 0.7), Vector3(0, 0.35, -0.7),
+## Cheap baked AO: for each vertex, look OUTWARD along its own normal and count
+## how much solid is in the way. A vertex on an open face sees nothing and stays
+## bright; one down a crevice between two blocks is blocked from several
+## directions and darkens.
+##
+## Outward is the whole point. This used to probe a fixed set of offsets — up,
+## and four sideways — which on any flat surface just walked into the block's own
+## neighbours. Every vertex of a plain wooden deck came back with the same three
+## hits, so the "occlusion" was a CONSTANT 0.52: no crevice detail whatsoever,
+## and a flat 22% darkening of everything. That is why a wooden deck rendered as
+## a chocolate-brown hole in the lawn instead of warm timber — measured by
+## dumping COLOR.r straight to ALBEDO, which came back an even grey.
+## Three rays, not seven. Every ray is a dictionary lookup per VERTEX, and the
+## isosurface has thousands of them: measured on an 80-block deck, baking cost
+## 19 ms of the 74 ms that one block placement took. Three still tells a crevice
+## from an open face, which is all this is for.
+const AO_RAYS: Array[Vector3] = [
+	Vector3(0, 0, 0),                            # straight out
+	Vector3(0.7, 0.4, 0), Vector3(-0.7, -0.4, 0),  # and a wide pair either side
 ]
+const AO_REACH: float = 0.85
+const AO_BITE: float = 0.20   # darkening per blocked ray, of three
 
 func _bake_vertex_ao(mesh: ArrayMesh, origin: Vector3) -> ArrayMesh:
 	var arrays: Array = mesh.surface_get_arrays(0)
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var colors := PackedColorArray()
 	colors.resize(verts.size())
+	var have_normals: bool = norms.size() == verts.size()
 	for i in verts.size():
 		var wp: Vector3 = origin + verts[i]
+		var n: Vector3 = norms[i].normalized() if have_normals else Vector3.UP
 		var occ := 0
-		for p in AO_PROBES:
-			if GridManager.has_block(GridManager.world_to_cell(wp + p)):
+		for r in AO_RAYS:
+			var probe: Vector3 = wp + (n + r).normalized() * AO_REACH
+			if GridManager.has_block(GridManager.world_to_cell(probe)):
 				occ += 1
-		var ao: float = 1.0 - 0.16 * float(occ)
+		var ao: float = 1.0 - AO_BITE * float(occ)
 		colors[i] = Color(ao, ao, ao)
 	arrays[Mesh.ARRAY_COLOR] = colors
 	var out := ArrayMesh.new()
