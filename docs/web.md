@@ -104,6 +104,38 @@ Two mistakes were made building this and both are worth not repeating:
    risks paying twice. It now warms in the main viewport, behind the opaque
    background panel.
 
+## Known console noise, and why it is left alone
+
+`ERROR: Parameter "material" is null.` — a handful, when blocks that carry an
+imported model are placed.
+
+It comes from `MeshInstance3D.set_surface_override_material`. Assigning a
+per-surface override makes the engine refresh that surface's instance shader
+parameters, and it queries the slot before anything is in it; the storage
+back-end logs a null-guard and returns. Nothing in this game uses instance
+shader parameters, so nothing is affected — the frame draws, the colours are
+right, the frame rate is unchanged.
+
+Measured, so this is not a guess:
+
+- pre-existing, not introduced here: the same probe returns **29** against this
+  branch's `mesh_fit.gd` and **29** against the previous branch's.
+- `MeshFit.matte` no longer duplicates a material per instance, which removed
+  most of them: **29 → 4** headless, **32 → 8** in the browser.
+- the rest come from `MeshFit.tint`, which recolours only the surfaces whose
+  albedo is near the model's base colour. That genuinely needs a per-surface
+  override; `material_override` covers the whole mesh and would repaint the
+  chime's frame along with its tube.
+
+Removing the last few means duplicating the *mesh* per instance so the material
+can be set on the surface itself. That trades a harmless log line for real
+per-instance vertex memory, on the one platform where memory matters most. Not
+worth it.
+
+`ERROR: Parse JSON failed` during a regression run is `_sec_save_corruption`
+feeding the loader a deliberately broken file, and `resources still in use at
+exit` is shutdown ordering. Both expected.
+
 ## Still on the table
 
 Not done, with the measurement that says what each is worth:

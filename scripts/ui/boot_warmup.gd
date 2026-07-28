@@ -103,7 +103,7 @@ func _ready() -> void:
 ## feature nothing else uses. `ShaderBudget` exists to keep this list short, and
 ## a longer boot is precisely the price of letting it grow.
 func _jobs() -> Array:
-	return [
+	var jobs: Array = [
 		{"say": "Waking the island", "make": func(): return _lit(false, false)},
 		{"say": "Mixing the paint", "make": func(): return _lit(true, false)},
 		{"say": "Lighting the lanterns", "make": func(): return _lit(false, true)},
@@ -115,6 +115,15 @@ func _jobs() -> Array:
 		{"say": "Clearing the glass", "make": func(): return _blended(BaseMaterial3D.BLEND_MODE_MIX)},
 		{"say": "Letting the leaves go", "make": func(): return _leaf_particles()},
 	]
+	# The island's heart cog is vertex-coloured AND emissive, a combination
+	# nothing else wears, and only on a map whose mechanism glows — Night. Warm
+	# it only there: on the other three it is a program nobody would ever use,
+	# and skipping it saves everyone else several seconds of first visit. Left
+	# out entirely, a Night player instead pays for it as a stall the first time
+	# the cog comes into view, which is worse for being unexplained.
+	if float(MapThemes.mechanism().get("glow", 0.0)) > 0.0:
+		jobs.append({"say": "Turning the heart cog", "make": func(): return _lit(true, true)})
+	return jobs
 
 # ------------------------------------------------------------------ warm items
 func _box(m: Material) -> MeshInstance3D:

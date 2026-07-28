@@ -57,9 +57,14 @@ static func _recenter(b: Button) -> void:
 static func _tween(b: Button) -> Tween:
 	# One tween per button: starting a second while the first runs leaves two
 	# writing to scale on the same frame and the button visibly stutters.
-	var old = b.get_meta("cute_tween", null)
-	if old != null and is_instance_valid(old) and (old as Tween).is_running():
-		(old as Tween).kill()
+	# `get_meta(name, null)` is NOT a safe lookup: an explicitly-null default is
+	# indistinguishable from no default at all, so the engine still logs
+	# "does not have any 'meta' values with the key" for every button the first
+	# time it is hovered. Ask whether the key is there instead.
+	if b.has_meta("cute_tween"):
+		var old = b.get_meta("cute_tween")
+		if old != null and is_instance_valid(old) and (old as Tween).is_running():
+			(old as Tween).kill()
 	var t: Tween = b.create_tween().set_parallel(true)
 	b.set_meta("cute_tween", t)
 	return t

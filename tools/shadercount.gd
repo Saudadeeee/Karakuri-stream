@@ -19,6 +19,9 @@ func _ready() -> void:
 			target = a.substr(6)
 		elif a.begins_with("houses="):
 			houses = int(a.substr(7))
+		elif a.begins_with("theme="):
+			MapThemes.current = int(a.substr(6))
+			MapThemes.save_current()
 		elif a.begins_with("lite="):
 			QualityManager.lite = a.substr(5) != "0"
 

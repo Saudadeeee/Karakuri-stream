@@ -62,8 +62,7 @@ static func flat(col: Color) -> StandardMaterial3D:
 ## Forces every material to the game's matte clay look. glTF import gives
 ## StandardMaterial3D with default specular 0.5, so smooth-shaded imported props
 ## catch bright highlights (a grey stone bell reads as white, wood as cream) —
-## clashing with the flat wood/water shaders. Duplicate each material (don't
-## mutate the shared imported resource) and flatten it: no metal, no specular,
+## clashing with the flat wood/water shaders. Flatten it: no metal, no specular,
 ## full roughness. Keeps the authored base colour.
 ##
 ## This is also where an imported material's SHADER FEATURE FLAGS get normalised,
@@ -73,6 +72,18 @@ static func flat(col: Color) -> StandardMaterial3D:
 ## of a second each under ANGLE. Every scenery model shipped with double-sided
 ## materials — that alone was one extra program plus double the raster work on
 ## rocks and tree trunks that can never be seen from inside.
+##
+## The material is edited IN PLACE rather than duplicated per instance. Every
+## caller wants the same answer — matte is a property of the art direction, not
+## of one bell — so a duplicate per surface per instance meant thirty copies of
+## one rock's material and thirty `set_surface_override_material` calls, each of
+## which made the engine log `Parameter "material" is null` while refreshing the
+## instance shader parameters of a slot that had nothing in it yet. Harmless, and
+## invisible on the desktop GL path, but it filled the browser console with
+## errors, and a console full of errors is indistinguishable from a broken build
+## when someone else is reading it.
+##
+## `tint()` below still duplicates, because recolouring IS per instance.
 ##
 ## `double_sided` is for props that really are flat sheets: crossed reed planes,
 ## a lily pad, a flag. Those knowingly spend the extra program.
@@ -87,9 +98,7 @@ static func matte(root: Node, double_sided: bool = false) -> void:
 	for s in range(mi.mesh.get_surface_count()):
 		var m: Material = mi.get_active_material(s)
 		if m is StandardMaterial3D:
-			var d: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
-			ShaderBudget.normalise(d, double_sided)
-			mi.set_surface_override_material(s, d)
+			ShaderBudget.normalise(m as StandardMaterial3D, double_sided)
 
 ## Recolours the surfaces whose current albedo is close to `from` — used to
 ## retint one part of a multi-material model (e.g. the jelly body) to a variant

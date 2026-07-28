@@ -35,6 +35,8 @@ func _ready() -> void:
 	await _sec_wildlife()
 	print("SECTION _sec_stream_ground")
 	await _sec_stream_ground()
+	print("SECTION _sec_legacy_save")
+	await _sec_legacy_save()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
 	print("SECTION _sec_theme_switch")
@@ -404,6 +406,77 @@ func _sec_stream_ground() -> void:
 ## Before this was fixed, load_game() cleared the grid FIRST and then hit an
 ## error partway through rebuilding, so a truncated file (a browser tab closed
 ## mid-flush is enough) wiped the current build and restored nothing.
+## A save written by the branch that still HAD houses. Everyone who ever opened
+## the old build has one sitting in user://, and type 16 no longer exists.
+##
+## `_valid_entries` already dropped unknown ids one at a time, but nothing
+## pinned the two cases that actually matter: a save that is PARTLY houses must
+## keep everything else, and one that is ENTIRELY houses must fail without
+## wiping the garden the player is currently looking at.
+##
+## Corrupt and out-of-range ids are in here too. On desktop a bad enum logs and
+## carries on; in WASM it traps and takes the engine down with it, so "it warned
+## on my machine" proves nothing about the build people actually play.
+func _sec_legacy_save() -> void:
+	# 1. Houses mixed in with blocks that still exist.
+	_write_save([
+		{"x": 0, "y": 0, "z": 0, "type": 16, "variant": 3},   # HOUSE, gone
+		{"x": 1, "y": 0, "z": 0, "type": 16, "variant": 0},   # HOUSE, gone
+		{"x": 2, "y": 0, "z": 0, "type": 0, "variant": 1},    # WOOD
+		{"x": 3, "y": 0, "z": 0, "type": 10, "variant": 2},   # CHIME
+		{"x": 4, "y": 0, "z": 0, "type": 3, "variant": 0},    # BELL
+	])
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(), "a save with houses in it still loads")
+	for _f in range(4):
+		await get_tree().process_frame
+	_check(not GridManager.has_block(Vector3i(0, 0, 0)) and not GridManager.has_block(Vector3i(1, 0, 0)),
+			"a house came back as something")
+	for c in [Vector3i(2, 0, 0), Vector3i(3, 0, 0), Vector3i(4, 0, 0)]:
+		_check(GridManager.has_block(c), "%s was thrown away along with the houses" % c)
+	var chime: BlockData = GridManager.get_block(Vector3i(3, 0, 0))
+	_check(chime != null and int(chime.state.get("variant", -1)) == 2, "the chime kept its note")
+
+	# 2. A garden that was ONLY houses: nothing is rebuildable, so the load has
+	#    to fail cleanly and leave what the player has alone.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 0, 40), BlockData.Type.DRUM)
+	await get_tree().process_frame
+	_write_save([
+		{"x": 0, "y": 0, "z": 0, "type": 16, "variant": 0},
+		{"x": 0, "y": 1, "z": 0, "type": 16, "variant": 0},
+	])
+	_check(not SaveManager.load_game(), "an all-houses save reports failure rather than success")
+	for _f in range(3):
+		await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(0, 0, 40)), "an unloadable save wiped the live garden")
+
+	# 3. Ids that never existed, negative, and enormous.
+	_clear()
+	await get_tree().process_frame
+	_write_save([
+		{"x": 0, "y": 0, "z": 0, "type": 99},
+		{"x": 1, "y": 0, "z": 0, "type": -4},
+		{"x": 2, "y": 0, "z": 0, "type": 2147483647},
+		{"x": 3, "y": 0, "z": 0, "type": 3, "variant": 999},   # BELL, silly variant
+		{"x": 4, "y": 0, "z": 0},                              # no type at all
+	])
+	_check(SaveManager.load_game(), "the one rebuildable entry is rescued from a corrupt file")
+	for _f in range(4):
+		await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(3, 0, 0)), "the valid bell survives its broken neighbours")
+	for c in [Vector3i(0,0,0), Vector3i(1,0,0), Vector3i(2,0,0), Vector3i(4,0,0)]:
+		_check(not GridManager.has_block(c), "%s built something out of a bad entry" % c)
+	_clear()
+	await get_tree().process_frame
+
+func _write_save(entries: Array) -> void:
+	var f := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	f.store_string(JSON.stringify(entries))
+	f.close()
+
 func _sec_save_corruption() -> void:
 	var cases: Array = [
 		["not json at all", "garbage text"],
