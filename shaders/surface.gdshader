@@ -128,30 +128,28 @@ void vertex() {
 }
 
 void fragment() {
-	// Take the normal from the SURFACE ITSELF rather than from the mesh.
+	// The mesh's own normals. An earlier pass replaced these with a screen-space
+	// derivative normal, on the strength of a normal read out of a RENDER by
+	// sampling a pixel — and the pixel was in the wrong place. Reading the mesh
+	// arrays directly (`tools/normcheck.gd`) settles it: on a flat slab, 45 of
+	// the top-face vertices point up and none point down. The normals were never
+	// broken.
 	//
-	// The isosurface's vertex normals are summed from face normals, and the
-	// marching-cubes winding is not consistent between the two orientation
-	// cases, so neighbouring triangles cancel: the normals came out short and
-	// scattered instead of pointing out. Measured on a flat wooden deck, the
-	// upward face reported (-0.69, -0.40, -0.25) where (0, 1, 0) belonged, and
-	// the timber lit to 42% of its own albedo — a chocolate-brown hole in the
-	// lawn where #D4A373 warm sand was meant to be. `cull_disabled` on both
-	// isosurface materials is why nobody ever saw a hole and caught it.
+	// The derivative version also forced every normal to face the camera, which
+	// flattened the lighting into "everything is lit" and made adjacent triangles
+	// shade in a visible checkerboard wherever the winding alternated. Measuring
+	// the wrong thing, then fixing it, cost more than the original problem.
+	// TWO-SIDED LIGHTING. Both isosurface looks are drawn with `cull_disabled`,
+	// because the builder's winding is the opposite of Godot's front-face rule
+	// and switching to `cull_back` makes the near wall of a pool disappear
+	// outright. So back faces ARE drawn — and a back face lit by its own outward
+	// normal shades nothing like the front face beside it. Along every silhouette
+	// that showed as a row of bright wedges, and while orbiting it reads exactly
+	// like seeing INTO the block, which is how it was reported.
 	//
-	// Screen-space derivatives of the world position give the true geometric
-	// normal of the triangle being drawn, whatever the mesh claims. It is also
-	// faceted, which is what every other surface in this game already is.
-	// Both of these live in WORLD space. `VIEW` and `NORMAL` are Godot's
-	// VIEW-space built-ins, so orienting against `VIEW` or assigning straight to
-	// `NORMAL` mixes two spaces and flips roughly half the faces the wrong way —
-	// which showed up as a deck whose sunlit top was the darkest part of it.
-	vec3 geo = normalize(cross(dFdx(v_world_pos), dFdy(v_world_pos)));
-	vec3 to_cam = normalize(CAMERA_POSITION_WORLD - v_world_pos);
-	if (dot(geo, to_cam) < 0.0) {
-		geo = -geo;
-	}
-	NORMAL = normalize((VIEW_MATRIX * vec4(geo, 0.0)).xyz);
+	// Flipping the normal on back-facing fragments is the standard answer and
+	// makes the two sides agree.
+	vec3 geo = FRONT_FACING ? v_world_normal : -v_world_normal;
 	vec3 sun = normalize(FIXED_SUN);
 	if (surface_mode == 2) {
 		// Two scrolling foam-streak layers at different speeds — the read of
@@ -206,7 +204,9 @@ void fragment() {
 		METALLIC = 0.12;
 		SPECULAR = 0.65;
 		// A faint self-glow keeps the pond as lively as the routed stream.
-		EMISSION = water_color.rgb * 0.08
+		// Same lift as the timber branch: this scene lights a surface at about
+		// 0.45, and the pond is meant to read as the bright #48CAE4 of the palette.
+		EMISSION = water_color.rgb * 0.45
 			+ foam_color.rgb * (foam * 0.15 + caustic * 0.3 + sparkle * 0.5);
 	} else {
 		// SOFT low-contrast blotches only — NO sine "ring" banding. World-Y sine
@@ -236,6 +236,11 @@ void fragment() {
 		ROUGHNESS = 0.85;
 		METALLIC = 0.0;
 		SPECULAR = 0.15;
-		EMISSION = vec3(0.0);
+		// A little self-light so a placed timber block reads the same warm sand
+		// as the wooden PROPS standing next to it. Measured with a white albedo,
+		// this scene lights a surface at about 0.45, which turns #D4A373 into a
+		// dark chocolate — physically right, and wrong next to a chime frame whose
+		// model albedo is much paler. The pond does the same thing one branch up.
+		EMISSION = albedo * 0.62;
 	}
 }

@@ -8,7 +8,9 @@ var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
 var _wood_test := false
+var _pool := false
 var _pitch := -1.0
+var _yaw := 999.0
 
 func _ready() -> void:
 	var target := "res://scenes/main_menu.tscn"
@@ -21,7 +23,9 @@ func _ready() -> void:
 		elif a.begins_with("theme="): want_theme = int(a.substr(6))
 		elif a.begins_with("zoom="): _zoom = float(a.substr(5))
 		elif a.begins_with("pitch="): _pitch = float(a.substr(6))
+		elif a.begins_with("yaw="): _yaw = float(a.substr(4))
 		elif a == "woodtest": _wood_test = true
+		elif a == "pool": _pool = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -38,6 +42,21 @@ func _ready() -> void:
 	for _f in range(40):
 		await get_tree().process_frame
 	_frame(s)
+	if _pool:
+		# A sunken pool with a wall all round it — the shape the report showed:
+		# looking across water at a far bank you should NOT be able to see through.
+		GridManager.clear_all()
+		await get_tree().process_frame
+		for x in range(-3, 4):
+			for z in range(-3, 4):
+				var edge: bool = absi(x) == 3 or absi(z) == 3
+				var t: int = BlockData.Type.WOOD if edge else BlockData.Type.WATER
+				for y in ([0, 1] if edge else [0]):
+					var c := Vector3i(x, y, z)
+					var n: Node3D = BlockFactory.instantiate(t)
+					s.add_child(n)
+					n.position = GridManager.cell_to_world(c)
+					GridManager.set_block(c, BlockData.new(t, n))
 	if _wood_test:
 		GridManager.clear_all()
 		await get_tree().process_frame
@@ -144,6 +163,8 @@ func _frame(root: Node) -> void:
 			arm.spring_length = _zoom
 	if _pitch > 0.0:
 		cam.set("_pitch", deg_to_rad(_pitch))
+	if _yaw < 900.0:
+		cam.set("_yaw", deg_to_rad(_yaw))
 
 ## What the wildlife manager thinks exists, so a screenshot can be checked
 ## against it rather than squinting.

@@ -178,43 +178,48 @@ music box — and the camera starts at 7. The starting distance lives on the
 scene's `SpringArm3D`, not in `orbit_camera.gd`; `_ready` reads it from the node,
 so editing the script constant alone does nothing.
 
-## The isosurface was lit from behind
+## The isosurface: a wrong diagnosis, and what was actually true
 
-Wood and water — the two most-placed block types — had been rendering at **42% of
-their own albedo** for the entire life of the project. A wooden deck came out a
-flat chocolate-brown hole in the lawn where `#D4A373` warm sand was intended, and
-the pond was a dull teal rather than the bright `#48CAE4` the art direction asks
-for.
+A previous pass here claimed the isosurface's vertex normals were broken and
+replaced them with a screen-space derivative normal forced to face the camera.
+**That was wrong, and it is now reverted.** Recording it because the mistake is
+more instructive than the fix.
 
-Found by elimination, each step a render:
+The evidence for it came from sampling a PIXEL out of a render and decoding it as
+a normal. That is indirect, and the pixel was in the wrong place — a later probe
+returned a "normal" longer than 1, which should have been the tell.
 
-1. `ALBEDO = base_color` alone — still dark. So not the shader's maths.
-2. Printed the uniform: `#D4A373`, correct. So not the colour being fed in.
-3. Sampled the pixel: `(89, 58, 30)` against an expected `(212, 163, 115)`.
-4. `ALBEDO = v_world_normal * 0.5 + 0.5` — the top face of a flat deck reported
-   `(-0.69, -0.40, -0.25)` where `(0, 1, 0)` belonged.
+`tools/normcheck.gd` reads the mesh arrays instead. On a flat slab: **45 top-face
+vertices point up, none point down.** The normals were always correct.
 
-The vertex normals are summed from face normals, which come from the
-marching-cubes winding, and that winding is not consistent between the two
-orientation cases — neighbouring triangles cancel, leaving short scattered
-normals. `cull_disabled` on both isosurface materials is why no hole ever opened
-and gave the game away.
+What the derivative version actually did was force every visible fragment's
+normal toward the camera, which floods everything with light. That is why the
+timber and the pond looked brighter after it — not because anything was fixed.
+It also made adjacent triangles shade in a visible checkerboard wherever the
+winding alternated, and being camera-relative it changed as the camera moved.
+That is almost certainly what was reported as "seeing through blocks while
+orbiting".
 
-The fix takes the normal from the surface itself:
-`normalize(cross(dFdx(v_world_pos), dFdy(v_world_pos)))`, oriented against
-`CAMERA_POSITION_WORLD`. Note the spaces: that normal is in WORLD space while
-Godot's `VIEW` and `NORMAL` built-ins are VIEW space, and mixing them flips about
-half the faces — which showed up as a deck whose sunlit top was its darkest part.
+Two things that ARE true and were measured on the way:
 
-It is also faceted, which every other surface in this game already is.
+- **Culling cannot simply be turned on.** The builder's winding is the opposite
+  of Godot's front-face rule: switching either isosurface material to `cull_back`
+  makes the near wall of a pool vanish outright. `cull_disabled` is load-bearing,
+  and the bright wedges along a silhouette are the price.
+- **The scene lights any surface at about 0.45.** Measured by rendering the
+  isosurface with a pure white albedo: 0.40 on slopes, 0.60 on the top, and the
+  island grass sits in the same range. So `#D4A373` genuinely renders as a dark
+  chocolate here; the wooden PROPS look paler because their model albedo is
+  paler, not because the block is shaded differently. Both isosurface looks now
+  carry a modest `EMISSION` lift so a placed block reads as the palette colour
+  it advertises, which is what the pond branch was already doing.
 
-The baked vertex AO was broken in the same area for the same kind of reason: it
-probed a fixed set of offsets rather than looking outward along the normal, so on
-any flat surface it just walked into the block's own neighbours and returned a
-CONSTANT 0.52 — no crevice detail, just a flat 22% darkening. It now probes along
-the vertex normal, with three rays rather than seven: each ray is a dictionary
-lookup per vertex, and on an 80-block deck the bake alone was 19 ms of the 74 ms
-a single block placement cost.
+The vertex-AO rewrite from the same pass DOES stand: it used to probe fixed
+offsets, which on any flat surface walked into the block's own neighbours and
+returned a constant 0.52 — no crevice detail, just a flat darkening. It now
+probes outward along the vertex normal, with three rays rather than seven,
+because each ray is a dictionary lookup per vertex and on an 80-block deck the
+bake alone was 19 ms of the 74 ms a single placement cost.
 
 ## Known console noise, and why it is left alone
 
