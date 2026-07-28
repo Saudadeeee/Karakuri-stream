@@ -274,7 +274,11 @@ func _build_corners(ctx: Dictionary, wall_col: Color) -> void:
 func _jitter(salt: int) -> float:
 	return HouseShape.jitter(grid_cell, salt)
 
-## Size of a slab covering one face: full across, thin through.
+## FULL-HEIGHT panel covering one face: `span` goes into BOTH the vertical and
+## the horizontal axis, so this is only ever right for something that fills the
+## whole face — a wall. For anything low (a sill, a band, a balustrade) use
+## `_slab`, which takes width and height separately. Mixing the two up turned a
+## terrace balustrade into a ring of full-height walls.
 func _face_size(side: Vector3i, span: float, thick: float) -> Vector3:
 	return Vector3(thick, span, span) if side.x != 0 else Vector3(span, span, thick)
 
@@ -640,9 +644,17 @@ func _build_terrace(ctx: Dictionary, trim_col: Color) -> void:
 	_batch.box(Vector3(1.04, 0.1, 1.04), Vector3(0, 0.5, 0), deck)
 	for side in ctx["open_sides"]:
 		var out := Vector3(float(side.x), 0.0, float(side.z))
-		# Balustrade: a capped low wall, only on edges that face out.
-		_batch.box(_face_size(side, 1.04, 0.09), out * 0.48 + Vector3(0, 0.68, 0), trim_col)
-		_batch.box(_face_size(side, 1.04, 0.13), out * 0.48 + Vector3(0, 0.79, 0), deck)
+		# Balustrade: a capped LOW wall, only on edges that face out.
+		#
+		# This used _face_size, which puts its `span` argument into BOTH the
+		# vertical and the horizontal axis — so "1.04 wide, 0.09 thick" came out
+		# as a 1.04-TALL full-height panel. A terrace therefore rendered as a ring
+		# of roofless walls standing around an empty cell, which is exactly what
+		# got reported: no block there, walls anyway, and placing a block into it
+		# "fixed" it because the cell then stopped being a terrace at all.
+		# _slab is the helper for a low, wide, thin panel on a face.
+		_batch.box(_slab(out, 1.04, 0.18), out * 0.46 + Vector3(0, 0.63, 0), trim_col)
+		_batch.box(_slab(out, 1.04, 0.06) + out.abs() * 0.05, out * 0.46 + Vector3(0, 0.73, 0), deck)
 	var leaf: Color = _tint(Color("6f9e5a"))
 	for i in 2:
 		var a: float = HouseShape.building_roll(grid_cell, 41 + i) * TAU

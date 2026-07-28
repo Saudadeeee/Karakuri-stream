@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_terrace_is_flat")
+	await _sec_terrace_is_flat()
 	print("SECTION _sec_delete_consistency")
 	await _sec_delete_consistency()
 	print("SECTION _sec_surprises")
@@ -567,6 +569,44 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7h. A terrace must be FLAT. Measured on the built mesh, not on the rule,
+## because the rule was right the whole time and the geometry was not.
+##
+## `_face_size(side, span, thick)` puts `span` into BOTH the vertical and the
+## horizontal axis — correct for a wall, wrong for anything low. The balustrade
+## used it, so "1.04 wide, 0.09 thick" came out as a 1.04-TALL panel and a
+## terrace rendered as a ring of roofless walls standing around an empty cell.
+## That is only visible in a screenshot or in a bounding box; no logic test would
+## ever have caught it.
+func _sec_terrace_is_flat() -> void:
+	_clear()
+	await get_tree().process_frame
+	for y in 3:
+		_b(Vector3i(0, y, 58), BlockData.Type.HOUSE)
+	var low := Vector3i(1, 0, 58)
+	_b(low, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(HouseShape.is_terrace(low), "the low cell beside a tower is a terrace")
+
+	var node: Node3D = GridManager.get_block(low).node
+	var top := -INF
+	for mi in _meshes_under(node):
+		top = maxf(top, (mi.mesh.get_aabb().position.y + mi.mesh.get_aabb().size.y))
+	# A cell is 1.0 tall with its top face at +0.5. A balustrade adds a little;
+	# a full-height wall panel would reach past +1.0.
+	_check(top < 1.0, "a terrace stays flat — nothing full-height stands on it (was %.2f)" % top)
+	_clear()
+	await get_tree().process_frame
+
+func _meshes_under(n: Node) -> Array:
+	var out: Array = []
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append(n)
+	for c in n.get_children():
+		out += _meshes_under(c)
+	return out
 
 ## 7g. DELETING must leave the survivors correct. Reported as "build it, delete
 ## something, and a house comes out with no roof".

@@ -69,9 +69,11 @@ func _village(root: Node) -> void:
 	#  C x=1   base + TWO cells out -> columns
 	#  D x=5   two towers + a 2-cell span -> arch underside
 	for e in [
-		[0,0,0],[0,1,0],
-		[3,0,0],
-		[6,0,0],[6,1,0],[6,2,0],
+		[0,0,0],[1,0,0],[2,0,0], [0,1,0],[1,1,0],
+		[0,0,1],[2,0,1],
+		[0,0,2],[1,0,2],[2,0,2], [2,1,2],
+		[4,0,0],[4,1,0],[4,2,0],
+		[4,0,2],[5,0,2],
 	]:
 		plan.append([Vector3i(e[0], e[1], e[2]), BlockData.Type.HOUSE])
 	for e in plan:
