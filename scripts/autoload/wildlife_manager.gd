@@ -5,10 +5,10 @@ extends Node
 ## something back — that two-way link is the whole point, otherwise they are
 ## just decoration that happens to move:
 ##
-##   Birds — need a house to nest near. They perch on roofs, and when a bird
+##   Birds — drawn by instruments. They perch on whatever is open to the sky,
 ##           lands on a BELL, CHIME or DRUM it PLAYS it. Your garden gets a
 ##           second musician you didn't program. They scatter when you build.
-##   Cat   — needs a small village (2+ houses). Walks the rooftops and paths,
+##   Cat   — turns up once the garden has a few instruments. Walks the tops,
 ##           refuses to step on water, and at night settles beside a lit stone
 ##           lantern. Naps where it stops.
 ##   Ducks — need a real pond (3+ open water cells). They paddle it in a loose
@@ -48,7 +48,6 @@ var _pond: Array[Vector3i] = []         # top-free water
 ## scan of the array would cost O(pond size) per duck per frame — the same reason
 ## GridManager keeps _cells_by_type instead of scanning.
 var _pond_set: Dictionary = {}
-var _houses := 0
 var _lanterns: Array[Vector3i] = []
 
 var _birds: Array[Dictionary] = []
@@ -98,13 +97,10 @@ func _cap(n: int) -> int:
 func _scan() -> void:
 	_perches.clear(); _instruments.clear(); _walkable.clear()
 	_pond.clear(); _pond_set.clear(); _lanterns.clear()
-	_houses = 0
 	for cell in GridManager.get_all_cells():
 		var b: BlockData = GridManager.get_block(cell)
 		if b == null:
 			continue
-		if b.type == BlockData.Type.HOUSE:
-			_houses += 1
 		if b.type == BlockData.Type.STONE_LANTERN:
 			_lanterns.append(cell)
 		if GridManager.has_block(cell + UP):
@@ -136,24 +132,28 @@ func _process(delta: float) -> void:
 
 ## Spawn/despawn so the population always matches what the world can support.
 ## Population has to GROW WITH the thing that supports it, not switch on. The
-## first version gated on "is there a house at all", so one hut instantly had
-## three birds hopping on it and two houses added two cats — a crowd on a build
-## with nothing in it yet. Animals should feel like they found the place, which
-## means the first one arrives alone and the rest turn up as the village does.
-## {arrives at, then one more every, hard cap}. The FIRST threshold is kept low
-## on purpose — one house should still earn one bird, because a bird landing on
-## your bell is the moment the whole feature exists for. It is the CROWD that was
-## wrong, so the second and third only turn up once there is a real village.
-##   1 house  -> 1 bird                 (was: 3 birds)
-##   4 houses -> 1 bird + 1 cat         (was: 3 birds + 2 cats)
-##   9 houses -> 3 birds + 1 cat
+## first version gated on "is there anything at all", so one block instantly had
+## three birds hopping on it — a crowd on a build with nothing in it yet. Animals
+## should feel like they found the place, which means the first one arrives alone
+## and the rest turn up as the garden does.
+##
+## What they grow with is the number of INSTRUMENTS, not the number of blocks.
+## A bird landing on your bell and ringing it is the moment the whole feature
+## exists for, so the thing that draws birds should be the thing they can play.
+## It used to be houses, which are gone; counting blocks in general would fill
+## the sky over a plain wooden deck.
+## {arrives at, then one more every, hard cap}
+##   1 instrument  -> 1 bird
+##   4 instruments -> 1 bird + 1 cat
+##   9 instruments -> 3 birds + 1 cat
 const BIRDS := [1, 4, 3]
 const CATS := [4, 6, 2]
 const DUCKS := [3, 5, 3]
 
 func _populate() -> void:
-	var birds: int = 0 if _perches.is_empty() else _scaled(_houses, BIRDS)
-	var cats: int = 0 if _walkable.is_empty() else _scaled(_houses, CATS)
+	var draw: int = _instruments.size()
+	var birds: int = 0 if _perches.is_empty() else _scaled(draw, BIRDS)
+	var cats: int = 0 if _walkable.is_empty() else _scaled(draw, CATS)
 	_fit(_birds, _cap(birds), _make_bird)
 	_fit(_cats, _cap(cats), _make_cat)
 	_fit(_ducks, _cap(_scaled(_pond.size(), DUCKS)), _make_duck)
@@ -186,16 +186,13 @@ func _rand_cell(pool: Array[Vector3i]) -> Vector3i:
 		return Vector3i.ZERO
 	return pool[randi() % pool.size()]
 
-## Where a creature's feet go when it stands on `cell`. Not simply the top face:
-## a house cell carries a pitched ROOF above that face, so standing at the face
-## put birds and cats visibly buried inside the roof they were meant to be
-## sitting on. HouseShape knows how tall its own roof is; ask it.
+## Where a creature's feet go when it stands on `cell` — the top face. Houses
+## used to need a correction here because a house cell carries a pitched roof
+## ABOVE its top face, and standing at the face buried the bird inside the roof.
+## Every block left on this branch is a cube-height thing, so the top face is
+## simply the top.
 func _top_of(cell: Vector3i) -> Vector3:
-	var p: Vector3 = GridManager.cell_to_world(cell) + Vector3(0, 0.5, 0)
-	var b: BlockData = GridManager.get_block(cell)
-	if b != null and b.type == BlockData.Type.HOUSE:
-		p.y += HouseShape.roof_top_height(cell)
-	return p
+	return GridManager.cell_to_world(cell) + Vector3(0, 0.5, 0)
 
 # ------------------------------------------------------------------- birds
 func _make_bird() -> Dictionary:

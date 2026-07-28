@@ -19,6 +19,7 @@ var _sun: DirectionalLight3D
 var _map_cards: Array[Button] = []
 
 func _ready() -> void:
+	print("MENU ready ", Time.get_ticks_msec(), "ms")
 	MapThemes.load_current()
 	_build_backdrop()
 	_build_title_3d()

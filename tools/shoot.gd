@@ -44,6 +44,11 @@ func _ready() -> void:
 		GridManager.clear_all()
 		await get_tree().process_frame
 		_village(s)
+		# WildlifeManager rescans on a 0.4 s throttle, and the report at the end
+		# reads its pools. Capturing before that lands reported a garden with one
+		# instrument in it and no birds, which is the harness being early, not the
+		# game being wrong.
+		await get_tree().create_timer(1.2).timeout
 	for _f in range(30):
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
@@ -61,21 +66,38 @@ func _ready() -> void:
 	get_tree().quit()
 
 ## A small sample build so a screenshot shows the actual game, not empty ground.
+## A whole karakuri, wired end to end: a spout pours onto a wheel, the wheel
+## drives a music box, the overflow runs a pipe to a shishi-odoshi that tips onto
+## a drum, and the pond feeds a scoop that starts it all again. That is the game
+## on this branch, so that is what a screenshot has to show.
 func _village(root: Node) -> void:
-	var plan := []
-	# The four reported cases, side by side and well separated:
-	#  A x=-6  four-storey tower  -> spire (is it a house with a spike on top?)
-	#  B x=-2  base + ONE cell out -> what supports a 1-cell overhang?
-	#  C x=1   base + TWO cells out -> columns
-	#  D x=5   two towers + a 2-cell span -> arch underside
-	for e in [
-		[0,0,0],[1,0,0],[2,0,0], [0,1,0],[1,1,0],
-		[0,0,1],[2,0,1],
-		[0,0,2],[1,0,2],[2,0,2], [2,1,2],
-		[4,0,0],[4,1,0],[4,2,0],
-		[4,0,2],[5,0,2],
-	]:
-		plan.append([Vector3i(e[0], e[1], e[2]), BlockData.Type.HOUSE])
+	var plan := [
+		# The pour, and the deck it lands on.
+		[Vector3i(0, 3, 0), BlockData.Type.SOURCE],
+		[Vector3i(0, 0, 0), BlockData.Type.GEAR],
+		[Vector3i(1, 0, 0), BlockData.Type.MUSIC_BOX],
+		# Piped away to a shishi that tips onto a drum.
+		[Vector3i(0, 1, 1), BlockData.Type.PIPE],
+		[Vector3i(0, 0, 1), BlockData.Type.PIPE],
+		[Vector3i(0, 0, 2), BlockData.Type.SHISHI],
+		[Vector3i(0, -1, 2), BlockData.Type.DRUM],
+		# A row of chimes, one note each.
+		[Vector3i(-2, 0, 0), BlockData.Type.CHIME],
+		[Vector3i(-2, 0, 1), BlockData.Type.CHIME],
+		[Vector3i(-2, 0, 2), BlockData.Type.CHIME],
+		[Vector3i(-2, 0, 3), BlockData.Type.BELL],
+		# Pond, scoop, and the quiet things around the edge.
+		[Vector3i(2, 0, 2), BlockData.Type.WATER],
+		[Vector3i(3, 0, 2), BlockData.Type.WATER],
+		[Vector3i(2, 0, 3), BlockData.Type.WATER],
+		[Vector3i(3, 0, 3), BlockData.Type.WATER],
+		[Vector3i(2, 0, 1), BlockData.Type.SCOOP],
+		[Vector3i(-1, 0, 3), BlockData.Type.STONE_LANTERN],
+		[Vector3i(1, 0, 3), BlockData.Type.PINWHEEL],
+		[Vector3i(-1, 0, -1), BlockData.Type.JELLY],
+		[Vector3i(1, 0, -1), BlockData.Type.WOOD],
+		[Vector3i(0, 0, -1), BlockData.Type.WOOD],
+	]
 	for e in plan:
 		var c: Vector3i = e[0]
 		var n: Node3D = BlockFactory.instantiate(e[1])
@@ -86,6 +108,8 @@ func _village(root: Node) -> void:
 		GridManager.set_block(c, BlockData.new(e[1], n))
 		if n.has_method("refresh_shape"):
 			n.refresh_shape()
+		elif n.has_method("face_adjacent_water"):
+			n.face_adjacent_water()
 
 ## Pull the orbit camera in / change its angle so a shot can actually SHOW the
 ## thing under test instead of the whole island from far away.
@@ -106,11 +130,11 @@ func _frame(root: Node) -> void:
 ## What the wildlife manager thinks exists, so a screenshot can be checked
 ## against it rather than squinting.
 func _report() -> void:
-	print("WILDLIFE birds=%d cats=%d ducks=%d deer=%d | perches=%d walkable=%d pond=%d houses=%d"
+	print("WILDLIFE birds=%d cats=%d ducks=%d deer=%d | perches=%d walkable=%d pond=%d instruments=%d"
 		% [WildlifeManager._birds.size(), WildlifeManager._cats.size(),
 		   WildlifeManager._ducks.size(), WildlifeManager._deer.size(),
 		   WildlifeManager._perches.size(), WildlifeManager._walkable.size(),
-		   WildlifeManager._pond.size(), WildlifeManager._houses])
+		   WildlifeManager._pond.size(), WildlifeManager._instruments.size()])
 	print("STREAM segments=%d impacts=%d playing=%s sources=%d visual_children=%d"
 		% [StreamManager._segments.size(), StreamManager._impacts.size(),
 		   str(StreamManager.is_playing()),

@@ -65,9 +65,20 @@ static func flat(col: Color) -> StandardMaterial3D:
 ## clashing with the flat wood/water shaders. Duplicate each material (don't
 ## mutate the shared imported resource) and flatten it: no metal, no specular,
 ## full roughness. Keeps the authored base colour.
-static func matte(root: Node) -> void:
+##
+## This is also where an imported material's SHADER FEATURE FLAGS get normalised,
+## because this is the one pass every .glb in the game already goes through. See
+## `ShaderBudget`: each distinct flag combination is a separate program the
+## browser has to compile before the first frame can finish, at a large fraction
+## of a second each under ANGLE. Every scenery model shipped with double-sided
+## materials — that alone was one extra program plus double the raster work on
+## rocks and tree trunks that can never be seen from inside.
+##
+## `double_sided` is for props that really are flat sheets: crossed reed planes,
+## a lily pad, a flag. Those knowingly spend the extra program.
+static func matte(root: Node, double_sided: bool = false) -> void:
 	for node in root.get_children():
-		matte(node)
+		matte(node, double_sided)
 	if not (root is MeshInstance3D):
 		return
 	var mi: MeshInstance3D = root
@@ -77,9 +88,7 @@ static func matte(root: Node) -> void:
 		var m: Material = mi.get_active_material(s)
 		if m is StandardMaterial3D:
 			var d: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
-			d.metallic = 0.0
-			d.metallic_specular = 0.0
-			d.roughness = 1.0
+			ShaderBudget.normalise(d, double_sided)
 			mi.set_surface_override_material(s, d)
 
 ## Recolours the surfaces whose current albedo is close to `from` — used to

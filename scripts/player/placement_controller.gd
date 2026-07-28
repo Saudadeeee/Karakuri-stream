@@ -114,8 +114,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_1:
 			select_material(BlockData.Type.WOOD)
-		elif event.keycode == KEY_Q:
-			select_material(BlockData.Type.HOUSE)
 		elif event.keycode == KEY_2:
 			select_material(BlockData.Type.WATER)
 		elif event.keycode == KEY_3:
@@ -274,7 +272,6 @@ func _tint_ghost(node: Node) -> void:
 		m.albedo_color = Color(0.55, 0.85, 1.0, 0.4)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
 		(node as MeshInstance3D).material_override = m
 	for c in node.get_children():
 		_tint_ghost(c)
@@ -308,8 +305,7 @@ func _place_block() -> void:
 		block.state["axis"] = axis
 		if instance.has_method("apply_axis"):
 			instance.apply_axis(axis)
-	elif _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.SOURCE \
-			or _current_type == BlockData.Type.HOUSE:
+	elif _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.SOURCE:
 		# Auto-connecting blocks derive orientation/shape from neighbours; set
 		# their cell before set_block so the placement signal drives the refresh.
 		instance.grid_cell = _ghost_cell
@@ -325,7 +321,7 @@ func _place_block() -> void:
 	_animate_drop(instance, final_pos, _current_type, cell, click_phase)
 	GridManager.set_block(_ghost_cell, block)
 	UndoManager.record_place(_ghost_cell, block)
-	if _current_type == BlockData.Type.PIPE or _current_type == BlockData.Type.HOUSE:
+	if _current_type == BlockData.Type.PIPE:
 		instance.refresh_shape()
 	elif _current_type == BlockData.Type.SOURCE:
 		instance.face_adjacent_water()

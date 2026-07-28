@@ -6,19 +6,19 @@ extends Node
 ## being asked to draw.
 ##
 ##   godot --path . --rendering-driver opengl3 --resolution 1280x720 \
-##       tools/perf.tscn -- scene=res://scenes/main.tscn lite=1 houses=24
+##       tools/perf.tscn -- scene=res://scenes/main.tscn lite=1 blocks=24
 ##
 ## Reading the numbers: DRAW CALLS is the one that matters on gl_compatibility.
 ## Primitives are cheap, state changes are not.
 
 var _lite := true
-var _houses := 24
+var _blocks := 24
 var _label := "run"
 var _churn := false
 ## Place and remove a block during the sample window, i.e. actually play.
 var _build_churn := true
 var _scene: Node
-var _probe_type: int = BlockData.Type.HOUSE
+var _probe_type: int = BlockData.Type.BELL
 var _wood := 0
 
 func _ready() -> void:
@@ -26,7 +26,7 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("scene="): target = a.substr(6)
 		elif a.begins_with("lite="): _lite = a.substr(5) != "0"
-		elif a.begins_with("houses="): _houses = int(a.substr(7))
+		elif a.begins_with("blocks="): _blocks = int(a.substr(7))
 		elif a.begins_with("label="): _label = a.substr(6)
 		elif a.begins_with("churn="): _churn = a.substr(6) != "0"
 		elif a.begins_with("place="): _build_churn = a.substr(6) != "0"
@@ -52,7 +52,7 @@ func _ready() -> void:
 		await get_tree().process_frame
 	GridManager.clear_all()
 	await get_tree().process_frame
-	if _houses > 0:
+	if _blocks > 0:
 		_build(s)
 	for _f in range(120):
 		await get_tree().process_frame
@@ -98,8 +98,8 @@ func _ready() -> void:
 	for ms in samples:
 		if ms > 16.7:
 			spikes += 1
-	print("PERF[%s] lite=%s houses=%d  avg=%.2f  p50=%.2f (%.0f fps)  p95=%.2f  p99=%.2f  worst=%.2fms  over16ms=%d/%d" % [
-		_label, str(_lite), _houses, avg_ms, p50, 1000.0 / maxf(p50, 0.001), p95, p99, worst_ms, spikes, frames])
+	print("PERF[%s] lite=%s blocks=%d  avg=%.2f  p50=%.2f (%.0f fps)  p95=%.2f  p99=%.2f  worst=%.2fms  over16ms=%d/%d" % [
+		_label, str(_lite), _blocks, avg_ms, p50, 1000.0 / maxf(p50, 0.001), p95, p99, worst_ms, spikes, frames])
 	print("   draw_calls=%d  objects=%d  primitives=%d" % [
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
 		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
@@ -169,14 +169,16 @@ func _count(n: Node, cls: String) -> int:
 		c += _count(k, cls)
 	return c
 
-## A village roughly the size someone would actually build, plus a pond and a
+## A karakuri roughly the size someone would actually build, plus a pond and a
 ## running machine, so the numbers reflect play rather than an empty island.
+## `blocks=N` scales the instrument bank: this build is about a garden FULL of
+## things that make a noise, so that is what the load test is made of.
 func _build(root: Node) -> void:
-	var n := 0
-	for i in _houses:
-		var c := Vector3i(-4 + (i % 6), i / 12, -3 + ((i / 6) % 2))
-		_place(root, c, BlockData.Type.HOUSE)
-		n += 1
+	var kit: Array = [BlockData.Type.BELL, BlockData.Type.CHIME, BlockData.Type.DRUM,
+			BlockData.Type.PINWHEEL, BlockData.Type.STONE_LANTERN, BlockData.Type.JELLY,
+			BlockData.Type.MUSIC_BOX, BlockData.Type.GEAR]
+	for i in _blocks:
+		_place(root, Vector3i(-6 + (i % 8), i / 24, -4 + ((i / 8) % 3)), kit[i % kit.size()])
 	for z in 3:
 		for x in 3:
 			_place(root, Vector3i(2 + x, 0, 1 + z), BlockData.Type.WATER)

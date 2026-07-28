@@ -42,7 +42,7 @@ alongside them, so they can be rebuilt from source:
 - `assets/3DModel/generated/` — Blender, via `stylekit.py` + `gen_assets.py`
 - `assets/3DModel/blockbench/` — modelled in Blockbench, converted by `bb_bridge.py`
 - Houses, animals, gears and pipes are built in GDScript at runtime and exist
-  only as code (`house_block.gd`, `critter_mesh.gd`, `gear_mesh.gd`, `pipe_block.gd`)
+  only as code (`critter_mesh.gd`, `gear_mesh.gd`, `pipe_block.gd`)
 
 ## Engine
 

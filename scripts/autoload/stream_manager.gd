@@ -490,9 +490,9 @@ func _refresh_source_audio(_sources: Array) -> void:
 ## against.
 ##
 ## `_impacts` records a type when the stream is traced and plays it later, so the
-## block can be swapped in between — replace a shishi with a house while water is
-## falling on it and the pending SHISHI impact would call `fill()` on the house:
-##   Invalid call. Nonexistent function 'fill' in base 'StaticBody3D (house_block.gd)'
+## block can be swapped in between — replace a shishi with a bell while water is
+## falling on it and the pending SHISHI impact would call `fill()` on the bell:
+##   Invalid call. Nonexistent function 'fill' in base 'StaticBody3D (bell_block.gd)'
 ## Checking the live type here fixes every branch at once, rather than sprinkling
 ## has_method() guards that each new karakuri block would have to remember.
 func _node_of(cell: Vector3i, expect: int = -1) -> Node3D:

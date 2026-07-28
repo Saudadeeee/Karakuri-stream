@@ -15,7 +15,7 @@ signal grid_cleared
 var _blocks: Dictionary = {} # Vector3i -> BlockData
 
 ## Bumped on every structural change. Lets a caller cache something derived from
-## the whole grid (HouseShape caches which building each house cell belongs to)
+## the whole grid (VoxelSurfaceManager caches which cells feed its isosurface)
 ## and know cheaply when that cache went stale, without every such cache having
 ## to connect signals and manage its own invalidation.
 var version: int = 0
