@@ -406,15 +406,48 @@ static func component_height(cell: Vector3i) -> int:
 ##
 ## The test is deliberately about the NEIGHBOURHOOD, not the cell: a roof only
 ## becomes a terrace when something next to it stands over it.
+## Terrace-ness belongs to the ROOF PATCH, not to the cell.
+##
+## Deciding it per cell is the same mistake per-cell gables were: on a 2x2 the
+## cell touching the tower became a flat terrace while the one behind it kept a
+## pitched roof, so the top of one building came out as a patchwork of decks and
+## gables that plainly refused to merge.
+##
+## The whole connected run of roof cells at this level is therefore decided
+## together: if ANY of them stands in the shelter of a taller part, they ALL
+## become one continuous deck. One roof area, one answer.
+static var _terrace_version := -1
+static var _terrace_cache: Dictionary = {}
+
 static func is_terrace(cell: Vector3i) -> bool:
 	if not is_roof_cell(cell):
 		return false
-	for d in SIDES:
-		if is_house(cell + d + UP):
-			return true
-	return false
+	if GridManager.version != _terrace_version:
+		_terrace_version = GridManager.version
+		_terrace_cache = {}
+	if _terrace_cache.has(cell):
+		return _terrace_cache[cell]
 
-## A SPIRE: build a tower at least four storeys tall and no more than one cell
+	# Flood the contiguous roof surface at this height.
+	var patch: Dictionary = {}
+	var queue: Array[Vector3i] = [cell]
+	patch[cell] = true
+	var sheltered := false
+	while not queue.is_empty() and patch.size() < MAX_BUILDING:
+		var c: Vector3i = queue.pop_back()
+		for d in SIDES:
+			if is_house(c + d + UP):
+				sheltered = true          # something taller stands over this patch
+			var n: Vector3i = c + d
+			if not patch.has(n) and is_roof_cell(n):
+				patch[n] = true
+				queue.append(n)
+
+	for c in patch:
+		_terrace_cache[c] = sheltered
+	return sheltered
+
+## A SPIRE: build a tower at least four storeys tall## A SPIRE: build a tower at least four storeys tall and no more than one cell
 ## thick and it stops being a house with a roof and becomes a landmark. The
 ## reward for building UP rather than out, and the one piece of the town that is
 ## visible from anywhere on the island.

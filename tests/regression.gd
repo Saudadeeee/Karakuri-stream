@@ -597,6 +597,45 @@ func _sec_terrace_is_flat() -> void:
 	# A cell is 1.0 tall with its top face at +0.5. A balustrade adds a little;
 	# a full-height wall panel would reach past +1.0.
 	_check(top < 1.0, "a terrace stays flat — nothing full-height stands on it (was %.2f)" % top)
+
+	# A ROOF AREA GETS ONE ANSWER. Deciding terrace-ness per cell made a 2x2 come
+	# out as a patchwork: the cell touching the tower went flat while the one
+	# behind it kept a pitched roof, and the top visibly refused to merge. Same
+	# mistake per-cell gables were, one level up.
+	_clear()
+	await get_tree().process_frame
+	for y in 3:
+		_b(Vector3i(0, y, 60), BlockData.Type.HOUSE)
+	var quad: Array[Vector3i] = []
+	for x in 2:
+		for z in 2:
+			var c := Vector3i(1 + x, 0, 60 + z)
+			quad.append(c)
+			_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var flat := 0
+	for c in quad:
+		if HouseShape.is_terrace(c):
+			flat += 1
+	_check(flat == quad.size(),
+		"every cell of a roof area agrees: a 2x2 beside a tower is ONE deck (%d/4)" % flat)
+
+	# And with nothing taller anywhere near it, the same 2x2 is all pitched roof.
+	_clear()
+	await get_tree().process_frame
+	var lone: Array[Vector3i] = []
+	for x in 2:
+		for z in 2:
+			var c := Vector3i(x, 0, 62 + z)
+			lone.append(c)
+			_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	var decks := 0
+	for c in lone:
+		if HouseShape.is_terrace(c):
+			decks += 1
+	_check(decks == 0, "a 2x2 with nothing over it stays a roof, not a deck")
 	_clear()
 	await get_tree().process_frame
 
