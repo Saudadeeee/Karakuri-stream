@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_house_audit")
+	await _sec_house_audit()
 	print("SECTION _sec_terrace_is_flat")
 	await _sec_terrace_is_flat()
 	print("SECTION _sec_delete_consistency")
@@ -569,6 +571,90 @@ func _wildlife_scan() -> void:
 	WildlifeManager._timer = 10.0
 	for _f in range(4):
 		await get_tree().process_frame
+
+## 7i. FUZZ THE HOUSE RULES. Build thirteen shapes, then take every cell out of
+## each one in turn and re-check the invariants on whatever survives.
+##
+## This exists because three separate house bugs in a row were all the same
+## mistake — a property of a SURFACE decided per CELL — and each one was found by
+## a person looking at a screenshot rather than by a test. These assertions are
+## the shape of that mistake, so the next one gets caught here instead.
+func _sec_house_audit() -> void:
+	var shapes := {
+		"hut": [[0,0,0]],
+		"row": [[0,0,0],[1,0,0],[2,0,0]],
+		"2x2": [[0,0,0],[1,0,0],[0,0,1],[1,0,1]],
+		"3x3": [[0,0,0],[1,0,0],[2,0,0],[0,0,1],[1,0,1],[2,0,1],[0,0,2],[1,0,2],[2,0,2]],
+		"L": [[0,0,0],[0,0,1],[0,0,2],[1,0,2],[2,0,2]],
+		"tower": [[0,0,0],[0,1,0],[0,2,0],[0,3,0]],
+		"wide tower": [[0,0,0],[0,1,0],[0,2,0],[0,3,0],[1,0,0],[1,1,0],[1,2,0],[1,3,0]],
+		"tower+wing": [[0,0,0],[0,1,0],[0,2,0],[1,0,0],[2,0,0],[1,0,1],[2,0,1]],
+		"plus": [[1,0,0],[0,0,1],[1,0,1],[2,0,1],[1,0,2]],
+		"courtyard": [[0,0,0],[1,0,0],[2,0,0],[0,0,1],[2,0,1],[0,0,2],[1,0,2],[2,0,2]],
+		"bridge": [[0,0,0],[0,1,0],[3,0,0],[3,1,0],[1,1,0],[2,1,0]],
+		"overhang": [[0,0,0],[0,1,0],[1,1,0]],
+	}
+	for name in shapes:
+		var cells: Array = shapes[name]
+		await _audit_build(name, cells, -1)
+		for i in cells.size():
+			await _audit_build(name, cells, i)
+	_clear()
+	await get_tree().process_frame
+
+func _audit_build(label: String, cells: Array, drop: int) -> void:
+	_clear()
+	await get_tree().process_frame
+	var placed: Array[Vector3i] = []
+	for e in cells:
+		var c := Vector3i(int(e[0]), int(e[1]), 70 + int(e[2]))
+		placed.append(c)
+		_b(c, BlockData.Type.HOUSE)
+	await get_tree().process_frame
+	if drop >= 0:
+		GridManager.remove_block(placed[drop])
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+	var live: Array[Vector3i] = []
+	for c in placed:
+		if HouseShape.is_house(c):
+			live.append(c)
+	if live.is_empty():
+		return
+	var tag: String = label if drop < 0 else "%s minus#%d" % [label, drop]
+
+	# One door and one chimney per building, whatever the shape.
+	var per := {}
+	for c in live:
+		var key: Vector3i = HouseShape._component(c)["lo"]
+		if not per.has(key):
+			per[key] = [0, 0]
+		if HouseShape.context(c)["door_side"] != Vector3i.ZERO:
+			per[key][0] += 1
+		if HouseShape.context(c)["chimney"]:
+			per[key][1] += 1
+	for k in per:
+		_check(per[k][0] == 1, "%s: one door per building (got %d)" % [tag, per[k][0]])
+		_check(per[k][1] == 1, "%s: one chimney per building (got %d)" % [tag, per[k][1]])
+
+	# A roof patch must agree with itself: all terrace or none, at most one spire.
+	var seen := {}
+	for c in live:
+		if not HouseShape.is_roof_cell(c) or seen.has(c):
+			continue
+		var patch: Array[Vector3i] = HouseShape.roof_patch(c)
+		var terr := 0
+		var spires := 0
+		for pc in patch:
+			seen[pc] = true
+			if HouseShape.is_terrace(pc):
+				terr += 1
+			if HouseShape.has_spire(pc):
+				spires += 1
+		_check(terr == 0 or terr == patch.size(),
+			"%s: roof patch is %d/%d terrace — patchwork" % [tag, terr, patch.size()])
+		_check(spires <= 1, "%s: roof patch grew %d spires" % [tag, spires])
 
 ## 7h. A terrace must be FLAT. Measured on the built mesh, not on the rule,
 ## because the rule was right the whole time and the geometry was not.

@@ -451,14 +451,34 @@ static func is_terrace(cell: Vector3i) -> bool:
 ## thick and it stops being a house with a roof and becomes a landmark. The
 ## reward for building UP rather than out, and the one piece of the town that is
 ## visible from anywhere on the island.
+## The roof patch this cell belongs to: the contiguous run of roof cells at this
+## height. Anything that describes the SHAPE OF A TOP — terrace, spire — has to
+## be answered for the patch, or two neighbouring cells give different answers
+## and the top comes out as a patchwork.
+static func roof_patch(cell: Vector3i) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	if not is_roof_cell(cell):
+		return out
+	var seen: Dictionary = {cell: true}
+	var queue: Array[Vector3i] = [cell]
+	while not queue.is_empty() and out.size() < MAX_BUILDING:
+		var c: Vector3i = queue.pop_back()
+		out.append(c)
+		for d in SIDES:
+			var n: Vector3i = c + d
+			if not seen.has(n) and is_roof_cell(n):
+				seen[n] = true
+				queue.append(n)
+	return out
+
 static func has_spire(cell: Vector3i) -> bool:
 	if not is_roof_cell(cell) or component_height(cell) < 4 or is_terrace(cell):
 		return false
-	var wide := 0
-	for d in SIDES:
-		if is_house(cell + d):
-			wide += 1
-	return wide <= 1
+	# A spire crowns a TOWER, so the top has to be a single cell. The old test
+	# counted this cell's own neighbours and allowed one — which on a two-wide
+	# top is true of BOTH cells, so a broad tower grew two spires side by side.
+	# Asking the patch instead makes "is this a tower top" a property of the top.
+	return roof_patch(cell).size() == 1
 
 ## A COURTYARD: ring house cells around an empty one and the gap becomes a
 ## planted courtyard rather than a hole. Returns the direction to the enclosed
