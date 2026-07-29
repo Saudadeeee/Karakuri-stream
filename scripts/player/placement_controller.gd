@@ -116,7 +116,13 @@ func select_material(type: BlockData.Type) -> void:
 	material_changed.emit(type, _current_variant)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed:
+	# Echo events are the OS repeating a held key, and they must not reach the
+	# material keys: pressing the SAME key again cycles that material's variant
+	# (see `select_material`), so holding `1` spins Wood → Dirt → Moss → Stone at
+	# thirty a second and picking the one you wanted becomes impossible. Same
+	# family as the sun key, which span somewhere unrecoverable for the same
+	# reason.
+	if event is InputEventKey and event.pressed and not event.is_echo():
 		if event.keycode == KEY_1:
 			select_material(BlockData.Type.WOOD)
 		elif event.keycode == KEY_2:

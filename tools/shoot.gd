@@ -9,6 +9,7 @@ var want_theme := -1
 var _zoom := -1.0
 var _wood_test := false
 var _pool := false
+var _mixed := false
 var _pitch := -1.0
 var _yaw := 999.0
 
@@ -26,6 +27,7 @@ func _ready() -> void:
 		elif a.begins_with("yaw="): _yaw = float(a.substr(4))
 		elif a == "woodtest": _wood_test = true
 		elif a == "pool": _pool = true
+		elif a == "mixed": _mixed = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -42,6 +44,24 @@ func _ready() -> void:
 	for _f in range(40):
 		await get_tree().process_frame
 	_frame(s)
+	if _mixed:
+		# Same TYPE, different VARIANT, side by side. Each variant is its own
+		# isosurface group with its own mesh, so this is where a seam or a gap
+		# between two meshes would show.
+		GridManager.clear_all()
+		await get_tree().process_frame
+		for i in 8:
+			var c := Vector3i(i - 4, 0, 0)
+			var t: int = BlockData.Type.WOOD if i < 6 else BlockData.Type.WATER
+			var v: int = (i % 4) if i < 6 else (i % 2)
+			var n: Node3D = BlockFactory.instantiate(t)
+			s.add_child(n)
+			n.position = GridManager.cell_to_world(c)
+			if n.has_method("apply_variant"):
+				n.apply_variant(BlockVariants.get_variant(t, v))
+			var bd := BlockData.new(t, n)
+			bd.state["variant"] = v
+			GridManager.set_block(c, bd)
 	if _pool:
 		# A sunken pool with a wall all round it — the shape the report showed:
 		# looking across water at a far bank you should NOT be able to see through.

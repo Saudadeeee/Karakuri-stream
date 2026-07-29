@@ -629,6 +629,26 @@ func _sec_key_repeat() -> void:
 		game._unhandled_input(echo_h)
 	_check(game.get_node("UI").visible == ui_before, "held H repeats toggled the UI")
 
+	# The material keys are the same trap wearing different clothes: pressing the
+	# SAME number again cycles that material's variant, so a held key runs Wood →
+	# Dirt → Moss → Stone at the repeat rate and landing on the one you want is
+	# impossible.
+	var pc: Node = game.get_node("PlacementController")
+	pc.select_material(BlockData.Type.WOOD)
+	var variant_before: int = pc._current_variant
+	var echo_1 := InputEventKey.new()
+	echo_1.keycode = KEY_1
+	echo_1.pressed = true
+	echo_1.echo = true
+	for i in 6:
+		pc._unhandled_input(echo_1)
+	_check(pc._current_variant == variant_before, "held material key cycled the variant")
+	var tap_1 := InputEventKey.new()
+	tap_1.keycode = KEY_1
+	tap_1.pressed = true
+	pc._unhandled_input(tap_1)
+	_check(pc._current_variant != variant_before, "a real material-key press no longer cycles")
+
 	var tap := InputEventKey.new()
 	tap.keycode = KEY_U
 	tap.pressed = true

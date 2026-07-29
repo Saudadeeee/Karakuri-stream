@@ -27,6 +27,17 @@ render_mode cull_disabled, diffuse_lambert, specular_schlick_ggx;
 // 0 = timber, 1 = still water, 2 = the falling stream.
 uniform int surface_mode : hint_range(0, 2) = 0;
 
+// How much self-light to add so a block reads as the palette colour it
+// advertises. This scene lights a surface at about 0.45, which turns #D4A373
+// into a dark chocolate and #48CAE4 into a dull teal — physically right, and
+// wrong beside props whose model albedo is paler.
+//
+// It MUST follow the map's own light level. Held fixed, it made the pond glow
+// like daylight on the Night map while everything around it went blue — the
+// water stopped answering to the scene at all. `VoxelSurfaceManager` sets it
+// from the theme's sun and ambient energy.
+uniform float palette_lift : hint_range(0.0, 1.0) = 0.45;
+
 // -- stream ---------------------------------------------------------------
 // The routed stream cylinders. `beat_pulse` is fed each frame from
 // StreamManager's shared clock so every stream breathes on the downbeat.
@@ -204,9 +215,7 @@ void fragment() {
 		METALLIC = 0.12;
 		SPECULAR = 0.65;
 		// A faint self-glow keeps the pond as lively as the routed stream.
-		// Same lift as the timber branch: this scene lights a surface at about
-		// 0.45, and the pond is meant to read as the bright #48CAE4 of the palette.
-		EMISSION = water_color.rgb * 0.45
+		EMISSION = water_color.rgb * palette_lift
 			+ foam_color.rgb * (foam * 0.15 + caustic * 0.3 + sparkle * 0.5);
 	} else {
 		// SOFT low-contrast blotches only — NO sine "ring" banding. World-Y sine
@@ -241,6 +250,6 @@ void fragment() {
 		// this scene lights a surface at about 0.45, which turns #D4A373 into a
 		// dark chocolate — physically right, and wrong next to a chime frame whose
 		// model albedo is much paler. The pond does the same thing one branch up.
-		EMISSION = albedo * 0.62;
+		EMISSION = albedo * palette_lift * 1.4;
 	}
 }

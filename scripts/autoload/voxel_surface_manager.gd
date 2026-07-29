@@ -104,6 +104,12 @@ func _material_for(key: String) -> ShaderMaterial:
 	if _materials.has(mkey):
 		return _materials[mkey]
 	var mat := ShaderMaterial.new()
+	# Follow the map's light level. The self-light that keeps a block on its
+	# palette colour has to dim with the map, or the pond glows like daylight on
+	# the Night map while everything round it goes blue.
+	var t: Dictionary = MapThemes.theme()
+	var lit: float = float(t.get("sun_energy", 0.9)) + float(t.get("ambient_energy", 0.28))
+	mat.set_shader_parameter("palette_lift", clampf(0.45 * lit / 1.18, 0.06, 0.5))
 	if parts[0] == "wood":
 		mat.shader = SURFACE_SHADER
 		mat.set_shader_parameter("surface_mode", MODE_WOOD)
