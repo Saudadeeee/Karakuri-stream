@@ -41,6 +41,8 @@ func _ready() -> void:
 	await _sec_save_corruption()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
+	print("SECTION _sec_key_repeat")
+	await _sec_key_repeat()
 	print("SECTION _sec_photo_and_misc")
 	await _sec_photo_and_misc()
 
@@ -593,6 +595,55 @@ func _sec_theme_switch() -> void:
 			"rebuilding one theme repeatedly accumulates props (%s)" % [repeat])
 
 ## 9. Photo mode, sun walk, pause volume settings preservation.
+## Held keys repeat. The OS sends a stream of `pressed` events while a key is
+## down, they all arrive at `_unhandled_input`, and none of the three shortcuts
+## there wants them: `U` span the sun far too fast to land anywhere on purpose
+## (reported as "press U a few times and the light never comes back"), `H`
+## flickered the UI and settled wherever the release fell, and `P` would have
+## handed the browser one file download per repeat.
+##
+## Also pins the sun walk itself: it is set ABSOLUTELY from the orientation the
+## scene started at and the step wraps, so a full circle of presses lands exactly
+## back where it began. Nudging the light by a relative rotation each time would
+## only approximately return, and "keep pressing until it looks right" has to be
+## a promise rather than a hope.
+func _sec_key_repeat() -> void:
+	var sun: DirectionalLight3D = game.get_node("DirectionalLight3D")
+	var start: Vector3 = -sun.global_transform.basis.z
+	var ui_before: bool = game.get_node("UI").visible
+
+	var echo := InputEventKey.new()
+	echo.keycode = KEY_U
+	echo.pressed = true
+	echo.echo = true
+	for i in 5:
+		game._unhandled_input(echo)
+	_check((-sun.global_transform.basis.z).distance_to(start) < 0.0001,
+			"held U repeats moved the sun")
+
+	var echo_h := InputEventKey.new()
+	echo_h.keycode = KEY_H
+	echo_h.pressed = true
+	echo_h.echo = true
+	for i in 5:
+		game._unhandled_input(echo_h)
+	_check(game.get_node("UI").visible == ui_before, "held H repeats toggled the UI")
+
+	var tap := InputEventKey.new()
+	tap.keycode = KEY_U
+	tap.pressed = true
+	for i in game.SUN_STEPS:
+		game._unhandled_input(tap)
+	_check((-sun.global_transform.basis.z).distance_to(start) < 0.0001,
+			"a full circle of U presses does not return the sun exactly")
+	# And a partial walk really does move it, so the test above cannot pass by
+	# the key having stopped working altogether.
+	game._unhandled_input(tap)
+	_check((-sun.global_transform.basis.z).distance_to(start) > 0.1, "U no longer moves the sun at all")
+	for i in game.SUN_STEPS - 1:
+		game._unhandled_input(tap)
+	await get_tree().process_frame
+
 func _sec_photo_and_misc() -> void:
 	var ev := InputEventKey.new()
 	ev.keycode = KEY_H

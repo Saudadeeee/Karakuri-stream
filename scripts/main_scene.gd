@@ -14,6 +14,9 @@ func _ready() -> void:
 	var env: Environment = $WorldEnvironment.environment
 	MapThemes.apply_environment(env, $DirectionalLight3D)
 	QualityManager.apply(self, env, $DirectionalLight3D, $FillLight)
+	# Captured AFTER the theme has had its say, so "back to noon" means this
+	# map's noon rather than whatever the scene file happened to store.
+	_sun_rest = $DirectionalLight3D.transform
 	# The sculpted island (IslandBuilder autoload) replaces the old cylinders;
 	# the flat collision box in this scene still handles raycasts.
 	$Ground/IslandTop.visible = false
@@ -32,18 +35,46 @@ func _ready() -> void:
 		_build_starter_garden.call_deferred()
 	_maybe_show_controls.call_deferred()
 
+## How many presses of `U` walk the sun all the way round. Twelve, so a press is
+## a neat 30° and a player who has gone too far only has to keep going.
+const SUN_STEPS: int = 12
+
+var _sun_step: int = 0
+var _sun_rest: Transform3D
+
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey and event.pressed):
+	# `is_echo()` matters more than it looks. Holding a key makes the OS repeat
+	# it — dozens of `pressed` events a second, all of which arrive here — and
+	# none of these three actions wants that. Holding `U` span the sun far too
+	# fast to land anywhere on purpose, which is how it was reported: press it a
+	# few times and you cannot get the light back. `H` flickered the UI on and
+	# off and settled wherever the release happened to fall, and `P` would have
+	# handed the browser a download per repeat.
+	if not (event is InputEventKey and event.pressed) or event.is_echo():
 		return
 	if event.keycode == KEY_H:
 		_photo_mode = not _photo_mode
 		$UI.visible = not _photo_mode
 		$PlacementController.set("photo_mode", _photo_mode)
 	elif event.keycode == KEY_U:
-		# Walk the sun 30° per press — evening light wraps back to morning.
-		$DirectionalLight3D.rotate_y(deg_to_rad(30.0))
+		_walk_sun()
 	elif event.keycode == KEY_P:
 		_take_screenshot()
+
+## Walk the sun one step round. Set ABSOLUTELY from the orientation the scene
+## started with rather than by rotating the light again each time: the step is
+## then a number that wraps, so twelve presses is exactly a full circle and
+## "keep pressing until it looks right" is guaranteed to work rather than
+## approximately work. The toast says where you are, because a player who has
+## made it dark needs to know the way out is forwards.
+func _walk_sun() -> void:
+	_sun_step = (_sun_step + 1) % SUN_STEPS
+	$DirectionalLight3D.transform = _sun_rest.rotated(
+		Vector3.UP, TAU * float(_sun_step) / float(SUN_STEPS))
+	if _sun_step == 0:
+		_toast("Sun back where it started")
+	else:
+		_toast("Sun %d/%d" % [_sun_step, SUN_STEPS])
 
 # ------------------------------------------------------- first-run controls
 ## One-time controls card (non-gamers never guess middle-drag). Dismissed with
