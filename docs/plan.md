@@ -1203,3 +1203,25 @@ Nhiều mục ghi ở PHẦN 10-30 đã được giải quyết ở các phần 
 1. **Cần TAI/MẮT thật của bạn** — cân âm lượng 6 SFX mới, reverb, và mọi chuyển động real-time (sóng nước, gear quay, lá rơi). Máy chỉ chứng minh được cấu trúc và số, không chứng minh được "nghe có thư giãn không".
 2. **Giới hạn kỹ thuật đã chấp nhận** — không có AO/soft-shadow/phản chiếu thật (đánh đổi của `gl_compatibility` để chạy được Web/Mobile).
 3. **Bản web của `main` chưa export lại sau khi merge nhà.** Nhánh `web` cố tình CẮT nhà + wildlife vì lý do hiệu năng trình duyệt; `main` giờ có lại cả hai. Nếu muốn phát hành web từ `main` thì phải đo lại trên trình duyệt — hoặc đơn giản là tiếp tục phát hành web từ nhánh `web` như thiết kế ban đầu.
+
+## PHẦN 75 (main): AUDIT VÒNG 2 — 2 bug runtime tìm được bằng trình duyệt
+
+Đào tiếp những vùng vòng 1 chưa chạm. Viết probe tạm (đã xoá sau khi dùng) cho 3 thứ regression chưa phủ:
+- **Undo/redo với NHÀ** (regression chỉ dùng JELLY — loại đơn giản nhất): đặt toà 4 ô → undo ×4 → redo ×4, so **vân tay hình học từng ô** trước/sau → GIỐNG HỆT ✓
+- **Rò rỉ node**: 40 chu kỳ đặt/xoá xen kẽ nhà và gear → node count 433 → 431 (âm, không rò) ✓
+- **Save/load town hỗn hợp** có nhà nhiều tầng + gỗ/nước/chime/gate → đủ block, hình học khớp ✓
+
+### Chốt câu hỏi tự nêu ở PHẦN 74: web export từ `main` sau khi merge nhà
+Export **thành công, 0 lỗi**: `index.pck` 5.4MB (bản nhánh `web` là 2.9MB — nhà + wildlife nặng thêm), wasm 37.7MB. Chạy thật bằng Chrome + puppeteer.
+
+**Tìm ra 2 bug runtime mà mọi lần kiểm trước đều bỏ sót** (vì chưa lần nào rê chuột lên nút):
+1. **`cute_button.gd`: `get_meta("cute_tween", null)`** — Godot chỉ dùng tham số default khi nó KHÁC null, nên truyền `null` vẫn rơi vào nhánh báo lỗi. Hệ quả: **lần rê chuột ĐẦU TIÊN lên bất kỳ nút nào trong game đều in lỗi** — cả desktop lẫn web, tồn tại âm thầm từ lâu. Fix: `has_meta()` trước.
+2. **`fredoka_chunky.tres` trỏ Fredoka.ttf bằng UID cũ** (`cmaekc5cf0wdr`, thật là `c8cxqywpp5kes`) — bản export nhị phân cảnh báo và fallback về đường dẫn text. Chạy được nhưng sai; fix bằng cách ghi đúng `uid=` vào dòng `ext_resource`.
+
+Sau fix: **jsErrors 4 → 0**, FPS lúc chơi 99. REGRESS ALL OK.
+
+### Kết luận về bản web của `main`
+Boot lần đầu **~47 giây** (nhánh `web` đã cắt nhà: 22-33s, lượt sau 4s). Chênh lệch đúng bằng cái giá của nhà + wildlife (nhiều biến thể shader hơn → trình duyệt biên dịch lâu hơn) — tức là **quyết định cắt nhà khỏi bản web ngày trước là đúng**. Kết luận: `main` = bản app đầy đủ (Windows/Android), phát hành web thì dùng nhánh `web`. Không phải lỗi cần sửa, là ranh giới thiết kế — ghi lại để khỏi phải đo lại.
+
+### Lỗi còn lại khi chạy regression (đều đã truy nguyên, vô hại)
+`Parse JSON failed` = bài test cố tình đưa file save hỏng. `Parameter "material" is null` ×2 = `MeshFit.tint` (bắt buộc override per-surface). `resources still in use at exit` = thứ tự giải phóng lúc thoát.

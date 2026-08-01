@@ -57,9 +57,13 @@ static func _recenter(b: Button) -> void:
 static func _tween(b: Button) -> Tween:
 	# One tween per button: starting a second while the first runs leaves two
 	# writing to scale on the same frame and the button visibly stutters.
-	var old = b.get_meta("cute_tween", null)
-	if old != null and is_instance_valid(old) and (old as Tween).is_running():
-		(old as Tween).kill()
+	# has_meta first: get_meta's "default" is only used when it is NOT null, so
+	# passing null there still raised "object has no meta values with the key"
+	# on the first hover of every button in the game.
+	if b.has_meta("cute_tween"):
+		var old: Variant = b.get_meta("cute_tween")
+		if is_instance_valid(old) and (old as Tween).is_running():
+			(old as Tween).kill()
 	var t: Tween = b.create_tween().set_parallel(true)
 	b.set_meta("cute_tween", t)
 	return t
