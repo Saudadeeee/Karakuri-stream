@@ -1001,3 +1001,39 @@ Còn (follow-up): R8 escapement (verge-foliot đếm beat), R6 ghost cog-jig. Ve
 - **R6 Ghost cog-jig** (`placement_controller`): con trỏ đặt block thêm vòng răng cog kem mờ (alpha 0.28) làm "ổ" + 1 crank cog nhỏ quay idle — đặt block = lắp bộ phận karakuri. Build 1 lần _ready, ẩn/hiện + follow theo ghost, tôn trọng photo_mode.
 
 Verify ảnh escapement (foliot + tạ + bánh thoát ở rìa) + REGRESS ALL OK + boot sạch. Toàn bộ 9 rank karakuri XONG.
+
+## PHẦN 66: ÂM THANH RIÊNG TỪNG NHẠC CỤ + FONT PIXEL ASEPRITE + HẾT GIẬT KHI ĐẶT BLOCK (branch web)
+
+User: "cải tiến toàn bộ — âm thanh hợp lý theo plan, font custom đáng yêu (Aseprite), rồi cải thiện gameplay". Ba việc, làm đủ, verify từng cái.
+
+### 1. Âm thanh: 5 sample → 11 (mỗi nhạc cụ MỘT giọng thật)
+Audit: cả game repitch 1 tiếng wood-hit cho drum/shishi/UI/gate/pinwheel; nước đặt dùng jellybounce; splash chỉ có hình KHÔNG tiếng. Sinh 6 SFX mới (KHÔNG tải mạng — tự synthesize, ghi CREDITS):
+- rfxgen MCP (sfxr): `water_plop` (sine trượt lên = bong bóng), `ui_pop` (pop tròn mềm), `paper_flutter` (noise repeat = giấy phần phật). Lưu ý scale thời gian sfxr ~bình phương — decay 0.17 ra 68ms, phải tăng 0.44 mới ra 0.45s.
+- ffmpeg synth (`aevalsrc`, chirp đúng pha TÍCH PHÂN ∫f dt chứ không phải f(t)·t): `taiko_boom` (sweep 110→45Hz + noise slap bandpass = màng trống thật), `music_box_tine` (partial INHARMONIC 6.27× của thanh cantilever — đúng vật lý hộp nhạc, bỏ hẳn chime×2), `splash_soft` (noise bandpass + chirp bọt).
+- Chuẩn web: mono 32kHz vorbis q1, cả 6 file ~40KB. Verify envelope bằng waveform PNG (nền đen — nền trong suốt nhìn toàn trắng).
+- Wire: `play_drum`→taiko; `play_music_box_note`→tine (bỏ ×2, sample đã cao); `play_water_plop` (đặt WATER); `play_splash` 4 chỗ từng câm: stream đổ vào ao (-9dB), koi leap (-11), vịt chúc đầu (-13), nước rơi chạm đất trong flow (-12, dedupe 35ms sẵn chống machine-gun); `play_ui_pop`→sample riêng; pinwheel→flutter. Shishi GIỮ double wood knock (bamboo gõ đá = đúng chất).
+
+### 2. Font pixel "KarakuriPop" vẽ bằng Aseprite
+- Aseprite giờ là SOURCE BUILD hợp lệ (`D:\Games\Aseprite\aseprite\build` — CMakeLists+ninja+CMakeCache đầy đủ, khác hẳn bản crack đã từ chối ở PHẦN 15).
+- `tools/font/gen_font.lua` (chạy `aseprite -b --script`): 56 glyph 5×7 pixel-art (A-Z, 0-9, dấu câu), upscale ×2 + BO GÓC tự động (subpixel lồi hạ alpha 45%) → mềm như đồ chơi. Xuất atlas trắng 256×64 (theme nhuộm màu) + `.fnt` AngelCode (size 20, lineHeight 22, base 17); a-z map sang glyph A-Z = small-caps có chủ đích.
+- Wire: `gen_theme.gd` sinh thêm `karakuri_pop.tres` (FontVariation: base=pixel, fallbacks=[Fredoka]) làm `theme.default_font`; **Fredoka GIỮ làm `custom_font` project** vì TextMesh wordmark 3D cần vector outline — bitmap font không extrude được. Size Label/default 18→20 (native của font, không resample). Import scaling_mode=fractional cho các size 12-40 rải rác.
+- Verify ảnh GPU menu + web thật: MAP/cards/PLAY/SETTINGS/hint/HOW-TO-PLAY toàn pixel font, wordmark 3D vẫn Fredoka.
+
+### 3. Gameplay: giết cú giật 60ms khi đặt block (mục "còn treo" số 1 của web.md)
+3 lớp, hình học KHÔNG đổi (chứng minh bằng `tools/isohash.gd` — md5 vertex+normal+index trước/sau GIỐNG HỆT, 4 layout):
+1. `_built` ở VoxelSurfaceManager là biến CHẾT — comment tả compare-first nhưng chưa từng code! Đặt CHUÔNG cũng re-solve cả gỗ lẫn nước. Thêm signature per-group → đặt block không-phải-gỗ/nước: worst 60.7→4.2ms.
+2. Cache density field per group: edit chỉ patch ~200 sample quanh cell (reach 0.66) thay vì resample ~10k; vượt bounds thì grow-copy (append_array slice = tốc độ C++).
+3. Solve = worker coroutine: Pass1/Pass2/smooth/normals/AO đều checkpoint mỗi ~4.5ms (`build_async` — bản mirror của `build()`, isohash so hash async vs sync = MATCH), commit mesh nguyên tử cuối cùng (mesh cũ hiện trong lúc nấu — không flicker). Nước chảy liên tục KHÔNG restart job (đói build) — xong snapshot rồi chạy vòng mới.
+- Unroll hot loop Pass 1 (bỏ Array[float] alloc mỗi dual cell — thứ tự cộng float GIỮ NGUYÊN để bit-exact) + smooth adjacency Dictionary → flat PackedInt32Array (nested packed array dính copy-on-write mỗi append — phải flat).
+- **Số đo (perf.gd, LITE, đặt GỖ lên deck 80 cell): worst 60.7ms → 13.8ms, over-16.7ms 14/420 → 0/420.** Churn nước liên tục: 0/420.
+
+### Verify tổng
+- REGRESS ALL OK (warning chỉ còn nhóm expected: corruption test + dummy renderer + exit ordering).
+- Ảnh GPU in-game: ao isosurface mượt không seam, stream, hotbar cog, wildlife sống.
+- Web export (official 4.7.1, tải lại về `D:\Apps\Godot` — binary cũ nằm temp session trước đã bay): pck 2.9MB, smoke puppeteer thật: boot 7s (cache), **menu→PLAY→game→How-to-play card→ghost đặt block, 144 FPS, 0 JS error**. Bẫy harness: click ĐẦU vào canvas bị nuốt (focus+AudioContext unlock) — phải click mồi rồi mới move+down/up vào PLAY.
+
+### Còn treo
+- [ ] Nghe 6 SFX mới bằng TAI THẬT + chỉnh volume theo cảm nhận (waveform chỉ chứng minh envelope, không chứng minh "hay").
+- [ ] Font: muốn đậm/nhạt hơn chỉnh `gen_font.lua` (stroke/AA) rồi chạy lại 1 lệnh.
+- [ ] Mesh xuất hiện trễ vài frame sau click (đổi 1 frame đơ lấy độ mượt) — máy 60fps chậm nhất ~130ms, có tiếng+particle che; nếu thấy khựng hình, giảm `BUILD_BUDGET_USEC`... không, TĂNG budget để xong sớm hơn (đánh đổi ngược lại).
+- [ ] `addons/godot_mcp` (plugin editor, PHẦN này cài để dùng scene-tools MCP) đang bật trong project.godot — vài KB script lọt vào export; cân nhắc exclude filter hoặc gỡ trước khi ship bản chính thức.

@@ -11,7 +11,8 @@ Two editions from one codebase, split by `QualityManager` (autoload):
 > an offscreen render target and is SLOWER than native resolution (measured).
 
 ## Requirements (one-time)
-- Godot **4.7.1 official** binary (the Steam build swallows export error text)
+- Godot **4.7.1 official** binary (the Steam build swallows export error text) —
+  kept at `D:\Apps\Godot\Godot_v4.7.1-stable_win64_console.exe` on this machine
 - Export templates 4.7.1.stable installed (`%APPDATA%/Godot/export_templates/4.7.1.stable/`)
 
 ## Web (lite edition)
