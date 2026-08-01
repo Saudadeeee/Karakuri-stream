@@ -45,12 +45,9 @@ void vertex() {
 }
 
 void fragment() {
-	// DIRECTIONAL grain — long soft streaks running along the timber, not
-	// isotropic blotches. Isotropic noise patches are exactly what soil looks
-	// like, and that is what this block kept being mistaken for. Real wood
-	// reads as wood through anisotropy: stretch the noise hard along world X
-	// on horizontal faces and along world Y (standing timber) on vertical
-	// ones, blended by the normal so the projection never smears.
+	// Directional grain: long streaks along the timber (isotropic blotches
+	// read as soil). Stretched along world X on horizontal faces, along the
+	// length on vertical ones, blended by the normal.
 	float side = clamp(abs(v_world_normal.y), 0.0, 1.0); // 1 = top/bottom face
 	vec2 top_uv = vec2(v_world_pos.x * 0.9, v_world_pos.z * 5.0) * grain_scale * 0.5;
 	vec2 side_uv = vec2((v_world_pos.x + v_world_pos.z) * 0.9, v_world_pos.y * 5.0) * grain_scale * 0.5;
@@ -61,11 +58,10 @@ void fragment() {
 
 	vec3 albedo = mix(base_color, grain_color, grain * grain_strength);
 
-	// Baked directional shade from a fixed "sun" — differentiates EVERY face by
-	// orientation so a smooth matte block reads as a SOLID convex shape from
-	// any angle (anti hollow-face illusion). The shadow floor is kept HIGH:
-	// multiplying warm sand down past ~0.7 lands in mud territory, which was
-	// the other half of the "looks like dirt" report.
+	// Baked directional shade from a fixed "sun" — differentiates every face
+	// by orientation so a smooth matte block reads as solid from any angle
+	// (anti hollow-face illusion). Shadow floor stays high: warm sand
+	// multiplied below ~0.7 turns to mud.
 	const vec3 SUN = normalize(vec3(0.35, 0.82, 0.45));
 	float lambert = dot(v_world_normal, SUN) * 0.5 + 0.5;
 	albedo *= mix(1.0 - top_shade * 0.7, 1.0 + top_shade * 0.4, lambert);
@@ -74,8 +70,7 @@ void fragment() {
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), rim_power);
 	albedo = mix(albedo, rim_color, fresnel * rim_strength);
 
-	// Baked vertex AO from the isosurface builder — crevices darken, but only
-	// toward warm shadow, never toward mud.
+	// Baked vertex AO from the isosurface builder.
 	ALBEDO = albedo * mix(0.7, 1.0, COLOR.r);
 	ROUGHNESS = 0.85;
 	SPECULAR = 0.15;

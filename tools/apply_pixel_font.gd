@@ -1,14 +1,12 @@
 extends SceneTree
 
-## Wires the hand-drawn pixel font (tools/font/gen_font.lua, rendered by
-## Aseprite) into this branch's EXISTING theme without regenerating it — the
-## styleboxes stay exactly as authored; only the face changes.
+## Wires the pixel font (tools/font/gen_font.lua) into the existing theme —
+## only default_font changes, the styleboxes stay as authored.
 ##
 ##   godot --headless --path . --script tools/apply_pixel_font.gd
 ##
-## Baloo2 stays as the project-wide custom_font because TextMesh (the 3D
-## wordmark) needs vector outlines a bitmap font cannot provide — and it rides
-## along as the per-glyph fallback for anything the small-caps pixel set lacks.
+## Baloo2 stays as project custom_font (TextMesh needs vector outlines) and
+## as the per-glyph fallback for anything the small-caps pixel set lacks.
 
 const PIXEL_SRC := "res://assets/fonts/pixel/karakuri_pop.fnt"
 const PIXEL_OUT := "res://assets/fonts/pixel/karakuri_pop.tres"
@@ -20,8 +18,7 @@ func _init() -> void:
 	var fv := FontVariation.new()
 	fv.base_font = base
 	fv.fallbacks = [load(FALLBACK)]
-	# Prove the bitmap actually loaded (an import failure would silently fall
-	# back to Baloo2 and nobody would notice the pixel font is missing).
+	# An import failure would silently fall back to Baloo2 — verify the bitmap loaded.
 	var w: float = fv.get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
 	print("pixel font check: 'PLAY'@20 = %.1f px -> %s" % [w,
 		"OK" if w > 1.0 else "*** EMPTY ***"])

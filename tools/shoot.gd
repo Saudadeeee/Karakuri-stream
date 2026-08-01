@@ -186,10 +186,8 @@ func _frame(root: Node) -> void:
 	if _yaw < 900.0:
 		cam.set("_yaw", deg_to_rad(_yaw))
 
-## What the wildlife manager thinks exists, so a screenshot can be checked
-## against it rather than squinting. WildlifeManager exists only on the web
-## branch — resolved dynamically so this harness also runs on main (a direct
-## identifier is a compile error that leaves the scene hung with no script).
+## What the managers think exists, so a screenshot can be checked against it.
+## WildlifeManager exists only on the web branch — resolved dynamically.
 func _report() -> void:
 	var wl: Node = get_node_or_null("/root/WildlifeManager")
 	if wl != null:

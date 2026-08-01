@@ -30,11 +30,9 @@ const EDGE: Array = [
 	[0, 4], [1, 5], [2, 6], [3, 7], # along Z
 ]
 
-## Time-sliced variant of build() for the LIVE game: identical output, but
-## yields to the frame loop whenever `budget_usec` of work has accumulated, so
-## a big re-solve becomes several cheap frames instead of one 50 ms hitch.
-## KEEP THE MATH IN SYNC WITH build() — tools/isohash.gd hashes build(), and
-## the two must produce the same mesh for the same field.
+## Time-sliced variant of build(): identical output, yields whenever
+## `budget_usec` of work has accumulated. KEEP THE MATH IN SYNC WITH build()
+## — tools/isohash.gd verifies both produce the same mesh.
 static func build_async(samples: PackedFloat32Array, dims: Vector3i, cell_size: float,
 		iso: float, budget_usec: int) -> ArrayMesh:
 	var tree: SceneTree = Engine.get_main_loop()
@@ -45,7 +43,7 @@ static func build_async(samples: PackedFloat32Array, dims: Vector3i, cell_size: 
 	var vertices: PackedVector3Array = PackedVector3Array()
 	var cell_index: Dictionary = {}
 
-	# Pass 1 — vertices (see build() for the unroll rationale). Checkpoint per z-slab.
+	# Pass 1 — vertices. Checkpoint per z-slab.
 	for z in range(dims.z - 1):
 		if Time.get_ticks_usec() > deadline:
 			await tree.process_frame
@@ -159,9 +157,8 @@ static func build_async(samples: PackedFloat32Array, dims: Vector3i, cell_size: 
 	if indices.is_empty():
 		return ArrayMesh.new()
 
-	# Smoothing, chunked — a mirror of _smooth() with budget checkpoints (the
-	# static one runs whole passes and would spike right where this function is
-	# trying not to). Same flat adjacency, same order, same result.
+	# Smoothing — mirror of _smooth() with budget checkpoints. Same adjacency,
+	# same order, same result.
 	var n_verts: int = vertices.size()
 	var nbr := PackedInt32Array()
 	nbr.resize(n_verts * MAX_VALENCE)
@@ -249,11 +246,9 @@ static func build(samples: PackedFloat32Array, dims: Vector3i, cell_size: float,
 	var cell_index: Dictionary = {} # Vector3i cell -> vertex index
 
 	# Pass 1 — one vertex per straddling cell, at the average of its edge
-	# crossings. HAND-UNROLLED hot loop: the readable version allocated an
-	# Array[float] and looped table-driven edges for EVERY dual cell — including
-	# the vast all-outside majority — and that allocation was the single biggest
-	# line item of a rebuild. Locals + explicit edges cut it several-fold with
-	# bit-identical output (verified via tools/isohash.gd).
+	# crossings. Hand-unrolled hot loop: locals + explicit edges, no per-cell
+	# allocation. Output is bit-identical to the table-driven form
+	# (tools/isohash.gd).
 	for z in range(dims.z - 1):
 		for y in range(dims.y - 1):
 			var row0: int = y * stride_y + z * stride_z
@@ -282,8 +277,8 @@ static func build(samples: PackedFloat32Array, dims: Vector3i, cell_size: float,
 						and b0 == b5 and b0 == b6 and b0 == b7:
 					continue
 
-				# Edge order matches the old EDGE table exactly — float sums are
-				# order-sensitive and the hashes must not move.
+				# Edge order matches the EDGE table — float sums are
+				# order-sensitive.
 				var sum := Vector3.ZERO
 				var crossings: int = 0
 				var t: float
@@ -410,13 +405,9 @@ static func build(samples: PackedFloat32Array, dims: Vector3i, cell_size: float,
 static func _smooth(verts: PackedVector3Array, indices: PackedInt32Array, passes: int) -> void:
 	if passes <= 0 or verts.is_empty():
 		return
-	# Neighbour sets per vertex, in ONE flat preallocated buffer (16 slots per
-	# vertex + a count array). A Surface Nets vertex has ~4-8 neighbours, so a
-	# linear dedup scan over the slots beats the old Dictionary-per-vertex by a
-	# wide margin — and a flat PackedInt32Array sidesteps the copy-on-write a
-	# nested packed array would pay on every append. Insertion order is
-	# preserved, so the centroid float-sum order — and therefore the mesh hash —
-	# is unchanged.
+	# Neighbour sets per vertex in one flat buffer (16 slots + count array).
+	# A nested packed array would pay copy-on-write per append. Insertion
+	# order is preserved — the centroid float-sum order must not change.
 	var n_verts: int = verts.size()
 	var nbr := PackedInt32Array()
 	nbr.resize(n_verts * MAX_VALENCE)

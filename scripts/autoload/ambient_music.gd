@@ -1,31 +1,15 @@
 extends Node
 
-## Ambient soundscape director on the Music bus — a small generative COMPOSER,
-## not a random-note sprinkler. Four layers, all feeding the Master reverb:
-##  1. a soft looping CHILL pad bed (real recording, far under everything);
-##  2. a very quiet RAIN layer for cosy texture;
-##  3. a slow HARMONIC CLOCK: a low drone that wanders between tonal centres;
-##  4. a phrase-based melody engine on top.
+## Generative ambient composer on the Music bus. Four layers into the Master
+## reverb: chill pad bed, quiet rain, a harmonic-clock drone, and a phrase
+## melody engine.
 ##
-## The music theory, and why it can never go sour:
-##
-##  - Everything — drone, melody, and every instrument the player strikes —
-##    draws from ONE shared pentatonic collection {C D E G A}. The five
-##    ROTATIONS of that collection are five different modes (C major-ish,
-##    A minor-ish, D dorian-ish, ...) built from the SAME pitches. So the
-##    harmonic clock changes the tonal centre — the light changes from major
-##    to minor and back — while the pitch set never moves, which means the
-##    player's chimes stay consonant through every chapter. Colour without
-##    clash risk.
-##  - Melody is a RANDOM WALK with stepwise bias (±1 scale step preferred,
-##    occasional small leaps). Uniform random picks sound like wind chimes in
-##    a storm; stepwise motion with rare leaps is what human melody does.
-##  - Notes come in PHRASES of 2-5 with breathing rests between, and a phrase
-##    sometimes ANSWERS the previous one — the same contour shifted one scale
-##    step (call and response). Structure the ear can follow, yet it never
-##    literally loops.
-##  - A minutes-long DENSITY swell (slow sine on the rest length) makes the
-##    whole thing ebb and flow instead of ticking like a clock.
+## Everything (drone, melody, player instruments) shares ONE pentatonic
+## collection {C D E G A}; the harmonic clock moves the tonal centre between
+## its five modal rotations. Same pitch set → the colour shifts major/minor
+## but nothing the player strikes can clash. Melody: stepwise-biased random
+## walk in 2-5-note phrases with call-and-response; a minutes-long sine
+## swells the phrase density.
 
 const CHILL_BEDS: Array[AudioStream] = [
 	preload("res://assets/sounds/chill_ambient.ogg"),
@@ -36,12 +20,11 @@ const TINE: AudioStream = preload("res://assets/sounds/music_box_tine.ogg")
 
 ## Pentatonic degree ratios within one octave (C D E G A).
 const P: Array[float] = [1.0, 1.1225, 1.2599, 1.4983, 1.6818]
-## Tonal centres ordered so NEIGHBOURS are gentle moves (relative/fifth-ish):
-## C -> Am is the classic major->relative-minor sigh; A -> E and G -> D are
-## fifth-flavoured. The harmonic clock only steps to an adjacent entry.
+## Tonal centres ordered so adjacent entries are gentle moves (relative
+## minor / fifths); the harmonic clock only steps to a neighbour.
 const ROOT_CIRCLE: Array[int] = [0, 4, 2, 3, 1]   # degrees: C A E G D
 
-## Melody walk: step distribution, heavily favouring neighbours.
+## Melody step distribution, favouring neighbours.
 const STEPS: Array[int] = [-2, -1, -1, -1, 1, 1, 1, 2]
 const DEGREE_SPAN: int = 10          # two octaves of pentatonic degrees
 const CHAPTER_MIN: float = 24.0      # seconds between tonal-centre moves
@@ -102,9 +85,8 @@ func _start_bed(stream: AudioStream, vol: float) -> AudioStreamPlayer:
 func _process(delta: float) -> void:
 	_clock += delta
 
-	# -- harmonic clock: wander to an adjacent tonal centre, announce it with
-	# a low drone (root two octaves down, sometimes joined by a soft partner
-	# a fifth-ish above — 3 scale steps in pentatonic land).
+	# Harmonic clock: step to an adjacent tonal centre, announce with a low
+	# drone (+ sometimes a fifth: 3 pentatonic steps up).
 	_chapter_timer += delta
 	if _chapter_timer >= _chapter_len:
 		_chapter_timer = 0.0
@@ -123,19 +105,16 @@ func _process(delta: float) -> void:
 
 	if _phrase.is_empty():
 		_phrase = _plan_phrase()
-		# The rest BEFORE a phrase carries the breathing: a minutes-long sine
-		# swells the music denser and thinner.
+		# The rest before a phrase carries the density breathing.
 		var breath: float = 1.0 + 0.5 * sin(TAU * _clock / DENSITY_PERIOD)
 		_next_note_in = randf_range(PHRASE_REST_MIN, PHRASE_REST_MAX) * breath
 		return
 
 	var degree: int = _phrase.pop_front()
 	_degree = degree
-	# First note of a phrase speaks; the rest trail quieter (natural taper).
+	# Phrase lead is louder and sometimes brighter (chime instead of tine).
 	var lead: bool = _phrase.size() >= 1
 	var vol: float = randf_range(-11.0, -8.0) if lead else randf_range(-15.0, -12.0)
-	# Timbre: music-box tine carries the line; a phrase-leading note sometimes
-	# rings brighter as real chimes.
 	var bright: bool = lead and randf() < 0.35
 	var pitch: float = _degree_pitch(degree) * (1.0 if bright else 0.5)
 	_spawn_note(CHIME if bright else TINE, pitch, vol)
@@ -144,9 +123,8 @@ func _process(delta: float) -> void:
 			_spawn_note.bind(TINE, pitch, vol - 7.0))
 	_next_note_in = randf_range(NOTE_GAP_MIN, NOTE_GAP_MAX)
 
-## Compose the next phrase: either an ANSWER to the previous one (same contour
-## shifted a scale step — call and response) or a fresh walk that opens on a
-## chord tone of the current centre (root, or its third two steps up).
+## Either an answer to the previous phrase (same contour, shifted a step) or
+## a fresh walk opening on a chord tone of the current centre.
 func _plan_phrase() -> Array[int]:
 	var out: Array[int] = []
 	if not _prev_phrase.is_empty() and randf() < ANSWER_CHANCE:
@@ -156,14 +134,12 @@ func _plan_phrase() -> Array[int]:
 	else:
 		var root: int = ROOT_CIRCLE[_circle_pos]
 		var start: int = root + (0 if randf() < 0.6 else 2)
-		# Choose the octave nearest the walk's current position, so phrases
-		# connect instead of teleporting.
+		# Open in the octave nearest the walk's current position.
 		if absi(start + 5 - _degree) < absi(start - _degree):
 			start += 5
 		var d: int = clampi(start, 0, DEGREE_SPAN - 1)
 		out.append(d)
 		for i in randi_range(1, 4):
-			# Mostly stepwise; a rare leap resets toward the root's octave.
 			if randf() < 0.15:
 				d = clampi(root + (5 if d < 5 else 0), 0, DEGREE_SPAN - 1)
 			else:

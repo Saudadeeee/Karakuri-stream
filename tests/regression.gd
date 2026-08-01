@@ -175,10 +175,8 @@ func _sec_karakuri_chain() -> void:
 	_clear()
 	await get_tree().process_frame
 
-## 4b. Flow-control mechanics that used to live only in ad-hoc suites (T4 /
-## OVERHAUL) and silently fell out of regression: sluice gate, jelly
-## trampoline, alternator round-robin (which also proves the beat lattice),
-## and dyed streams. An audit found ZERO coverage for all four.
+## 4b. Flow control: sluice gate, jelly trampoline, alternator round-robin
+## (also the beat lattice's direct check), dyed streams.
 func _sec_flow_control() -> void:
 	# --- sluice gate: closed (default) blocks; open passes through.
 	_b(Vector3i(0, 0, 4), BlockData.Type.WOOD)
@@ -206,8 +204,7 @@ func _sec_flow_control() -> void:
 	await get_tree().process_frame
 
 	# --- alternator pipe: two exits share the source's beat round-robin —
-	# each exit's interval DOUBLES and their phases interleave. This is also
-	# the beat lattice's only direct regression check.
+	# interval doubles, phases interleave.
 	_b(Vector3i(0, 2, 4), BlockData.Type.PIPE, 2)          # alternator variant
 	_b(Vector3i(1, 2, 4), BlockData.Type.PIPE)
 	_b(Vector3i(-1, 2, 4), BlockData.Type.PIPE)
@@ -215,9 +212,8 @@ func _sec_flow_control() -> void:
 	# the drums sit directly under the pipe ends.
 	_b(Vector3i(1, 1, 4), BlockData.Type.DRUM)
 	_b(Vector3i(-1, 1, 4), BlockData.Type.DRUM)
-	# Source sits DIRECTLY on the pipe — free-falling water does not enter
-	# a horizontal run from above (it splashes off the bamboo body); a source
-	# is itself a pipe connection, so on top it feeds the junction properly.
+	# Source must sit directly on the pipe: free-falling water does not enter
+	# a horizontal run from above; an adjacent source is a pipe connection.
 	_b(Vector3i(0, 3, 4), BlockData.Type.SOURCE)
 	await get_tree().create_timer(0.9).timeout
 	var right: Dictionary = StreamManager._impacts.get(Vector3i(1, 1, 4), {})

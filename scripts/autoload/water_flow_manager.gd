@@ -197,8 +197,6 @@ func _activate_cell(cell: Vector3i, from_dir: Vector3i) -> void:
 	if from_dir == Vector3i(0, -1, 0) and (cell.y == 0 or GridManager.has_block(below)):
 		var splash_pos: Vector3 = GridManager.cell_to_world(cell) + Vector3(0.0, -0.5, 0.0)
 		_spawn_splash(splash_pos)
-		# Quiet landing splash; AudioManager's 35 ms dedupe keeps a whole
-		# revealing cascade from machine-gunning.
 		AudioManager.play_splash(splash_pos, -12.0)
 
 func _spawn_splash(pos: Vector3) -> void:

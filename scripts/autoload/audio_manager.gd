@@ -15,8 +15,7 @@ const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__c
 var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.wav")
 var _water_flow := preload("res://assets/sounds/249666__tymorafarr__water-stream-looped.ogg")
 const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.wav")
-# Synthesized in-house (rfxgen + ffmpeg) — each instrument finally has its own
-# voice instead of borrowing a repitched wood knock. See CREDITS.md.
+# Synthesized in-house (rfxgen + ffmpeg) — see CREDITS.md.
 const TAIKO: AudioStream = preload("res://assets/sounds/taiko_boom.ogg")
 const TINE: AudioStream = preload("res://assets/sounds/music_box_tine.ogg")
 const SPLASH: AudioStream = preload("res://assets/sounds/splash_soft.ogg")
@@ -38,9 +37,7 @@ const DEDUPE_MS: int = 35
 func _ready() -> void:
 	_water_flow.loop = true
 	_gear_creak.loop_mode = AudioStreamWAV.LOOP_FORWARD
-	# Every Button in the game gets the soft UI pop automatically — hover answers
-	# press at a brighter pitch. One tree-wide hook instead of wiring each of the
-	# dozen places buttons are built; the 35 ms dedupe stops any doubling.
+	# One tree-wide hook gives every Button the UI pop (hover + press).
 	get_tree().node_added.connect(_on_node_added)
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
@@ -102,8 +99,7 @@ func play_wood_note(global_pos: Vector3, degree: int, octave_up: bool, base_pitc
 	var p: float = base_pitch * PENTATONIC_RATIOS[degree % PENTATONIC_RATIOS.size()] * (2.0 if octave_up else 1.0)
 	play_wood_pitch(global_pos, clampf(p, 0.6, 2.2), vol_db)
 
-## Deep taiko boom — a real membrane hit (synthesized sweep), not a repitched
-## wood knock. Slight pitch jitter keeps a rhythm section from sounding cloned.
+## Deep taiko boom.
 func play_drum(global_pos: Vector3) -> void:
 	if not _can_start("drum"):
 		return
@@ -120,10 +116,8 @@ func play_shishi_knock(global_pos: Vector3) -> void:
 	get_tree().create_timer(0.16).timeout.connect(
 		play_wood_pitch.bind(global_pos, 0.85, 2.0))
 
-## Music-box tinkle: a real steel tine (synthesized — fundamental plus the
-## inharmonic 6.27× partial of a struck cantilever bar, the sound every wind-up
-## music box makes). Pitched to the pentatonic degree; the sample is already
-## the high root so no octave shift is needed.
+## Music-box tine, pitched to the pentatonic degree. The sample is already the
+## high root — no octave shift.
 func play_music_box_note(global_pos: Vector3, note_index: int) -> void:
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
@@ -142,8 +136,7 @@ func play_jelly_bounce(global_pos: Vector3) -> void:
 	player.volume_db = randf_range(-5.0, -1.5)
 	player.play()
 
-## A round watery "bloop" — placing a water block. Rubbery jelly keeps its own
-## bounce; water deserved a voice that actually sounds wet.
+## Watery "bloop" for placing a water block.
 func play_water_plop(global_pos: Vector3) -> void:
 	if not _can_start("plop"):
 		return
@@ -154,8 +147,7 @@ func play_water_plop(global_pos: Vector3) -> void:
 	player.volume_db = randf_range(-4.0, -2.0)
 	player.play()
 
-## Soft splash — the sound the splash PARTICLES were always missing: stream
-## landing on open water, a koi re-entering after a leap, water hitting ground.
+## Soft splash: stream on open water, koi re-entry, water landing on ground.
 func play_splash(global_pos: Vector3, vol_db: float = -6.0) -> void:
 	if not _can_start("splash"):
 		return
@@ -166,7 +158,7 @@ func play_splash(global_pos: Vector3, vol_db: float = -6.0) -> void:
 	player.volume_db = vol_db + randf_range(-1.5, 0.0)
 	player.play()
 
-## Paper flutter for the pinwheel — spinning paper, not knocking wood.
+## Paper flutter for the pinwheel.
 func play_flutter(global_pos: Vector3) -> void:
 	if not _can_start("flutter"):
 		return
@@ -177,9 +169,8 @@ func play_flutter(global_pos: Vector3) -> void:
 	player.volume_db = randf_range(-9.0, -6.0)
 	player.play()
 
-## UI clicks: soft round pop, NON-positional — a button has no place in the
-## world, so routing it through a 3D player would pan and fade with the camera.
-## `up` picks the brighter pitch so hover and press answer each other.
+## UI pop, non-positional (a 3D player would pan/fade with the camera).
+## `up` = brighter hover pitch.
 func play_ui_pop(up: bool = false) -> void:
 	if not _can_start("ui%s" % ("u" if up else "d")):
 		return

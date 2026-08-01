@@ -9,9 +9,6 @@ extends Control
 const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
 const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
-## Two COLUMNS of icons instead of one long strip — fifteen entries in a single
-## file line read as a wall of tools; split in two the palette is half the
-## height and each icon gets room to breathe again.
 const COLUMNS: int = 2
 const ICON_SIZE: int = 48
 const ICON_GAP: int = 6
@@ -39,12 +36,9 @@ const HINTS: Dictionary = {
 	BlockData.Type.GATE: "Sluice gate — CLICK it in the world to open/close the flow",
 }
 
-## The palette holds only blocks that MATTER to the machine: build, water,
-## routing, power, instruments, and flow control. Stone lantern and pinwheel
-## are pure decoration — they were crowding the toolbar without adding a
-## mechanic, so they are no longer offered here. Everything about them still
-## exists (factory, variants, save/load, the starter garden's lantern), and
-## the audit suite still exercises them; re-adding is one line each.
+## Only blocks with a gameplay mechanic. STONE_LANTERN and PINWHEEL are pure
+## decoration and deliberately not offered — their factory/variants/save
+## support still exists, re-adding is one line here.
 const ENTRIES: Array = [
 	BlockData.Type.WOOD,
 	BlockData.Type.WATER,
@@ -231,8 +225,7 @@ func _on_icon_hover(type: int, entered: bool) -> void:
 		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
 		_hint_label.text = "%s\n%s" % [vname, HINTS.get(type, "")]
 		var btn: Button = _buttons[type]
-		# Clear of the WHOLE grid (two columns), not just the hovered button —
-		# anchored to the button's x it would sit on top of the second column.
+		# Clear of the whole grid, not the hovered button's column.
 		_hint_panel.position = Vector2(16.0 + float(COLUMNS * (ICON_SIZE + ICON_GAP)) + 14.0, btn.global_position.y)
 		_hint_panel.visible = true
 	elif _hint_panel != null:

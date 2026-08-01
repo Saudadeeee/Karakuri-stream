@@ -23,16 +23,12 @@ const MARGIN: float = 0.85
 const REBUILD_INTERVAL: float = 0.05
 
 var _groups: Dictionary = {}       # "wood:2" -> MeshInstance3D
-## Last built cell-set signature per group. WaterFlowManager.flow_changed and
-## every grid edit mark the whole manager dirty, but a rebuild only produces a
-## DIFFERENT mesh when that group's cells changed — re-solving the unchanged
-## wood isosurface on every water reveal tick was most of the water-flow cost.
+## Cell-set signature per group; rebuilds are skipped when a group's cells
+## did not change (water reveal ticks must not re-solve the wood).
 var _built: Dictionary = {}        # group key -> int signature
-## Cached density field per group. A single placed/removed cell only disturbs
-## the field within its own reach (~0.66), so instead of resampling the whole
-## bounding box we patch the few hundred samples around the edit. The cache is
-## invalidated by a spacing change and REGROWN (copy + fresh border slabs) when
-## the build outgrows its box.
+## Cached density field per group. An edit only disturbs samples within its
+## cell's reach (~0.66), so the field is patched around the edit; a spacing
+## change invalidates, outgrowing the box regrows (copy + fresh slabs).
 var _field_cache: Dictionary = {}  # group key -> {min, dims, spacing, samples, occ}
 const MAX_LOCAL_EDITS: int = 16
 var _materials: Dictionary = {}    # "wood:#hex" -> ShaderMaterial
@@ -48,11 +44,9 @@ func _ready() -> void:
 func _on_changed(_a = null) -> void:
 	_dirty = true
 
-## One re-solve used to run synchronously inside a frame — 45-60 ms on an
-## 80-cell garden, i.e. a visible hitch on every placement. The solve is now a
-## single WORKER COROUTINE that yields whenever ~6 ms of work has accumulated:
-## same mesh, spread over a few frames, committed atomically at the end (the
-## old mesh stays up while the new one is cooking, so nothing flickers).
+## The solve runs as a worker coroutine yielding every ~4.5 ms of work and
+## commits the mesh atomically — the old mesh stays up while the new one is
+## being built, so nothing flickers.
 const BUILD_BUDGET_USEC: int = 4500
 var _running: bool = false
 
@@ -67,10 +61,9 @@ func _process(delta: float) -> void:
 	_worker()
 
 func _worker() -> void:
-	# Consume-and-loop: edits landing while a solve is in flight don't restart
-	# it (continuous water flow would starve the build forever) — the current
-	# snapshot finishes and commits, then the worker goes again with the newest
-	# state. Water lags a tick or two behind its logic at worst.
+	# Consume-and-loop: mid-flight edits do not restart the solve (continuous
+	# water flow would starve it) — the snapshot finishes and commits, then
+	# the worker goes again with the newest state.
 	while true:
 		_dirty = false
 		await _rebuild_all()
@@ -96,8 +89,7 @@ func _rebuild_all() -> void:
 	for cell in WaterFlowManager._active_flows:
 		_add(groups, "water:0", GridManager.cell_to_world(cell))
 
-	# rebuild present groups, free absent ones — but SKIP any group whose cell
-	# set is identical to what its current mesh was built from.
+	# Rebuild present groups (skipping unchanged cell sets), free absent ones.
 	for key in groups.keys():
 		var sig: int = _signature(groups[key])
 		if _groups.has(key) and int(_built.get(key, 0)) == sig:
@@ -119,8 +111,6 @@ func _rebuild_all() -> void:
 			_field_cache.erase(key)
 
 ## Order-independent set signature: count + wrapped sum of per-cell hashes.
-## Cheap enough to run per group per rebuild; a collision needs two DIFFERENT
-## consecutive cell sets with equal count and equal hash sum.
 func _signature(centers: Array) -> int:
 	var h: int = centers.size()
 	for c in centers:
@@ -185,11 +175,9 @@ func _build(key: String, mi: MeshInstance3D, centers: Array, iso: float, bake_ao
 	req_min -= Vector3.ONE * MARGIN
 	req_max += Vector3.ONE * MARGIN
 
-	# Try to PATCH the cached field instead of resampling the whole box — an
-	# edit only disturbs samples within its cell's reach. Three tiers:
-	#   fits + few edits     -> recompute just the zones around changed cells
-	#   outgrown + few edits -> grow the box, row-copy the overlap, sample only
-	#                           the fresh border slabs, then patch the zones
+	# Field reuse tiers:
+	#   fits + few edits     -> patch the zones around changed cells
+	#   outgrown + few edits -> grow the box, copy overlap, sample fresh slabs
 	#   otherwise            -> full resample (first build, load, clear)
 	var region_min: Vector3
 	var dims: Vector3i
@@ -287,8 +275,8 @@ func _contains(a_min: Vector3, a_max: Vector3, b_min: Vector3, b_max: Vector3) -
 	return a_min.x <= b_min.x + 0.001 and a_min.y <= b_min.y + 0.001 and a_min.z <= b_min.z + 0.001 \
 		and a_max.x >= b_max.x - 0.001 and a_max.y >= b_max.y - 0.001 and a_max.z >= b_max.z - 0.001
 
-## Recompute every sample within one cell's reach from the CURRENT occupancy.
-## Recompute, not add/subtract, so repeated edits can never accumulate drift.
+## Recompute every sample within one cell's reach from the current occupancy
+## (recompute, not add/subtract — no accumulated drift).
 func _patch_zone(samples: PackedFloat32Array, region_min: Vector3, dims: Vector3i,
 		spacing: float, occ: Dictionary, c: Vector3, reach: float) -> void:
 	var pad: float = reach + spacing
@@ -304,11 +292,10 @@ func _patch_zone(samples: PackedFloat32Array, region_min: Vector3, dims: Vector3
 			for x in range(ix0, ix1 + 1):
 				samples[x + row] = _density(region_min + Vector3(x, y, z) * spacing, occ, reach)
 
-## Grow the cached field box to also cover [req_min, req_max]: allocate the
-## union box, row-copy the old samples (append_array on slices — C++ speed),
-## and sample fresh only where the box is new. Returns {} when the lattices
-## don't align (shouldn't happen — cells sit on a unit grid — but a misaligned
-## copy would show as geometry corruption, so fall back to a full resample).
+## Grow the cached field box to cover [req_min, req_max]: allocate the union
+## box, row-copy the old samples, sample fresh only where the box is new.
+## Returns {} when the lattices don't align (fall back to a full resample —
+## a misaligned copy shows as geometry corruption).
 func _grow_field(cache: Dictionary, req_min: Vector3, req_max: Vector3,
 		spacing: float, occ: Dictionary, reach: float) -> Dictionary:
 	var c_min: Vector3 = cache["min"]
