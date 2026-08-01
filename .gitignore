@@ -23,3 +23,7 @@ mono_crash.*.json
 # Claude Code session-local state (not project content)
 /.claude/
 build/
+
+# Local editor tooling: the godot_mcp scene-bridge plugin (dev machine only,
+# enabled in project.godot; a clone without it just logs a missing-plugin note)
+/addons/godot_mcp/

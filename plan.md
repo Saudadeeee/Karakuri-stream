@@ -1001,3 +1001,90 @@ Còn (follow-up): R8 escapement (verge-foliot đếm beat), R6 ghost cog-jig. Ve
 - **R6 Ghost cog-jig** (`placement_controller`): con trỏ đặt block thêm vòng răng cog kem mờ (alpha 0.28) làm "ổ" + 1 crank cog nhỏ quay idle — đặt block = lắp bộ phận karakuri. Build 1 lần _ready, ẩn/hiện + follow theo ghost, tôn trọng photo_mode.
 
 Verify ảnh escapement (foliot + tạ + bánh thoát ở rìa) + REGRESS ALL OK + boot sạch. Toàn bộ 9 rank karakuri XONG.
+
+## PHẦN 66 (main): PORT TỪ BRANCH WEB — giọng riêng từng nhạc cụ + font pixel + hết giật đặt block
+
+Ba cải tiến làm và verify trên branch `web` trước (xem docs/plan.md PHẦN 66 bên đó), giờ port sang app chính. Khác biệt buộc phải thích nghi, không copy mù:
+
+### Âm thanh (6 SFX tự synthesize — rfxgen + ffmpeg, CC-free, ~40KB)
+- `taiko_boom` / `music_box_tine` / `splash_soft` / `water_plop` / `ui_pop` / `paper_flutter` — trống hết mượn wood-knock repitch, hộp nhạc ra tiếng tine thật (partial inharmonic 6.27×), splash có TIẾNG ở 3 chỗ từng câm (stream đổ vào ao, koi leap, nước rơi chạm đất), nước đặt "bloop" thật, pinwheel phần phật giấy.
+- Main KHÁC web: không có wildlife_manager (vịt = đồ web), không có cute_button → **UI pop nối kiểu khác**: `AudioManager` nghe `get_tree().node_added` — MỌI Button trong game (menu, pause, hotbar, dialog) tự có pop hover/press, không phải sửa từng file. Dedupe 35ms chống double.
+
+### Font pixel "KarakuriPop"
+- Copy `tools/font/gen_font.lua` + `assets/fonts/pixel/` từ web. Main dùng **Baloo2** (không phải Fredoka như web) → viết `tools/apply_pixel_font.gd`: patch theme HIỆN CÓ tại chỗ (stylebox giữ nguyên authored, chỉ đổi default_font + size 20), fallback = Baloo2; `custom_font` project vẫn Baloo2 cho TextMesh wordmark 3D.
+
+### Hết giật khi đặt block
+- Port `iso_surface.gd` nguyên bản web (unroll + flat-array smooth + `build_async` time-sliced). `tools/isohash.gd`: 4 hash TRÙNG baseline web + async MATCH — hình học không đổi giữa 2 branch.
+- `voxel_surface_manager.gd`: lấy bản web rồi graft lại phần material của main (wood/water shader TÁCH, không phải surface.gdshader gộp; không palette_lift/MapThemes). Được luôn 3 fix web: signature skip (main trước đó đặt CHUÔNG cũng re-solve gỗ+nước), field cache occ-index (main trước đó còn quét MỌI center cho MỖI sample — O(samples×cells), bản chậm nhất còn sống), worker coroutine ~4.5ms/frame.
+- **AO đổi theo**: main từng dùng 5 probe offset CỐ ĐỊNH — web.md đo ra trên mặt phẳng nó đi thẳng vào hàng xóm của chính block → occlusion HẰNG SỐ 0.52 = tối phẳng toàn bộ, không có chi tiết khe. Bản port dò 3 tia HƯỚNG RA THEO NORMAL — khe thật tối, mặt thoáng sáng. Hình ảnh gỗ trên main sẽ hơi khác (đúng hơn).
+
+### Verify
+- REGRESS ALL OK trên main sau toàn bộ port.
+- QualityManager.lite = false trên desktop → mọi nhánh LITE trong code port tự né, app giữ full quality.
+
+### Số đo cuối (perf.gd, FULL quality, đặt GỖ lên deck 80 cell, cùng máy cùng phiên)
+```
+TRƯỚC: worst=437.19ms  p99=410.59  over16ms=14/420   (field O(samples×cells) + samples=4)
+SAU:   worst= 14.27ms  p99= 13.46  over16ms= 0/420   (~30× worst frame)
+```
+Bẫy harness khi đo: perf.gd/shoot.gd (đồ web) gọi thẳng `WildlifeManager` — main không có autoload đó → GDScript compile error, scene ngồi im KHÔNG in gì (nhìn như treo). Đã đổi sang `get_node_or_null("/root/WildlifeManager")` — 2 tool giờ chạy cả 2 branch.
+
+### Còn treo
+- [ ] Nghe 6 SFX bằng tai + chỉnh volume.
+- [ ] cute_button (squash tween hover) là đồ web — main muốn thì port riêng.
+- [ ] Ảnh main hơi cháy sáng ở góc nhìn cao (glow full quality — có từ trước, không phải do port); muốn dịu thì hạ glow intensity trong main.tscn.
+
+## PHẦN 67 (main): NHẠC GENERATIVE CÓ NHẠC LÝ + HẾT CHÁY SÁNG
+
+User: "cái nhìn đẹp thật sự + âm thanh thư giãn thật sự, áp dụng nhạc lý (pentatonic) chống nhàm/lặp".
+
+### Nhạc: `ambient_music.gd` viết lại thành COMPOSER (không còn rắc nốt random)
+Nguyên tắc cốt lõi — mọi lớp (drone, giai điệu, VÀ mọi nhạc cụ người chơi gõ) cùng rút từ MỘT tập pentatonic {C D E G A}:
+1. **Đồng hồ hòa âm**: tonal center lang thang giữa 5 MODE (5 phép quay của cùng tập âm — C trưởng-ish ↔ A thứ-ish ↔ ...) mỗi chương 24-44s, đi bước KỀ trên vòng C-A-E-G-D (quãng liên quan gần: trưởng↔thứ tương đối, quãng 5). Mỗi lần chuyển: drone trầm 2 quãng dưới + 60% thêm bạn quãng-5 (3 bậc pentatonic). Vì tập âm KHÔNG đổi (chỉ đổi trọng tâm) → màu sắc trưởng/thứ thay đổi mà chuông người chơi gõ loạn vẫn hòa — đổi màu, không đổi rủi ro chỏi.
+2. **Random walk có thiên kiến bước liền**: nốt sau = nốt trước ±1 bậc (nặng) / ±2 (nhẹ), 15% leap reset về quãng tám của root — giai điệu người thật thay vì chuông gió giữa bão. Đo: 89% bước liền.
+3. **Phrase 2-5 nốt + nghỉ thở** (2.6-6.5s), nốt đầu phrase to hơn + 35% sáng hơn (chime thay tine); 35% phrase SAU là câu TRẢ LỜI phrase trước dịch ±1 bậc (call-and-response) — có cấu trúc tai theo được mà không bao giờ loop nguyên văn.
+4. **Hơi thở mật độ**: chu kỳ sine ~173s scale khoảng nghỉ — nhạc dâng/lắng theo phút.
+5. Echo 20% (nốt lặp -7dB sau 0.34s), taper âm lượng trong phrase, jitter pitch ±0.5%.
+- Verify `MUSIC ALL OK`: 10 pitch đúng tập pentatonic ×2 quãng tám, phrase 2-5 phân bố đều, stepwise 694 vs leap 86, vòng root đúng.
+- `AudioManager.play_ambient_note` mồ côi (không caller) — giữ lại vô hại.
+- Bẫy test: SceneTree `--script` KHÔNG load autoload (phải `.new()` script trực tiếp); gán `[]` untyped vào `Array[int]` = runtime error làm script chết im → treo vô hạn.
+
+### Visual: hết cháy trắng góc cao (main full quality)
+- Chẩn đoán qua 3 vòng ảnh: glow chỉ là phụ — thủ phạm chính là ALBEDO đảo quá sáng dưới sun 0.9 + ambient 0.45 + filmic: island_top Spring (0.55,0.58,0.44) render ra kem trắng nhìn từ trên.
+- Fix: `main.tscn` glow intensity 0.4→0.24, threshold mặc định→1.25 (bloom chỉ còn cho highlight thật: sparkle/đèn/trời), bloom 0.15→0.08, brightness 1.02→1.0; `map_themes` island_top Spring →(0.45,0.52,0.35), Autumn →(0.54,0.42,0.24). Snow/Night giữ (trắng/tối có chủ đích).
+- Verify ảnh 2 góc (cao 38° + thấp 18°): đảo XANH thật, block/nhạc cụ nổi rõ, trời hồng cân bằng, hết white-out.
+
+### Verify: REGRESS ALL OK sau toàn bộ.
+### Còn treo: nghe composer bằng tai thật (cấu trúc đã chứng minh bằng số, "thư giãn" phải nghe); 2 theme còn lại soi ảnh nếu muốn tinh chỉnh tiếp.
+
+## PHẦN 68 (main): GỖ HẾT GIỐNG ĐẤT + HOTBAR 2 CỘT
+
+Feedback: (1) khối gỗ xấu, giống khối đất; (2) 15 icon xếp 1 hàng dài quá — chia 2.
+
+1. **Gỗ** (`wood.gdshader`): chẩn đúng 2 nguyên nhân "giống đất":
+   - Grain cũ = value-noise ĐẲNG HƯỚNG → mảng loang lổ nâu = đúng bề mặt đất. Gỗ đọc ra gỗ nhờ BẤT ĐẲNG HƯỚNG. Đổi sang vân KÉO DỌC THỚ: mặt trên kéo theo world-X, mặt bên kéo NGANG theo chiều dài (lần đầu viết nhầm trục — vân chạy dọc như rèm, ảnh lộ ngay, đảo lại), blend theo normal.
+   - 2 tầng nhân tối chồng nhau (top_shade floor 0.6 × AO floor 0.55 = 0.33) đưa nâu cát #D4A373 xuống vùng bùn. Nâng floor: shade 0.72, AO 0.7 — bóng ấm, không bùn.
+   - Verify ảnh close-up thanh 4 khối: đọc ra THANH GỖ bào nhẵn có thớ chạy dọc thân.
+2. **Hotbar** (`material_ui.gd`): VBox 1 cột 15 icon (675px) → GridContainer **2 cột × 8**, icon 40→48px (nửa chiều cao, mỗi icon thoáng hơn). Hint card neo theo mép phải CẢ GRID (neo theo nút thì đè lên cột 2). Verify ảnh: 2 cột đều, vòng chọn salmon đúng icon.
+
+REGRESS ALL OK.
+
+## PHẦN 69 (main): AUDIT CƠ CHẾ TOÀN CỤC + TỈA HOTBAR
+
+User: "kiểm tra toàn bộ cơ chế, có gì cần fix; hotbar nhiều đồ quá, bỏ thứ không thuộc cơ chế chính".
+
+### Audit: viết thêm section regression thay vì chỉ đọc code
+Soi coverage: GATE, jelly trampoline, alternator, dyed stream, beat lattice — **0 dòng** trong regression (chỉ tồn tại trong suite ad-hoc T4/OVERHAUL cũ, đã rơi rụng). Viết `_sec_flow_control` (vĩnh viễn trong tests/regression.gd): gate đóng chặn/mở cho qua, jelly nảy dòng sang ô kề, alternator chia beat (interval ×2 + phase so le — đồng thời là check trực tiếp duy nhất của beat lattice), scoop múc hồ màu đổ ra đúng màu.
+
+### Bug THẬT tìm ra nhờ test mới: nước rơi bãi cỏ trống = câm + xuyên đảo
+Segment dump lộ: nước rơi chỗ không có block xuyên qua THÂN ĐẢO thành sợi chỉ vô hình tới y=-18 (giới hạn void) — không impact, không splash, không tiếng, phí ~18 segment/dòng. Web đã fix từ PHẦN 57-era, main chưa bao giờ có. Fix `_trace`: rơi DOWN qua y<0 trong bán kính đảo → impact tại ô đầu-dưới-mặt-đất (đỉnh ô = đúng mặt cỏ), type giả `LAWN=-1` → splash mềm nhất palette (-12dB) + ring nằm TRÊN mặt cỏ (offset cũ chôn ring trong đảo).
+
+### Bẫy rig khi viết test (ghi để khỏi lặp):
+- Đặt rig ngoài `MAP_RADIUS` (z=20) → nước dừng ở rìa, 4/4 fail oan.
+- Nước rơi TỰ DO không chui vào ống ngang (đập thân tre) — SOURCE phải đặt SÁT TRÊN ống (source = 1 connection của mạng ống).
+- Ống cụt = nước nhỏ giọt XUỐNG tại ô cuối — trống hứng phải nằm ngay dưới đầu ống, không phải xa hơn 1 ô.
+
+### Hotbar 15 → 13
+Bỏ STONE_LANTERN + PINWHEEL khỏi palette (thuần trang trí, không cơ chế). Giữ nguyên factory/variant/save-load/starter-garden — regression vẫn exercise cả 2 loại; thêm lại = 1 dòng ENTRIES. Không đụng keymap (2 loại này vốn không có phím).
+
+REGRESS ALL OK (10 section, thêm _sec_flow_control 8 check).
