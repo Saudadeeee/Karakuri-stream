@@ -385,7 +385,9 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 	var pitch_mul: float = float(dye.get("pitch", 1.0))
 	# Confluence accent: merged streams strike louder.
 	var weight: int = int(_impacts[cell].get("weight", 1)) if _impacts.has(cell) else 1
-	var vol: float = float(dye.get("vol", 0.0)) + float(weight - 1) * 2.5
+	# Confluence accent, capped — three merged streams must read "heavier",
+	# not "twice as loud on every single beat".
+	var vol: float = clampf(float(dye.get("vol", 0.0)) + float(weight - 1) * 2.5, -8.0, 2.0)
 	match type:
 		BlockData.Type.BELL:
 			var node: Node3D = _node_of(cell, BlockData.Type.BELL)
@@ -420,7 +422,9 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 		BlockData.Type.SCOOP:
 			AudioManager.play_wood_pitch(pos, 1.0 * pitch_mul, vol)
 		BlockData.Type.WATER:
-			AudioManager.play_splash(pos, -9.0)
+			# Repeats on the beat for as long as the spout runs — must sit far
+			# below the instruments, low-pitched.
+			AudioManager.play_splash(pos, -16.0, true)
 		_:
 			# PIPE/SOURCE deliberately SILENT — water moving through the bamboo
 			# system shouldn't knock; only what it finally lands on sings (the

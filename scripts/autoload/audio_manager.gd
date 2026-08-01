@@ -97,14 +97,14 @@ func play_drum(global_pos: Vector3) -> void:
 	player.global_position = global_pos
 	player.stream = TAIKO
 	player.pitch_scale = randf_range(0.92, 1.06)
-	player.volume_db = randf_range(1.0, 2.5)
+	player.volume_db = randf_range(-2.0, -0.5)
 	player.play()
 
 ## Shishi-odoshi tipping back: the classic double knock — "cộc… cốc!".
 func play_shishi_knock(global_pos: Vector3) -> void:
-	play_wood_pitch(global_pos, 1.45, 0.5)
+	play_wood_pitch(global_pos, 1.45, 0.0)
 	get_tree().create_timer(0.16).timeout.connect(
-		play_wood_pitch.bind(global_pos, 0.85, 2.0))
+		play_wood_pitch.bind(global_pos, 0.85, 1.0))
 
 ## Music-box tine, pitched to the pentatonic degree. The sample is already the
 ## high root — no octave shift.
@@ -138,13 +138,15 @@ func play_water_plop(global_pos: Vector3) -> void:
 	player.play()
 
 ## Soft splash: stream on open water, koi re-entry, water landing on ground.
-func play_splash(global_pos: Vector3, vol_db: float = -6.0) -> void:
+## `deep` pitches it down into a low plop — for sounds that repeat on the beat
+## forever, where any brightness turns abrasive.
+func play_splash(global_pos: Vector3, vol_db: float = -6.0, deep: bool = false) -> void:
 	if not _can_start("splash"):
 		return
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
 	player.stream = SPLASH
-	player.pitch_scale = randf_range(0.9, 1.15)
+	player.pitch_scale = randf_range(0.7, 0.9) if deep else randf_range(0.9, 1.15)
 	player.volume_db = vol_db + randf_range(-1.5, 0.0)
 	player.play()
 
@@ -179,7 +181,7 @@ func play_chime(global_pos: Vector3, note_index: int = -1, pitch_mul: float = 1.
 	player.global_position = global_pos
 	player.stream = CHIME
 	player.pitch_scale = PENTATONIC_RATIOS[index] * pitch_mul * randf_range(0.99, 1.01)
-	player.volume_db = randf_range(-2.0, 1.0)
+	player.volume_db = randf_range(-4.0, -1.0)
 	player.play()
 
 ## A soft, non-positional pentatonic note for the generative ambient music
@@ -206,7 +208,7 @@ func make_water_loop_player() -> AudioStreamPlayer3D:
 	player.bus = "SFX"
 	player.stream = _water_flow
 	player.pitch_scale = randf_range(0.95, 1.05)
-	player.volume_db = -4.0
+	player.volume_db = -8.0
 	player.unit_size = 6.0
 	player.max_distance = 0.0
 	return player

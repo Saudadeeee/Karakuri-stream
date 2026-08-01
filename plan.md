@@ -18,3 +18,21 @@ User: "sao mở Godot không có nhà? Tưởng chỉ bỏ khỏi bản web?" �
 - Hover hotbar to: -13→-18.5dB.
 
 REGRESS ALL OK (22 section, 0 script error). Ảnh: nhà 2 tầng chữ L merge đúng cạnh máy karakuri, chim+mèo+vịt về, hotbar 14 icon.
+
+## PHẦN 71 (main): MIX PASS TOÀN CỤC — thư giãn là mặc định
+
+Feedback: tiếng nước từ vòi rơi xuống chát và to. Audit TOÀN BỘ đường phát âm — nguyên tắc mới: **âm lặp-theo-beat vô hạn phải nằm xa dưới nhạc cụ và trầm** (mọi độ sáng lặp mãi đều thành chói); one-shot hiếm mới được nổi.
+
+| Đường âm | Trước | Sau |
+|---|---|---|
+| Splash nước chạm ao/cỏ (LẶP mỗi beat 0.55s) | -9dB, pitch 0.9-1.15 | **-16dB, pitch 0.7-0.9** (cờ `deep` mới) |
+| Splash nước rơi trong flow reveal | -12 | -15, deep |
+| Taiko (lặp theo beat khi stream gõ) | +1..+2.5 | **-2..-0.5** |
+| Chuông bell (lặp theo beat) | -2..+1 | -4..-1 |
+| Shishi knock đôi | 0.5 / **+2.0** | 0.0 / +1.0 |
+| Loop nước chảy (pond spill) | -4 | -8 |
+| Confluence accent | không cap (+2.5/dòng) | **cap +2.0 tổng** |
+| Koi leap splash (one-shot hiếm) | -14 | giữ (được phép nổi) |
+| Marimba knock beat / đặt block / tine / jelly / creak -19 / UI -18.5 | | giữ — đã cân
+
+REGRESS ALL OK. Chưa thể nghe hộ — cần tai thật chấm lần cuối; mọi số ở audio_manager/stream_manager, đổi 1 dòng/giọng.
