@@ -10,6 +10,9 @@ extends Node
 
 const DOWN := Vector3i(0, -1, 0)
 const MAX_STEPS := 80
+## Pseudo-type for a stream landing on open grass (no block there) — gets a
+## soft splash voice instead of silence.
+const LAWN := -1
 const MAP_RADIUS := 8.5
 const REBUILD_INTERVAL := 0.05
 ## One shared musical beat (~109 BPM). Every impact snaps to multiples of its
@@ -228,6 +231,16 @@ func _trace(src: Vector3i, interval: float = BASE_BEAT, color: Color = CYAN) -> 
 			continue
 		var block: BlockData = GridManager.get_block(nxt)
 		if block == null:
+			# Falling PAST the island surface: land on the LAWN instead of
+			# threading an invisible stream through the island's body all the
+			# way to the void (which is what this used to do — no splash, no
+			# sound, a dozen wasted segments). The impact sits at the first
+			# below-ground cell because _play_impact splashes at that cell's
+			# TOP, which is exactly lawn level.
+			if dir == DOWN and nxt.y < 0 and Vector2(nxt.x, nxt.z).length() <= MAP_RADIUS:
+				_add_seg(pos, nxt, st["color"])
+				_impact(nxt, LAWN, st["interval"], st["phase"], st["color"])
+				continue
 			# Empty: travel, then gravity takes over (fall) from there.
 			_add_seg(pos, nxt, st["color"])
 			stack.append(_entry(st, nxt, DOWN, carried_h))
@@ -394,16 +407,29 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.MUSIC_BOX, \
 		BlockData.Type.SCOOP:
 			AudioManager.play_wood_pitch(pos, 1.0 * pitch_mul, vol)
+		BlockData.Type.WATER:
+			# Stream meeting open water: an actual soft splash, quiet enough to
+			# sit under the instrument voices.
+			AudioManager.play_splash(pos, -9.0)
+		LAWN:
+			# Rain-on-grass: the quietest splash in the palette.
+			AudioManager.play_splash(pos, -12.0)
 		_:
-			# Water: splash only. PIPE/SOURCE deliberately SILENT — water moving
-			# through the bamboo system shouldn't knock; only what it finally
-			# lands on sings (the constant in-pipe noise was overwhelming).
+			# PIPE/SOURCE deliberately SILENT — water moving through the bamboo
+			# system shouldn't knock; only what it finally lands on sings (the
+			# constant in-pipe noise was overwhelming).
 			pass
 	# The splash + pooled ring take the struck NOTE's colour — the machine
 	# paints its melody in the air, in time with the quantized sound.
 	var tint: Color = _impact_tint(cell, type, color)
 	_spawn_splash(pos, tint)
-	_ring_at(pos - Vector3(0, 0.45, 0), tint)
+	# The ring hugs the struck block's top face — but a LAWN impact has no
+	# block, and pos is already grass level, so the same offset would bury the
+	# ring inside the island. Sit it just above the grass instead.
+	if GridManager.get_block(cell) == null:
+		_ring_at(pos + Vector3(0, 0.02, 0), tint)
+	else:
+		_ring_at(pos - Vector3(0, 0.45, 0), tint)
 	# NIGHT runs on light: percussive impacts spark fireflies (throttled).
 	if MapThemes.current == 3 and type in [BlockData.Type.CHIME, BlockData.Type.DRUM, BlockData.Type.WOOD, BlockData.Type.JELLY]:
 		var now: int = Time.get_ticks_msec()

@@ -9,8 +9,12 @@ extends Control
 const WOOD_SHADER: Shader = preload("res://shaders/wood.gdshader")
 const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
-const ICON_SIZE: int = 40   # 15 entries must fit a ~700px-tall window
-const ICON_GAP: int = 5
+## Two COLUMNS of icons instead of one long strip — fifteen entries in a single
+## file line read as a wall of tools; split in two the palette is half the
+## height and each icon gets room to breathe again.
+const COLUMNS: int = 2
+const ICON_SIZE: int = 48
+const ICON_GAP: int = 6
 const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 const FADE_MIN_ALPHA: float = 0.18
 const SPIN_SPEED: float = 0.9
@@ -35,6 +39,12 @@ const HINTS: Dictionary = {
 	BlockData.Type.GATE: "Sluice gate — CLICK it in the world to open/close the flow",
 }
 
+## The palette holds only blocks that MATTER to the machine: build, water,
+## routing, power, instruments, and flow control. Stone lantern and pinwheel
+## are pure decoration — they were crowding the toolbar without adding a
+## mechanic, so they are no longer offered here. Everything about them still
+## exists (factory, variants, save/load, the starter garden's lantern), and
+## the audit suite still exercises them; re-adding is one line each.
 const ENTRIES: Array = [
 	BlockData.Type.WOOD,
 	BlockData.Type.WATER,
@@ -48,8 +58,6 @@ const ENTRIES: Array = [
 	BlockData.Type.CHIME,
 	BlockData.Type.MUSIC_BOX,
 	BlockData.Type.SCOOP,
-	BlockData.Type.STONE_LANTERN,
-	BlockData.Type.PINWHEEL,
 	BlockData.Type.GATE,
 ]
 
@@ -70,14 +78,16 @@ var _hint_panel: PanelContainer
 var _hint_label: Label
 
 func _ready() -> void:
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", ICON_GAP)
-	vbox.position = Vector2(16, 16)
-	add_child(vbox)
+	var grid := GridContainer.new()
+	grid.columns = COLUMNS
+	grid.add_theme_constant_override("h_separation", ICON_GAP)
+	grid.add_theme_constant_override("v_separation", ICON_GAP)
+	grid.position = Vector2(16, 16)
+	add_child(grid)
 
 	for type in ENTRIES:
 		var button := _build_icon_button(type)
-		vbox.add_child(button)
+		grid.add_child(button)
 		_buttons[type] = button
 		button.pressed.connect(placement_controller.select_material.bind(type))
 
@@ -221,7 +231,9 @@ func _on_icon_hover(type: int, entered: bool) -> void:
 		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
 		_hint_label.text = "%s\n%s" % [vname, HINTS.get(type, "")]
 		var btn: Button = _buttons[type]
-		_hint_panel.position = Vector2(btn.global_position.x + ICON_SIZE + 14, btn.global_position.y)
+		# Clear of the WHOLE grid (two columns), not just the hovered button —
+		# anchored to the button's x it would sit on top of the second column.
+		_hint_panel.position = Vector2(16.0 + float(COLUMNS * (ICON_SIZE + ICON_GAP)) + 14.0, btn.global_position.y)
 		_hint_panel.visible = true
 	elif _hint_panel != null:
 		_hint_panel.visible = false

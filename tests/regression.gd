@@ -31,6 +31,8 @@ func _ready() -> void:
 	await _sec_pipe_shapes()
 	print("SECTION _sec_removal_during_activity")
 	await _sec_removal_during_activity()
+	print("SECTION _sec_flow_control")
+	await _sec_flow_control()
 	print("SECTION _sec_theme_switch")
 	await _sec_theme_switch()
 	print("SECTION _sec_photo_and_misc")
@@ -170,6 +172,81 @@ func _sec_karakuri_chain() -> void:
 	var chime := _b(Vector3i(7, 0, 0), BlockData.Type.CHIME, 2)
 	chime.ring()
 	await get_tree().process_frame
+	_clear()
+	await get_tree().process_frame
+
+## 4b. Flow-control mechanics that used to live only in ad-hoc suites (T4 /
+## OVERHAUL) and silently fell out of regression: sluice gate, jelly
+## trampoline, alternator round-robin (which also proves the beat lattice),
+## and dyed streams. An audit found ZERO coverage for all four.
+func _sec_flow_control() -> void:
+	# --- sluice gate: closed (default) blocks; open passes through.
+	_b(Vector3i(0, 0, 4), BlockData.Type.WOOD)
+	_b(Vector3i(0, 1, 4), BlockData.Type.GATE)
+	_b(Vector3i(0, 3, 4), BlockData.Type.SOURCE)
+	await get_tree().create_timer(0.8).timeout
+	_check(StreamManager._impacts.has(Vector3i(0, 1, 4)), "closed gate takes the hit")
+	_check(not StreamManager._impacts.has(Vector3i(0, 0, 4)), "closed gate blocks the wood below")
+	var gate: BlockData = GridManager.get_block(Vector3i(0, 1, 4))
+	if is_instance_valid(gate.node) and gate.node.has_method("set_open"):
+		gate.node.set_open(true, true)
+	await get_tree().create_timer(0.8).timeout
+	_check(StreamManager._impacts.has(Vector3i(0, 0, 4)), "open gate lets water through")
+	_clear()
+	await get_tree().process_frame
+
+	# --- jelly trampoline: a straight drop bounces up-and-over one cell.
+	_b(Vector3i(0, 0, 4), BlockData.Type.WOOD)
+	_b(Vector3i(0, 1, 4), BlockData.Type.JELLY)
+	_b(Vector3i(1, 0, 4), BlockData.Type.WOOD)   # where the arc should land
+	_b(Vector3i(0, 3, 4), BlockData.Type.SOURCE)
+	await get_tree().create_timer(0.8).timeout
+	_check(StreamManager._impacts.has(Vector3i(1, 0, 4)), "jelly arcs the stream onto the next block")
+	_clear()
+	await get_tree().process_frame
+
+	# --- alternator pipe: two exits share the source's beat round-robin —
+	# each exit's interval DOUBLES and their phases interleave. This is also
+	# the beat lattice's only direct regression check.
+	_b(Vector3i(0, 2, 4), BlockData.Type.PIPE, 2)          # alternator variant
+	_b(Vector3i(1, 2, 4), BlockData.Type.PIPE)
+	_b(Vector3i(-1, 2, 4), BlockData.Type.PIPE)
+	# Side pipes are DEAD ENDS, so water drips straight down out of them —
+	# the drums sit directly under the pipe ends.
+	_b(Vector3i(1, 1, 4), BlockData.Type.DRUM)
+	_b(Vector3i(-1, 1, 4), BlockData.Type.DRUM)
+	# Source sits DIRECTLY on the pipe — free-falling water does not enter
+	# a horizontal run from above (it splashes off the bamboo body); a source
+	# is itself a pipe connection, so on top it feeds the junction properly.
+	_b(Vector3i(0, 3, 4), BlockData.Type.SOURCE)
+	await get_tree().create_timer(0.9).timeout
+	var right: Dictionary = StreamManager._impacts.get(Vector3i(1, 1, 4), {})
+	var left: Dictionary = StreamManager._impacts.get(Vector3i(-1, 1, 4), {})
+	_check(not right.is_empty() and not left.is_empty(), "alternator feeds both exits")
+	if not right.is_empty() and not left.is_empty():
+		var base: float = StreamManager.BASE_BEAT
+		_check(absf(float(right["interval"]) - base * 2.0) < 0.01, "alternator doubles the interval")
+		var dphase: float = absf(float(right["phase"]) - float(left["phase"]))
+		_check(absf(dphase - base) < 0.01, "alternator staggers the phases")
+	_clear()
+	await get_tree().process_frame
+
+	# --- dyed stream: a scoop ladling a coloured pond pours that colour.
+	_b(Vector3i(0, 0, 4), BlockData.Type.WOOD)
+	_b(Vector3i(0, 0, 5), BlockData.Type.WOOD)
+	_b(Vector3i(0, 1, 4), BlockData.Type.WATER, 1)
+	_b(Vector3i(0, 1, 5), BlockData.Type.WATER, 1)
+	_b(Vector3i(1, 1, 4), BlockData.Type.GEAR)
+	_b(Vector3i(1, 1, 5), BlockData.Type.SCOOP)
+	_b(Vector3i(1, 0, 5), BlockData.Type.WOOD)   # catches the scoop's pour
+	await get_tree().create_timer(1.0).timeout
+	var want: Color = BlockVariants.color_of(BlockData.Type.WATER, 1)
+	var dyed := false
+	for cell in StreamManager._impacts:
+		var c: Color = StreamManager._impacts[cell].get("color", Color.WHITE)
+		if c.is_equal_approx(want):
+			dyed = true
+	_check(dyed, "scoop pours the pond's dye colour")
 	_clear()
 	await get_tree().process_frame
 
