@@ -267,19 +267,30 @@ Not done, with the measurement that says what each is worth:
   looks up.
 - **Brotli instead of gzip** would take the 9.6 MB download to roughly 7 MB. A
   hosting choice, not a code one.
-- **`VoxelSurfaceManager` re-solves its whole group on every edit**, and that is
-  now the one thing standing between this and "smooth whatever you build".
-  Measured, LITE, a block placed with a deck already down:
+- ~~**`VoxelSurfaceManager` re-solves its whole group on every edit**~~ —
+  RESOLVED, in three layers, none of which change the geometry (proved by
+  `tools/isohash.gd`: md5 of the mesh buffers, identical before and after):
 
-  | wood/water cells | p50 | worst frame | frames over 16.7 ms |
-  |---|---|---|---|
-  | the starter garden's 6 | 3.0 ms | 11.4 ms | 0 / 420 |
-  | 40 | 2.9 ms | 45 ms | 14 / 420 |
-  | 80 | 2.5 ms | 60 ms | 14 / 420 |
+  1. **The dead signature.** `_built` declared a compare-first optimization that
+     was never implemented — placing a BELL re-solved the wood AND water
+     isosurfaces for nothing. Group cell-set signatures now skip untouched
+     groups; that alone took the non-wood placement spike from 60 ms to 4 ms.
+  2. **The density field is cached per group.** An edit only disturbs samples
+     within its cell's reach (~0.66), so the field is patched (~200 samples)
+     instead of resampled (~10 000); outgrowing the box row-copies the overlap.
+  3. **The solve is a worker coroutine.** Surface Nets + smoothing + normals +
+     AO now yield every ~4.5 ms of accumulated work and commit the mesh
+     atomically at the end — the old mesh stays up while the new one cooks. An
+     80-cell re-solve became several 5 ms frames instead of one 50 ms hitch.
+     Edits landing mid-solve don't restart it (continuous water flow would
+     starve the build); the snapshot finishes, then the worker goes again.
 
-  Steady state is fine at every size — it is the rebuild. One edit re-solves the
-  entire connected group, so the fix is to chunk the field and re-solve only the
-  chunk that changed. That is a real change to the manager, not a tuning knob.
+  Measured, LITE, same harness (`place=1`, wood placed on an 80-cell deck):
+
+  | | before | after |
+  |---|---|---|
+  | worst frame | 60.7 ms | **13.8 ms** |
+  | frames over 16.7 ms | 14 / 420 | **0 / 420** |
 
 ## Frame times
 
