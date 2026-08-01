@@ -170,7 +170,7 @@ func _process(delta: float) -> void:
 			if p > 0.85 and not fish["splashed"]:
 				fish["splashed"] = true
 				StreamManager._spawn_splash(fish["node"].global_position, Color(0.8, 0.93, 0.96))
-				AudioManager.play_splash(fish["node"].global_position, -11.0)
+				AudioManager.play_splash(fish["node"].global_position, -14.0)
 		var swim_y: float = 0.5 + sin(t * 1.6 + fish["phase"]) * 0.03 + leap_y
 		fish["node"].position = Vector3(cos(angle) * r, swim_y, sin(angle) * r)
 		# Aim the model's head (+X) along the velocity tangent (-sin, 0, cos).

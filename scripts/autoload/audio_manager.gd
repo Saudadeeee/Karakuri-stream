@@ -178,7 +178,7 @@ func play_ui_pop(up: bool = false) -> void:
 	player.bus = "SFX"
 	player.stream = UI_POP
 	player.pitch_scale = (1.3 if up else 1.0) * randf_range(0.985, 1.015)
-	player.volume_db = -13.0 if up else -9.0
+	player.volume_db = -18.5 if up else -10.0
 	add_child(player)
 	player.finished.connect(player.queue_free)
 	player.play()
