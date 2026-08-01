@@ -5,12 +5,12 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script tools/apply_pixel_font.gd
 ##
-## Baloo2 stays as project custom_font (TextMesh needs vector outlines) and
+## Fredoka stays as project custom_font (TextMesh needs vector outlines) and
 ## as the per-glyph fallback for anything the small-caps pixel set lacks.
 
 const PIXEL_SRC := "res://assets/fonts/pixel/karakuri_pop.fnt"
 const PIXEL_OUT := "res://assets/fonts/pixel/karakuri_pop.tres"
-const FALLBACK := "res://assets/fonts/Baloo2.ttf"
+const FALLBACK := "res://assets/fonts/fredoka_chunky.tres"
 const THEME := "res://ui/karakuri_theme.tres"
 
 func _init() -> void:
@@ -18,7 +18,7 @@ func _init() -> void:
 	var fv := FontVariation.new()
 	fv.base_font = base
 	fv.fallbacks = [load(FALLBACK)]
-	# An import failure would silently fall back to Baloo2 — verify the bitmap loaded.
+	# An import failure would silently fall back to Fredoka — verify the bitmap loaded.
 	var w: float = fv.get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
 	print("pixel font check: 'PLAY'@20 = %.1f px -> %s" % [w,
 		"OK" if w > 1.0 else "*** EMPTY ***"])

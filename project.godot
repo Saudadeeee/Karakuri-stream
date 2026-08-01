@@ -42,6 +42,7 @@ SceneryManager="*res://scripts/autoload/scenery_manager.gd"
 CloudSea="*res://scripts/autoload/cloud_sea.gd"
 IslandBuilder="*res://scripts/autoload/island_builder.gd"
 KarakuriClock="*res://scripts/autoload/karakuri_clock.gd"
+WildlifeManager="*res://scripts/autoload/wildlife_manager.gd"
 
 [display]
 
@@ -51,7 +52,7 @@ window/stretch/aspect="expand"
 [gui]
 
 theme/custom="res://ui/karakuri_theme.tres"
-theme/custom_font="res://assets/fonts/Baloo2.ttf"
+theme/custom_font="res://assets/fonts/fredoka_chunky.tres"
 
 [physics]
 

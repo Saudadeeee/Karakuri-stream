@@ -22,6 +22,7 @@ const SCOOP_SCENE: PackedScene = preload("res://scenes/blocks/scoop_block.tscn")
 const STONE_LANTERN_SCENE: PackedScene = preload("res://scenes/blocks/stone_lantern_block.tscn")
 const PINWHEEL_SCENE: PackedScene = preload("res://scenes/blocks/pinwheel_block.tscn")
 const GATE_SCENE: PackedScene = preload("res://scenes/blocks/gate_block.tscn")
+const HOUSE_SCENE: PackedScene = preload("res://scenes/blocks/house_block.tscn")
 
 const SCENES_BY_TYPE: Dictionary = {
 	BlockData.Type.WOOD: WOOD_SCENE,
@@ -40,8 +41,15 @@ const SCENES_BY_TYPE: Dictionary = {
 	BlockData.Type.STONE_LANTERN: STONE_LANTERN_SCENE,
 	BlockData.Type.PINWHEEL: PINWHEEL_SCENE,
 	BlockData.Type.GATE: GATE_SCENE,
+	BlockData.Type.HOUSE: HOUSE_SCENE,
 }
 
+## Returns null for a type this build doesn't know — which happens for real once
+## the game ships and a save file written by a newer version comes back. Callers
+## must handle null rather than get an "out of bounds" mid-rebuild.
 static func instantiate(type: BlockData.Type) -> Node3D:
-	var scene: PackedScene = SCENES_BY_TYPE[type]
+	var scene: PackedScene = SCENES_BY_TYPE.get(type)
+	if scene == null:
+		push_warning("No scene registered for block type %d" % int(type))
+		return null
 	return scene.instantiate()

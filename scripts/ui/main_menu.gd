@@ -9,18 +9,13 @@ const MAIN_SCENE := "res://scenes/main.tscn"
 const SETTINGS_PATH := "user://settings.cfg"
 
 const CREAM := Color("f4efe2")
-const WOOD_SIGN := Color("7a5a3a")
-const WOOD_SIGN_EDGE := Color("caa878")
 const TEXT := Color("4a3f35")
 const SALMON := Color("e07a5f")
-const GREEN := Color("8cb369")
 
 var _cam_rig: Node3D
 var _settings_panel: Panel
 var _env: Environment
 var _sun: DirectionalLight3D
-var _island_top: MeshInstance3D
-var _island_base: MeshInstance3D
 var _map_cards: Array[Button] = []
 
 func _ready() -> void:
@@ -30,6 +25,11 @@ func _ready() -> void:
 	_build_ui()
 	_load_audio()
 	_apply_theme()
+	# Every button in this menu is built in code above, so one sweep at the end
+	# is simpler and harder to forget than wiring each one at its call site.
+	CuteButton.apply_all(self)
+	# F3 readout — the only way to get real numbers off the web build.
+	add_child(preload("res://scripts/ui/perf_overlay.gd").new())
 
 func _process(delta: float) -> void:
 	if is_instance_valid(_cam_rig):
@@ -97,33 +97,6 @@ func _build_backdrop() -> void:
 	_cam_rig.add_child(cam)
 	cam.make_current()
 
-func _add_island() -> void:
-	var ground := Node3D.new()
-	add_child(ground)
-	var top := MeshInstance3D.new()
-	var top_mesh := CylinderMesh.new()
-	top_mesh.top_radius = 9.0; top_mesh.bottom_radius = 9.0; top_mesh.height = 0.2; top_mesh.radial_segments = 48
-	top.mesh = top_mesh
-	top.material_override = _matte(Color(0.55, 0.58, 0.44))
-	top.position = Vector3(0, -0.1, 0)
-	ground.add_child(top)
-	_island_top = top
-	var base := MeshInstance3D.new()
-	var base_mesh := CylinderMesh.new()
-	base_mesh.top_radius = 9.0; base_mesh.bottom_radius = 1.5; base_mesh.height = 7.0; base_mesh.radial_segments = 48
-	base.mesh = base_mesh
-	base.material_override = _matte(Color(0.4, 0.3, 0.22))
-	base.position = Vector3(0, -3.7, 0)
-	ground.add_child(base)
-	_island_base = base
-
-func _matte(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 1.0
-	m.metallic = 0.0
-	return m
-
 # -------------------------------------------------------------- 3D title
 ## The game's name as REAL 3D lettering floating over the island — extruded
 ## wooden TextMesh with a cream back-copy as a soft drop shadow, gently
@@ -142,17 +115,18 @@ func _build_title_3d() -> void:
 		{"text": "KARAKURI", "size": 1.35, "y": 0.75},
 		{"text": "STREAM", "size": 1.35, "y": -0.55},
 	]
+	# Sticker treatment: a FAT cream halo behind a warm wood face. The polarity
+	# matters and used to be the other way round — a cream face on the pale pink
+	# spring sky had almost no contrast and the title read as an outline.
+	#
+	# It has to survive all four skies, which rules out picking one colour: a dark
+	# face vanishes on the indigo night map, a light one vanishes on pink and
+	# snow. Doing both is what makes it theme-proof — the halo separates the
+	# letters from a dark sky, the face separates them from a pale one.
 	for l in lines:
-		# Deep-wood drop copy behind + cream face in front — flat unshaded
-		# colours so the wordmark stays bold against the pastel sky.
-		_title_root.add_child(_letter_mesh(l["text"], l["size"] * 1.05, l["y"] - 0.07,
-			-0.12, Color("6b4a30"), 0.1))
-		_title_root.add_child(_letter_mesh(l["text"], l["size"], l["y"],
-			0.0, Color("fdf3e3"), 0.16))
-
-	# Salmon subtitle under the wordmark.
-	var sub := _letter_mesh("- A WATER GARDEN TOY -", 0.42, -1.62, 0.0, Color("f5c4a8"), 0.05)
-	_title_root.add_child(sub)
+		_add_haloed(l["text"], l["size"], l["y"], Color("7d5533"), 0.16, 0.035)
+	# Subtitle got the same treatment — plain salmon on a pink sky was invisible.
+	_add_haloed("- A WATER GARDEN TOY -", 0.42, -1.62, Color("c2694a"), 0.05, 0.016)
 
 	# The wordmark hangs on a running MOVEMENT: two meshing wooden cogs flank it
 	# and a weight-pendulum keeps time — the karakuri soul at first glance.
@@ -194,12 +168,56 @@ func _flat3(c: Color) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
 
+const HALO := Color("fff6e8")
+
+## Text with a cream outline around it, and the reason it is built this way.
+##
+## The obvious outline — a second copy scaled up behind — does NOT work for text:
+## scaling stretches the LETTER SPACING as well as the glyphs, so the two copies
+## drift apart and you see doubled letterforms rather than an outline. Instead,
+## four copies at the SAME size are nudged up/down/left/right behind the face, so
+## every glyph lines up exactly.
+##
+## All five instances SHARE one TextMesh. Triangulating glyphs is the expensive
+## part; five MeshInstance3D pointing at one mesh costs five draw calls and one
+## triangulation, where five TextMesh resources would pay for the outlines five
+## times over.
+func _add_haloed(text: String, size: float, y: float, col: Color, depth: float, spread: float) -> void:
+	var face := _letter_mesh(text, size, y, 0.0, col, depth)
+	# Four offsets make a true outline; one makes a drop shadow. The web LITE
+	# profile takes the drop shadow, because each copy re-submits the whole glyph
+	# mesh every frame and the title is the first thing a browser has to draw.
+	var offsets: Array = [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]
+	if QualityManager.lite:
+		offsets = [Vector2(-0.7, -0.7)]
+	for o in offsets:
+		var edge := MeshInstance3D.new()
+		edge.mesh = face.mesh
+		edge.position = Vector3(o.x * spread, y + o.y * spread, -0.12)
+		edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var m := StandardMaterial3D.new()
+		m.albedo_color = HALO
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		edge.material_override = m
+		_title_root.add_child(edge)
+	_title_root.add_child(face)
+
+## TextMesh tessellates glyph curves in proportion to `font_size`, and
+## `pixel_size` then scales the result to world units — so the two together set
+## the DETAIL independently of how big the letters actually look.
+##
+## This was 64, which on a chunky flat-shaded wordmark bought nothing visible and
+## made the title the heaviest object in the game: 245,000 vertices across its
+## copies, six times the entire scenery ring, on the very first screen the player
+## sees. At 26 the curves are still smooth at this size.
+const TITLE_DETAIL := 26.0
+
 func _letter_mesh(text: String, size: float, y: float, z: float, col: Color, depth: float) -> MeshInstance3D:
 	var tm := TextMesh.new()
 	tm.text = text
 	tm.font = ThemeDB.fallback_font
-	tm.font_size = 64
-	tm.pixel_size = size / 64.0
+	tm.font_size = int(TITLE_DETAIL)
+	tm.pixel_size = size / TITLE_DETAIL
 	tm.depth = depth
 	var mi := MeshInstance3D.new()
 	mi.mesh = tm
@@ -263,9 +281,12 @@ func _build_ui() -> void:
 	play.add_theme_color_override("font_color", Color("fff6ee"))
 	play.add_theme_color_override("font_hover_color", Color.WHITE)
 	row.add_child(play)
-	var quit_b := _menu_button("Quit", _on_quit)
-	quit_b.custom_minimum_size = Vector2(130, 48)
-	row.add_child(quit_b)
+	# No Quit in the browser: get_tree().quit() cannot close a tab, so the button
+	# would just look broken. The web build simply doesn't offer one.
+	if not OS.has_feature("web"):
+		var quit_b := _menu_button("Quit", _on_quit)
+		quit_b.custom_minimum_size = Vector2(130, 48)
+		row.add_child(quit_b)
 
 	var hint := Label.new()
 	hint.text = "drop blocks · hear the stream · relax"

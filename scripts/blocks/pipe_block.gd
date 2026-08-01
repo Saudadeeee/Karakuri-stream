@@ -49,8 +49,8 @@ func refresh_shape() -> void:
 ## placement ghost can reuse it.
 static func build_visual(dirs: Array, open: bool = false, alternator: bool = false) -> Node3D:
 	var root := Node3D.new()
-	var mat := _mat(BAMBOO)
-	var accent := _mat(ACCENT)
+	var mat := MeshFit.flat(BAMBOO)
+	var accent := MeshFit.flat(ACCENT)
 
 	var straight: bool = dirs.size() == 2 and dirs[0] == -Vector3i(dirs[1])
 	if straight:
@@ -142,13 +142,6 @@ static func _box(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> MeshIn
 	mi.material_override = mat
 	mi.position = pos
 	return mi
-
-static func _mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	m.metallic = 0.0
-	return m
 
 ## Cylinder default axis is Y — aim it along `dir`.
 static func _basis_towards(dir: Vector3) -> Basis:

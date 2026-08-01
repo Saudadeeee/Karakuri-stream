@@ -72,25 +72,15 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_wheel):
 		_wheel.rotation.z = _wheel_cur
 
-## Public: build a standalone twin (the menu mounts one beside the wordmark).
-func make_twin() -> Node3D:
-	return _make_movement()
-
 # ---------------------------------------------------------------- primitives
 func _box(size: Vector3, pos: Vector3, col: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var b := BoxMesh.new(); b.size = size
-	mi.mesh = b; mi.position = pos; mi.material_override = _mat(col)
+	mi.mesh = b; mi.position = pos; mi.material_override = MeshFit.flat(col)
 	return mi
 
 func _cyl(r: float, h: float, col: Color, pos: Vector3) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var c := CylinderMesh.new(); c.top_radius = r; c.bottom_radius = r; c.height = h; c.radial_segments = 10
-	mi.mesh = c; mi.rotation.z = PI / 2.0; mi.position = pos; mi.material_override = _mat(col)
+	mi.mesh = c; mi.rotation.z = PI / 2.0; mi.position = pos; mi.material_override = MeshFit.flat(col)
 	return mi
-
-func _mat(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	return m

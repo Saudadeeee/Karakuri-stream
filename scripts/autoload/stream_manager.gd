@@ -10,8 +10,6 @@ extends Node
 
 const DOWN := Vector3i(0, -1, 0)
 const MAX_STEPS := 80
-## Pseudo-type for a stream landing on open grass (no block there).
-const LAWN := -1
 const MAP_RADIUS := 8.5
 const REBUILD_INTERVAL := 0.05
 ## One shared musical beat (~109 BPM). Every impact snaps to multiples of its
@@ -223,20 +221,31 @@ func _trace(src: Vector3i, interval: float = BASE_BEAT, color: Color = CYAN) -> 
 		var carried_h: Vector3i = dir if dir.y == 0 else st["last_h"]
 
 		var nxt: Vector3i = pos + dir
-		# Off the island / into the void → the stream pours away (into the sea
-		# of clouds below).
-		if Vector2(nxt.x, nxt.z).length() > MAP_RADIUS + 1.0 or nxt.y < -18:
+		# THE LAWN IS NOT IN THE GRID. The island is a sculpted MESH built by
+		# IslandBuilder, not a field of blocks, so GridManager has nothing at
+		# y<0 to stop a falling stream. Water poured onto open ground therefore
+		# used to fall straight THROUGH the island and keep going to y=-18:
+		# eighteen segments of invisible thread under the world, no splash, no
+		# impact — so `is_playing()` stayed false and a lone spout on the grass
+		# was silent and did nothing.
+		#
+		# Anything over the island disc now lands ON it. The struck "cell" is the
+		# first one below ground, because _play_impact splashes at that cell's TOP
+		# face, which is exactly y=0 — the surface.
+		if nxt.y < 0:
+			if Vector2(nxt.x, nxt.z).length() <= MAP_RADIUS + 1.0:
+				_add_seg_world(GridManager.cell_to_world(pos), Vector3(nxt.x, 0.0, nxt.z), st["color"])
+				_impact(nxt, BlockData.Type.WATER, st["interval"], st["phase"], st["color"])
+				continue
+			# Past the rim there is no ground: it pours into the cloud sea.
+			_add_seg(pos, nxt, st["color"])
+			continue
+		# Off the side of the island → the stream pours away into the clouds.
+		if Vector2(nxt.x, nxt.z).length() > MAP_RADIUS + 1.0:
 			_add_seg(pos, nxt, st["color"])
 			continue
 		var block: BlockData = GridManager.get_block(nxt)
 		if block == null:
-			# Falling past the island surface lands on the LAWN. The impact
-			# sits at the first below-ground cell because _play_impact
-			# splashes at that cell's TOP — exactly lawn level.
-			if dir == DOWN and nxt.y < 0 and Vector2(nxt.x, nxt.z).length() <= MAP_RADIUS:
-				_add_seg(pos, nxt, st["color"])
-				_impact(nxt, LAWN, st["interval"], st["phase"], st["color"])
-				continue
 			# Empty: travel, then gravity takes over (fall) from there.
 			_add_seg(pos, nxt, st["color"])
 			stack.append(_entry(st, nxt, DOWN, carried_h))
@@ -308,7 +317,14 @@ func _entry(st: Dictionary, pos: Vector3i, dir: Vector3i, last_h: Vector3i) -> D
 		"interval": st["interval"], "phase": st["phase"], "color": st["color"]}
 
 func _add_seg(a: Vector3i, b: Vector3i, color: Color = CYAN) -> void:
-	_segments.append({"a": GridManager.cell_to_world(a), "b": GridManager.cell_to_world(b), "color": color})
+	_add_seg_world(GridManager.cell_to_world(a), GridManager.cell_to_world(b), color)
+
+## Segment between two exact WORLD points, for the cases where the endpoint is
+## not a cell centre — water stopping on the island surface has to end at y=0
+## rather than at the centre of the cell below it, or the last half-cell of the
+## stream is drawn buried in the lawn.
+func _add_seg_world(a: Vector3, b: Vector3, color: Color = CYAN) -> void:
+	_segments.append({"a": a, "b": b, "color": color})
 
 func _impact(cell: Vector3i, type: int, interval: float = BASE_BEAT, phase: float = 0.0, color: Color = CYAN) -> void:
 	# Preserve an existing entry's schedule so 0.05s retraces never stutter a
@@ -372,7 +388,7 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 	var vol: float = float(dye.get("vol", 0.0)) + float(weight - 1) * 2.5
 	match type:
 		BlockData.Type.BELL:
-			var node: Node3D = _node_of(cell)
+			var node: Node3D = _node_of(cell, BlockData.Type.BELL)
 			AudioManager.play_chime(node.global_position if node else pos, -1, pitch_mul)
 			if node:
 				FireflyManager.burst_at(node.global_position)
@@ -380,24 +396,24 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 					node.ring()
 		BlockData.Type.JELLY:
 			AudioManager.play_jelly_bounce(pos)
-			var jelly: Node3D = _node_of(cell)
+			var jelly: Node3D = _node_of(cell, BlockData.Type.JELLY)
 			if jelly and jelly.has_method("bounce"):
 				jelly.bounce()
 		# Karakuri targets: the stream OPERATES them instead of just splashing.
 		BlockData.Type.SHISHI:
-			var shishi: Node3D = _node_of(cell)
+			var shishi: Node3D = _node_of(cell, BlockData.Type.SHISHI)
 			if shishi:
 				shishi.fill(color)
 		BlockData.Type.CHIME:
-			var chime: Node3D = _node_of(cell)
+			var chime: Node3D = _node_of(cell, BlockData.Type.CHIME)
 			if chime:
 				chime.ring(pitch_mul)
 		BlockData.Type.DRUM:
-			var drum: Node3D = _node_of(cell)
+			var drum: Node3D = _node_of(cell, BlockData.Type.DRUM)
 			if drum:
 				drum.hit()
 		BlockData.Type.PINWHEEL:
-			var pin: Node3D = _node_of(cell)
+			var pin: Node3D = _node_of(cell, BlockData.Type.PINWHEEL)
 			if pin:
 				pin.splash()
 		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.MUSIC_BOX, \
@@ -405,8 +421,6 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 			AudioManager.play_wood_pitch(pos, 1.0 * pitch_mul, vol)
 		BlockData.Type.WATER:
 			AudioManager.play_splash(pos, -9.0)
-		LAWN:
-			AudioManager.play_splash(pos, -12.0)
 		_:
 			# PIPE/SOURCE deliberately SILENT — water moving through the bamboo
 			# system shouldn't knock; only what it finally lands on sings (the
@@ -474,9 +488,22 @@ func _refresh_source_audio(_sources: Array) -> void:
 			old.queue_free()
 	_source_audio.clear()
 
-func _node_of(cell: Vector3i) -> Node3D:
+## The node at `cell`, but ONLY if it is still the type the impact was scheduled
+## against.
+##
+## `_impacts` records a type when the stream is traced and plays it later, so the
+## block can be swapped in between — replace a shishi with a house while water is
+## falling on it and the pending SHISHI impact would call `fill()` on the house:
+##   Invalid call. Nonexistent function 'fill' in base 'StaticBody3D (house_block.gd)'
+## Checking the live type here fixes every branch at once, rather than sprinkling
+## has_method() guards that each new karakuri block would have to remember.
+func _node_of(cell: Vector3i, expect: int = -1) -> Node3D:
 	var b: BlockData = GridManager.get_block(cell)
-	return b.node if b != null and is_instance_valid(b.node) else null
+	if b == null or not is_instance_valid(b.node):
+		return null
+	if expect >= 0 and b.type != expect:
+		return null
+	return b.node
 
 func _spawn_splash(pos: Vector3, tint: Color = Color(0.7, 0.9, 0.95)) -> void:
 	var p := GPUParticles3D.new()

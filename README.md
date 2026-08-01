@@ -20,11 +20,12 @@ time; sources come in three tempos, and polyrhythms fall out naturally.
 All pitched sounds draw from one **pentatonic scale** — whatever you build,
 it stays consonant.
 
-### The palette (13 blocks)
+### The palette
 
 | Block | What it does |
 |---|---|
 | Wood | Building block — the whole island is a marimba: placement pitch follows height |
+| House | Stack and line up house cells — they merge into one building (see below) |
 | Water | Still pond — powers any gear touching it; four dye colours |
 | Spout | Pours a stream straight down; three tempos |
 | Pipe | Self-connecting bamboo — closed, open, or **alternator** (deals water to its exits beat-by-beat) |
@@ -38,10 +39,41 @@ it stays consonant.
 | Scoop | Beside a pond and a spinning gear, ladles out a new stream — in the pond's colour |
 | Sluice gate | Click it in the world to open/close a whole branch of the machine |
 
+### Houses
+
+You don't place a house, you place a house *cell*, and the building assembles
+itself. Put two side by side and the wall between them disappears — they
+become one wide house under one roof. The roof is one surface over the whole
+footprint: a row gets a ridge with hipped ends, a 2×2 a hip roof, a 3×3 a
+pyramid, an L-shape grows a valley — none of it special-cased.
+
+Stack a cell and the lower roof becomes a floor. Nothing floats: a house in
+mid-air grows legs down to whatever is beneath it, and an overhanging storey
+braces itself with a corbel. Each building gets exactly one door and one
+chimney, deterministically — a village looks identical after you reload it.
+
+Some shapes are worth more, and the town will tell you so: a four-storey
+single-cell tower earns a **spire**; a roof in the shadow of a taller part
+becomes a railed **terrace**; ring an empty cell and it becomes a planted
+**courtyard**; leave one cell of air between equal rooftops and **bunting**
+is strung across the gap. Deterministic — find one, then build it on purpose.
+
+### Animals
+
+Wildlife arrives because of what you built, and does something back:
+
+- **Birds** need a house. They perch on roofs, and a bird landing on a bell,
+  chime or drum **plays it** — a second musician you didn't program.
+- **A cat** moves in at two houses, walks the rooftops, and on the night map
+  sits by a lit stone lantern.
+- **Ducks** need a real pond (three open water cells) and paddle it.
+- **A deer** only comes out when the machine is *quiet* — switching your
+  garden off is the only way to see it.
+
 ### Controls
 
 - **Left click** place · **Right click** remove · **Middle drag** orbit · **Scroll** zoom
-- **1–0, -, =** select blocks · click a hotbar icon again to cycle its variant
+- **1–0, -, =** select blocks · **Q** houses · click a hotbar icon again to cycle its variant
 - **Ctrl+Z / Ctrl+Y** undo/redo · **H** hide UI · **U** move the sun · **P** screenshot
 - Touch: one finger orbits, two fingers pinch-zoom
 
@@ -49,7 +81,8 @@ it stays consonant.
 
 Spring (sakura & petals), Autumn (amber & falling leaves), Snow (hushed
 white), Night (fireflies — percussion sparks light). Same garden, different
-world; ambience and palette retune per map.
+world; ambience and palette retune per map. Progress saves to `user://` —
+save, load, and clear from the pause menu.
 
 ## The sound
 
@@ -62,22 +95,25 @@ recordings and in-house synthesis (see [CREDITS.md](CREDITS.md)).
 
 ## Running it
 
-Made with **Godot 4.7.1** (GL Compatibility renderer). Open the project and
-run — the main scene boots a menu with a live island behind it.
+Made with **Godot 4.7.1** (GL Compatibility renderer, no external addons).
 
-- Build instructions (Windows / Web / Android / iOS): [BUILD.md](BUILD.md)
-- Full regression suite: `godot --headless --path . tests/regression.tscn`
-  → expect `REGRESS ALL OK`
-- Art style bible: [artstyle.md](artstyle.md) · development log: [plan.md](plan.md)
+```
+godot --path .                        # opens the main menu
+godot --path . tests/regression.tscn  # regression suite → expect "REGRESS ALL OK"
+```
+
+Use an **official** Godot 4.7.1 binary for exports — the Steam build swallows
+export error text. Build instructions: [BUILD.md](BUILD.md).
+Art style bible: [artstyle.md](artstyle.md) · development log: [plan.md](plan.md)
 
 ## Project layout
 
 ```
 scenes/          menu, game, block scenes
 scripts/
-  autoload/      grid, streams, gears, isosurface renderer, audio, composer
+  autoload/      grid, streams, gears, houses, wildlife, isosurface, audio, composer
   blocks/        per-block behaviour (shishi, gate, jelly, chime, ...)
-  data/          block registry, variants, iso surface, map themes
+  data/          block registry, variants, iso surface, house shapes, map themes
   ui/            hotbar, menus, theme
 shaders/         wood / water / stream / cloud-sea
 assets/          sounds, fonts (incl. the Aseprite-drawn pixel font), models

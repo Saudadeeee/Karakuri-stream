@@ -21,6 +21,8 @@ func _ready() -> void:
 	CloudSea.apply_theme()
 	IslandBuilder.rebuild()
 	KarakuriClock.rebuild()
+	# F3 readout — the only way to get real numbers off the web build.
+	add_child(preload("res://scripts/ui/perf_overlay.gd").new())
 	# First run ever (no save yet): a small STARTER GARDEN machine already
 	# running in one corner — spout → shishi-odoshi → drum, a pond turning a
 	# gear — so the blank island never stares back at a new player. One-time:
@@ -68,6 +70,8 @@ func _maybe_show_controls() -> void:
 	body.text = "Left click — place a block        Right click — remove\n" \
 		+ "Middle drag — orbit camera      Scroll — zoom\n" \
 		+ "Click a hotbar icon again — change its style / tempo\n" \
+		+ "Q — houses. Line them up and they become one building.\n" \
+		+ "Build a village and animals move in. Birds play your bells.\n" \
 		+ "Ctrl+Z undo · H hide UI · U move the sun · P screenshot"
 	body.add_theme_font_size_override("font_size", 15)
 	box.add_child(body)
@@ -75,6 +79,7 @@ func _maybe_show_controls() -> void:
 	ok.text = "Got it"
 	ok.custom_minimum_size = Vector2(0, 42)
 	box.add_child(ok)
+	CuteButton.wire(ok)
 	ok.pressed.connect(func():
 		panel.queue_free()
 		var c := ConfigFile.new()
@@ -153,11 +158,3 @@ func _starter(cell: Vector3i, type: int, variant: int = 0) -> void:
 		instance.refresh_shape()
 	elif instance.has_method("face_adjacent_water"):
 		instance.face_adjacent_water()
-
-func _paint(mi: MeshInstance3D, color: Color) -> void:
-	# The island materials are baked sub-resources shared with the .tscn —
-	# override instead of mutating them.
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = 1.0
-	mi.set_surface_override_material(0, m)

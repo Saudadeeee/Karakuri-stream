@@ -33,6 +33,7 @@ func _ready() -> void:
 	volume_slider.value_changed.connect(_on_volume_changed)
 
 	_load_settings()
+	CuteButton.apply_all(self)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -66,12 +67,20 @@ func _on_resume_pressed() -> void:
 	_resume()
 
 func _on_save_pressed() -> void:
-	SaveManager.save_game()
-	_show_status("Build saved")
+	# Saving can fail (no space, storage blocked in the browser). Telling the
+	# player "Build saved" when nothing was written is how people lose work.
+	if SaveManager.save_game():
+		_show_status("Build saved")
+	else:
+		_show_status("Could not save — storage unavailable")
 
 func _on_load_confirmed() -> void:
 	if SaveManager.load_game():
 		_show_status("Build loaded")
+	elif SaveManager.has_save():
+		# The file exists but nothing in it could be rebuilt. The build on
+		# screen is deliberately left untouched.
+		_show_status("Saved build is unreadable — kept what you have")
 	else:
 		_show_status("No saved build yet")
 

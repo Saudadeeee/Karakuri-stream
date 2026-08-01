@@ -12,7 +12,7 @@ const POOL_SIZE: int = 24
 
 const WOOD_HIT: AudioStream = preload("res://assets/sounds/218460__thomasjaunism__wood-block-hit.wav")
 const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__chimes-5.wav")
-var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.wav")
+var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.ogg")
 var _water_flow := preload("res://assets/sounds/249666__tymorafarr__water-stream-looped.ogg")
 const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.wav")
 # Synthesized in-house (rfxgen + ffmpeg) — see CREDITS.md.
@@ -36,7 +36,7 @@ const DEDUPE_MS: int = 35
 
 func _ready() -> void:
 	_water_flow.loop = true
-	_gear_creak.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_gear_creak.loop = true
 	# One tree-wide hook gives every Button the UI pop (hover + press).
 	get_tree().node_added.connect(_on_node_added)
 	for i in POOL_SIZE:
@@ -69,16 +69,6 @@ func _get_free_player() -> AudioStreamPlayer3D:
 	var player: AudioStreamPlayer3D = _pool[_next_index]
 	_next_index = (_next_index + 1) % _pool.size()
 	return player
-
-func play_wood_hit(global_pos: Vector3) -> void:
-	if not _can_start("wood"):
-		return
-	var player: AudioStreamPlayer3D = _get_free_player()
-	player.global_position = global_pos
-	player.stream = WOOD_HIT
-	player.pitch_scale = randf_range(0.94, 1.06)
-	player.volume_db = randf_range(-3.0, 0.0)
-	player.play()
 
 ## Wood knock at an exact pitch — the karakuri percussion palette is all one
 ## wood sample at different speeds (drum = slow/deep, shishi = bright "cốc").
@@ -207,6 +197,23 @@ func _ambient_one(pitch: float, vol: float) -> void:
 	player.stream = CHIME
 	player.pitch_scale = pitch * randf_range(0.99, 1.01)
 	player.volume_db = vol
+	add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()
+
+## UI clicks: the same wood knock as the blocks, but NON-positional, because a
+## button has no place in the world — routed through a 3D player it would pan and
+## fade with the camera, which is exactly wrong for an interface.
+## `up` picks the brighter of two pitches, so hovering and pressing answer each
+## other instead of repeating one sound.
+func play_ui_pop(up: bool = false) -> void:
+	if not _can_start("ui%s" % ("u" if up else "d")):
+		return
+	var player := AudioStreamPlayer.new()
+	player.bus = "SFX"
+	player.stream = WOOD_HIT
+	player.pitch_scale = (1.85 if up else 1.42) * randf_range(0.985, 1.015)
+	player.volume_db = -15.0 if up else -11.0
 	add_child(player)
 	player.finished.connect(player.queue_free)
 	player.play()

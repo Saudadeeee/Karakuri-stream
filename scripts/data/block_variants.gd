@@ -73,6 +73,22 @@ const V: Dictionary = {
 	BlockData.Type.DRUM: [{"name": "Wooden drum"}],
 	BlockData.Type.MUSIC_BOX: [{"name": "Music box"}],
 	BlockData.Type.GATE: [{"name": "Sluice gate"}],
+	# House plaster colours. `palette` indexes house_block.PALETTES; the roof hue
+	# stays close across all four so a mixed street still reads as one town.
+	# The variant leads the colour; each BUILDING then rolls its own shade around
+	# it (see house_block._resolve_palette), so a row of one variant is still a
+	# row of individual houses rather than a wall of identical grey.
+	BlockData.Type.HOUSE: [
+		{"name": "Cream house", "palette": 0, "color": "#f6ead2"},
+		{"name": "Tomato house", "palette": 1, "color": "#e8503f"},
+		{"name": "Sea-blue house", "palette": 2, "color": "#3f7fa6"},
+		{"name": "Saffron house", "palette": 3, "color": "#f0b53c"},
+		{"name": "Leaf house", "palette": 4, "color": "#6f9e5a"},
+		{"name": "Whitewash house", "palette": 5, "color": "#f2f0e8"},
+		{"name": "Rose house", "palette": 6, "color": "#c76ba0"},
+		{"name": "Violet house", "palette": 7, "color": "#6a5b96"},
+	],
+
 	BlockData.Type.SCOOP: [{"name": "Water scoop"}],
 }
 

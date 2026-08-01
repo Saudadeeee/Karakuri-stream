@@ -72,7 +72,7 @@ func rebuild() -> void:
 		var rr: float = rng.randf_range(6.5, 8.6)
 		rock.position = Vector3(cos(ang) * rr, rng.randf_range(-1.6, -0.6), sin(ang) * rr)
 		rock.rotation = Vector3(rng.randf_range(-0.3, 0.3), ang, rng.randf_range(-0.3, 0.3))
-		rock.material_override = _matte(base_col.darkened(0.12))
+		rock.material_override = MeshFit.flat(base_col.darkened(0.12))
 		_root.add_child(rock)
 	for i in 2:
 		var shard := Node3D.new()
@@ -172,9 +172,3 @@ func _ring_jitter(rim: Array[float], scale: float, y: float, rng: RandomNumberGe
 		var p := Vector3(cos(ang) * r, y + rng.randf_range(-0.25, 0.25), sin(ang) * r)
 		pts.append(p.lerp(Vector3(tip.x, p.y, tip.z), 0.12))
 	return pts
-
-func _matte(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 1.0
-	return m

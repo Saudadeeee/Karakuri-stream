@@ -43,12 +43,13 @@ regenerated from source:
 
 ## Fonts
 
-- **Baloo 2** by Ek Type — SIL OFL 1.1, via
-  [Google Fonts](https://fonts.google.com/specimen/Baloo+2). See
-  [`assets/fonts/README.md`](assets/fonts/README.md).
+- **Fredoka** by [Hafontia](https://github.com/hafontia/Fredoka-One), via
+  [Google Fonts](https://fonts.google.com/specimen/Fredoka) — SIL OFL 1.1.
+  Unlike CC0, the OFL **requires** the licence text to travel with the font:
+  it is in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt), which ships in the
+  exported build — do not remove it.
 - **KarakuriPop** (`assets/fonts/pixel/`) — original pixel font drawn by
-  Aseprite from `tools/font/gen_font.lua`. No licence needed; regenerate with
-  one command.
+  Aseprite from `tools/font/gen_font.lua`. Regenerate with one command.
 
 ## 3D models
 

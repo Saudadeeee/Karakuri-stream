@@ -49,17 +49,11 @@ func set_open(open: bool, silent: bool = false) -> void:
 	# The stream must re-route immediately.
 	StreamManager._on_changed()
 
-func is_open() -> bool:
-	return _open
-
 func _box(size: Vector3, pos: Vector3, col: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var b := BoxMesh.new()
 	b.size = size
 	mi.mesh = b
 	mi.position = pos
-	var m := StandardMaterial3D.new()
-	m.albedo_color = col
-	m.roughness = 1.0
-	mi.material_override = m
+	mi.material_override = MeshFit.flat(col)
 	return mi
