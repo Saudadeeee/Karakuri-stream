@@ -187,13 +187,15 @@ func _frame(root: Node) -> void:
 		cam.set("_yaw", deg_to_rad(_yaw))
 
 ## What the wildlife manager thinks exists, so a screenshot can be checked
-## against it rather than squinting.
+## against it rather than squinting. WildlifeManager exists only on the web
+## branch — resolved dynamically so this harness also runs on main (a direct
+## identifier is a compile error that leaves the scene hung with no script).
 func _report() -> void:
-	print("WILDLIFE birds=%d cats=%d ducks=%d deer=%d | perches=%d walkable=%d pond=%d instruments=%d"
-		% [WildlifeManager._birds.size(), WildlifeManager._cats.size(),
-		   WildlifeManager._ducks.size(), WildlifeManager._deer.size(),
-		   WildlifeManager._perches.size(), WildlifeManager._walkable.size(),
-		   WildlifeManager._pond.size(), WildlifeManager._instruments.size()])
+	var wl: Node = get_node_or_null("/root/WildlifeManager")
+	if wl != null:
+		print("WILDLIFE birds=%d cats=%d ducks=%d deer=%d | perches=%d walkable=%d pond=%d instruments=%d"
+			% [wl._birds.size(), wl._cats.size(), wl._ducks.size(), wl._deer.size(),
+			   wl._perches.size(), wl._walkable.size(), wl._pond.size(), wl._instruments.size()])
 	print("STREAM segments=%d impacts=%d playing=%s sources=%d visual_children=%d"
 		% [StreamManager._segments.size(), StreamManager._impacts.size(),
 		   str(StreamManager.is_playing()),
@@ -203,12 +205,13 @@ func _report() -> void:
 		print("   seg ", s["a"], " -> ", s["b"])
 	for c in StreamManager._impacts:
 		print("   impact at ", c, " type=", StreamManager._impacts[c].get("type"))
-	for b in WildlifeManager._birds:
-		if is_instance_valid(b["root"]):
-			print("   bird at ", b["root"].global_position.snapped(Vector3.ONE * 0.01), " state=", b["state"])
-	for c in WildlifeManager._cats:
-		if is_instance_valid(c["root"]):
-			print("   cat  at ", c["root"].global_position.snapped(Vector3.ONE * 0.01))
-	for d in WildlifeManager._ducks:
-		if is_instance_valid(d["root"]):
-			print("   duck at ", d["root"].global_position.snapped(Vector3.ONE * 0.01))
+	if wl != null:
+		for b in wl._birds:
+			if is_instance_valid(b["root"]):
+				print("   bird at ", b["root"].global_position.snapped(Vector3.ONE * 0.01), " state=", b["state"])
+		for c in wl._cats:
+			if is_instance_valid(c["root"]):
+				print("   cat  at ", c["root"].global_position.snapped(Vector3.ONE * 0.01))
+		for d in wl._ducks:
+			if is_instance_valid(d["root"]):
+				print("   duck at ", d["root"].global_position.snapped(Vector3.ONE * 0.01))

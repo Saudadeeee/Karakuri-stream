@@ -110,10 +110,15 @@ func _ready() -> void:
 			str(env.glow_enabled), str(_sun_shadow(s)),
 			int(ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d", 0)),
 			str(env.fog_enabled), str(env.adjustment_enabled)])
+	# WildlifeManager exists only on the web branch — resolve dynamically so
+	# this harness runs on main too (a direct identifier is a compile error
+	# that silently leaves the scene hung with no script at all).
+	var wl: Node = get_node_or_null("/root/WildlifeManager")
+	var critters: int = 0
+	if wl != null:
+		critters = wl._birds.size() + wl._cats.size() + wl._ducks.size() + wl._deer.size()
 	print("   viewports=%d critters=%d particles=%d" % [
-		_count(get_tree().root, "SubViewport"),
-		WildlifeManager._birds.size() + WildlifeManager._cats.size()
-			+ WildlifeManager._ducks.size() + WildlifeManager._deer.size(),
+		_count(get_tree().root, "SubViewport"), critters,
 		_count(get_tree().root, "GPUParticles3D") + _count(get_tree().root, "CPUParticles3D")])
 	_breakdown(s)
 	get_tree().quit()
