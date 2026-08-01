@@ -167,7 +167,8 @@ func _digest(ctx: Dictionary) -> String:
 	if not _placed:
 		return str(d)
 	d.append([HouseShape.has_spire(grid_cell), HouseShape.is_terrace(grid_cell),
-			HouseShape.has_roof_garden(grid_cell), HouseShape.has_shutters(grid_cell)])
+			HouseShape.has_roof_garden(grid_cell), HouseShape.has_shutters(grid_cell),
+			HouseShape.bears_stilts(grid_cell)])
 	d.append([HouseShape.dormer_side(grid_cell), HouseShape.courtyard_dir(grid_cell),
 			HouseShape.bunting_dir(grid_cell)])
 	d.append([HouseShape.arch_axis(grid_cell), HouseShape.arch_run(grid_cell),
@@ -254,7 +255,9 @@ func refresh_shape() -> void:
 		_build_roof(ctx)
 	elif terrace:
 		_build_terrace(ctx, trim_col)
-	if ctx["chimney"]:
+	# No chimney under another house's floor — a terrace bearing stilts has a
+	# building overhead, and the stack pokes straight into its floorboards.
+	if ctx["chimney"] and not (terrace and HouseShape.bears_stilts(grid_cell)):
 		_build_chimney(trim_col)
 	# Only a real building earns a roof garden, and only where its roof is flat
 	# enough on top to stand a pot on — a narrow ridge would just float them.

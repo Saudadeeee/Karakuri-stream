@@ -36,3 +36,14 @@ Feedback: tiếng nước từ vòi rơi xuống chát và to. Audit TOÀN BỘ 
 | Marimba knock beat / đặt block / tine / jelly / creak -19 / UI -18.5 | | giữ — đã cân
 
 REGRESS ALL OK. Chưa thể nghe hộ — cần tai thật chấm lần cuối; mọi số ở audio_manager/stream_manager, đổi 1 dòng/giọng.
+
+## PHẦN 72 (main): NHÀ DƯỚI CỘT + AUDIO.md
+
+1. **Bug nhà-cột** (user: "xây nhà có cột, xây thêm nhà ở dưới cột là bị lỗi"):
+   - Repro đầu SAI: quên set `grid_cell` → nhà build bằng `lone_context` không bao giờ rebuild → tưởng mất cột. Đường thật của game có set — repro lại đúng đường.
+   - Bug THẬT: nhà trên rebuild đúng (chân drop=1 chạm mặt phẳng y=1) nhưng **mái DỐC nhà dưới nhô ~0.6 lên ô trên** → chân + đế chôn trong mái, ống khói nhà dưới đâm xuyên sàn nhà trên.
+   - Fix đúng ngôn ngữ hệ thống: patch mái **bears_stilts** (có nhà cách ≥2 ô thẳng trên, không khí thông suốt, chân đáp đúng nóc) → cả patch thành TERRACE phẳng (hệ terrace có sẵn) + triệt ống khói dưới sàn nhà khác. `bears_stilts` vào digest chống stale. Ảnh verify: sân thượng phẳng + chậu cây, chân đứng gọn, chim đậu nóc — đọc như kiến trúc cố ý.
+   - Regression mới `_sec_house_under_stilts`: bears/terrace đúng, geometry không vượt y=1.05, GỠ nhà trên → mái revert dốc.
+2. **AUDIO.md** (root): doc chỉnh âm hoàn chỉnh — bảng mọi giọng (hàm, volume, pitch hiện tại), các call-site đè volume, hằng số composer, sơ đồ bus, cách thay sample, quy trình chỉnh an toàn. Nguyên tắc mix ghi thành luật: lặp-theo-beat = nhỏ+trầm, one-shot hiếm được nổi.
+
+REGRESS ALL OK (24 section).

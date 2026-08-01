@@ -8,6 +8,7 @@ var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
 var _wood_test := false
+var _stilt_case := false
 var _pool := false
 var _mixed := false
 var _pitch := -1.0
@@ -26,6 +27,7 @@ func _ready() -> void:
 		elif a.begins_with("pitch="): _pitch = float(a.substr(6))
 		elif a.begins_with("yaw="): _yaw = float(a.substr(4))
 		elif a == "woodtest": _wood_test = true
+		elif a == "stiltcase": _stilt_case = true
 		elif a == "pool": _pool = true
 		elif a == "mixed": _mixed = true
 		elif a.begins_with("crop="):
@@ -77,6 +79,43 @@ func _ready() -> void:
 					s.add_child(n)
 					n.position = GridManager.cell_to_world(c)
 					GridManager.set_block(c, BlockData.new(t, n))
+	if _stilt_case:
+		# The reported bug: build a stilted house FIRST, then a house UNDER its
+		# legs. Order matters — the stilts exist before the lower cell does.
+		GridManager.clear_all()
+		await get_tree().process_frame
+		var above := Vector3i(0, 2, 0)
+		var na: Node3D = BlockFactory.instantiate(BlockData.Type.HOUSE)
+		s.add_child(na)
+		na.position = GridManager.cell_to_world(above)
+		na.grid_cell = above
+		GridManager.set_block(above, BlockData.new(BlockData.Type.HOUSE, na))
+		for _f in range(20):
+			await get_tree().process_frame
+		print("STILT step1 ctx=", HouseShape.context(above))
+		for mi in na.find_children("*", "MeshInstance3D", true, false):
+			if mi.mesh != null:
+				print("STILT step1 aabb y=[%.2f..%.2f]" % [mi.mesh.get_aabb().position.y,
+					mi.mesh.get_aabb().position.y + mi.mesh.get_aabb().size.y])
+		var below := Vector3i(0, 0, 0)
+		var nb: Node3D = BlockFactory.instantiate(BlockData.Type.HOUSE)
+		s.add_child(nb)
+		nb.position = GridManager.cell_to_world(below)
+		nb.grid_cell = below
+		GridManager.set_block(below, BlockData.new(BlockData.Type.HOUSE, nb))
+		for _f in range(20):
+			await get_tree().process_frame
+		print("STILT step2 ctx=", HouseShape.context(above))
+		for cell in [above, below]:
+			var node: Node3D = GridManager.get_block(cell).node
+			for mi in node.find_children("*", "MeshInstance3D", true, false):
+				if mi.mesh == null:
+					continue
+				var ab: AABB = mi.mesh.get_aabb()
+				print("STILT %s mesh=%s y[%.2f..%.2f] xz-reach=%.2f" % [
+					cell, mi.name, ab.position.y, ab.position.y + ab.size.y,
+					maxf(maxf(absf(ab.position.x), absf(ab.position.x + ab.size.x)),
+						maxf(absf(ab.position.z), absf(ab.position.z + ab.size.z)))])
 	if _wood_test:
 		GridManager.clear_all()
 		await get_tree().process_frame

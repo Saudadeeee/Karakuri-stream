@@ -462,6 +462,19 @@ static func component_height(cell: Vector3i) -> int:
 static var _terrace_version := -1
 static var _terrace_cache: Dictionary = {}
 
+## A stilted house whose legs land exactly on this cell's top: a house cell
+## straight above at height >= 2 with clear air the whole way between. A
+## pitched roof under those legs buries the posts and the footpads in its
+## slope, so the roof patch flattens into a terrace and the legs stand ON it.
+static func bears_stilts(cell: Vector3i) -> bool:
+	for k in range(2, MAX_STILT + 1):
+		var above: Vector3i = cell + UP * k
+		if is_house(above):
+			return support_drop(above) == k - 1
+		if _solid(above):
+			return false
+	return false
+
 static func is_terrace(cell: Vector3i) -> bool:
 	if not is_roof_cell(cell):
 		return false
@@ -478,6 +491,8 @@ static func is_terrace(cell: Vector3i) -> bool:
 	var sheltered := false
 	while not queue.is_empty() and patch.size() < MAX_BUILDING:
 		var c: Vector3i = queue.pop_back()
+		if bears_stilts(c):
+			sheltered = true              # a stilted house stands ON this roof
 		for d in SIDES:
 			if is_house(c + d + UP):
 				sheltered = true          # something taller stands over this patch

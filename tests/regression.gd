@@ -39,6 +39,8 @@ func _ready() -> void:
 	await _sec_removal_during_activity()
 	print("SECTION _sec_flow_control")
 	await _sec_flow_control()
+	print("SECTION _sec_house_under_stilts")
+	await _sec_house_under_stilts()
 	print("SECTION _sec_houses")
 	await _sec_houses()
 	print("SECTION _sec_wildlife")
@@ -273,6 +275,33 @@ func _sec_flow_control() -> void:
 		if c.is_equal_approx(want):
 			dyed = true
 	_check(dyed, "scoop pours the pond's dye colour")
+	_clear()
+	await get_tree().process_frame
+
+## 4c. A house built UNDER another house's stilts: the lower roof must flatten
+## into a terrace (a pitched roof buries the legs and rams its chimney into
+## the upper floor), and must revert when the stilted house is removed.
+func _sec_house_under_stilts() -> void:
+	var above := Vector3i(0, 2, 6)
+	var below := Vector3i(0, 0, 6)
+	_b(above, BlockData.Type.HOUSE)
+	for _f in range(6):
+		await get_tree().process_frame
+	_b(below, BlockData.Type.HOUSE)
+	for _f in range(6):
+		await get_tree().process_frame
+	_check(HouseShape.bears_stilts(below), "lower cell knows it bears stilts")
+	_check(HouseShape.is_terrace(below), "roof under stilts flattens to a terrace")
+	# Geometry must respect the boundary: lower stays inside its cell's top,
+	# upper's legs reach down but not through.
+	for mi in GridManager.get_block(below).node.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh != null:
+			var top: float = mi.mesh.get_aabb().position.y + mi.mesh.get_aabb().size.y
+			_check(top <= 1.05, "terrace under stilts stays below y=%.2f" % top)
+	GridManager.remove_block(above)
+	for _f in range(6):
+		await get_tree().process_frame
+	_check(not HouseShape.is_terrace(below), "roof reverts to pitched when the stilts go")
 	_clear()
 	await get_tree().process_frame
 
