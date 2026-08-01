@@ -242,6 +242,10 @@ func _spawn_splash(pos: Vector3) -> void:
 	get_tree().create_timer(particles.lifetime + 0.3).timeout.connect(particles.queue_free)
 
 func _refresh_source_audio() -> void:
+	# During shutdown the autoloads free in order — AudioManager can already be
+	# gone when a final grid_cleared rescan lands here.
+	if not is_instance_valid(AudioManager):
+		return
 	var sources: Dictionary = {}
 	for s in _get_spill_sources():
 		sources[s] = true

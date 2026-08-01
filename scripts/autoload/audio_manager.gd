@@ -201,23 +201,6 @@ func _ambient_one(pitch: float, vol: float) -> void:
 	player.finished.connect(player.queue_free)
 	player.play()
 
-## UI clicks: the same wood knock as the blocks, but NON-positional, because a
-## button has no place in the world — routed through a 3D player it would pan and
-## fade with the camera, which is exactly wrong for an interface.
-## `up` picks the brighter of two pitches, so hovering and pressing answer each
-## other instead of repeating one sound.
-func play_ui_pop(up: bool = false) -> void:
-	if not _can_start("ui%s" % ("u" if up else "d")):
-		return
-	var player := AudioStreamPlayer.new()
-	player.bus = "SFX"
-	player.stream = WOOD_HIT
-	player.pitch_scale = (1.85 if up else 1.42) * randf_range(0.985, 1.015)
-	player.volume_db = -15.0 if up else -11.0
-	add_child(player)
-	player.finished.connect(player.queue_free)
-	player.play()
-
 func make_water_loop_player() -> AudioStreamPlayer3D:
 	var player := AudioStreamPlayer3D.new()
 	player.bus = "SFX"

@@ -15,6 +15,12 @@ func _ready() -> void:
 		await get_tree().process_frame
 	GridManager.clear_all()
 	UndoManager.clear()
+	# Pin the theme: _sec_theme_switch persists whatever map it ends on, and
+	# the NEXT run's house colour audit would then run under that map's tint —
+	# Night squeezes two distinct decoration colours to within 0.04 and fails
+	# the near-duplicate check. The suite must not depend on the previous run.
+	MapThemes.current = 0
+	MapThemes.save_current()
 	await get_tree().process_frame
 
 	print("SECTION _sec_all_types_variants")

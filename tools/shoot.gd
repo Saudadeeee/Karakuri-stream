@@ -154,6 +154,11 @@ func _village(root: Node) -> void:
 		[Vector3i(-1, 0, -1), BlockData.Type.JELLY],
 		[Vector3i(1, 0, -1), BlockData.Type.WOOD],
 		[Vector3i(0, 0, -1), BlockData.Type.WOOD],
+		# A small merged house so shots cover the town system too.
+		[Vector3i(-3, 0, -2), BlockData.Type.HOUSE],
+		[Vector3i(-2, 0, -2), BlockData.Type.HOUSE],
+		[Vector3i(-3, 0, -3), BlockData.Type.HOUSE],
+		[Vector3i(-3, 1, -2), BlockData.Type.HOUSE],
 	]
 	for e in plan:
 		var c: Vector3i = e[0]

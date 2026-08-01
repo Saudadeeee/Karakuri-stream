@@ -1,7 +1,7 @@
 [gd_resource type="FontVariation" format=3]
 
 [ext_resource type="FontFile" path="res://assets/fonts/pixel/karakuri_pop.fnt" id="1_gemuv"]
-[ext_resource type="FontFile" path="res://assets/fonts/Baloo2.ttf" id="2_kbt2s"]
+[ext_resource type="FontVariation" path="res://assets/fonts/fredoka_chunky.tres" id="2_kbt2s"]
 
 [resource]
 fallbacks = Array[Font]([ExtResource("2_kbt2s")])

@@ -208,6 +208,10 @@ func _remove_sparkle(cell: Vector3i) -> void:
 func _ensure_creak(cell: Vector3i, parent: Node3D) -> void:
 	if _creaks.has(cell):
 		return
+	# During shutdown the autoloads free in order — AudioManager can already
+	# be gone when a last _process tick lands here.
+	if not is_instance_valid(AudioManager):
+		return
 	var player: AudioStreamPlayer3D = AudioManager.make_gear_loop_player()
 	parent.add_child(player)
 	player.play()
