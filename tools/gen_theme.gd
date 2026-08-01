@@ -16,6 +16,13 @@ const OUT := "res://ui/karakuri_theme.tres"
 const FONT_SRC := "res://assets/fonts/Fredoka.ttf"
 const FONT_OUT := "res://assets/fonts/fredoka_chunky.tres"
 const WEIGHT := 600     # SemiBold: bubbly without turning into a blob
+## The hand-drawn pixel font (tools/font/gen_font.lua, rendered by Aseprite).
+## It becomes the THEME font for all 2D UI; Fredoka stays as the project-wide
+## custom_font because TextMesh (the 3D wordmark) needs vector outlines a
+## bitmap font cannot provide, and as the per-glyph fallback for anything the
+## small-caps pixel set lacks.
+const PIXEL_SRC := "res://assets/fonts/pixel/karakuri_pop.fnt"
+const PIXEL_OUT := "res://assets/fonts/pixel/karakuri_pop.tres"
 
 ## Fredoka is a VARIABLE font, and Godot instantiates a variable font at its
 ## default axis position — which for Fredoka is Light. Pointing the project at
@@ -45,6 +52,20 @@ func _make_font() -> FontVariation:
 	print("font  -> %s (%s)" % [FONT_OUT, "OK" if err == OK else "ERR %d" % err])
 	return fv
 
+func _make_pixel_font(fredoka: FontVariation) -> FontVariation:
+	var base: FontFile = load(PIXEL_SRC)
+	var fv := FontVariation.new()
+	fv.base_font = base
+	fv.fallbacks = [fredoka]
+	# Prove the bitmap actually loaded (an import failure would silently fall
+	# back to Fredoka and nobody would notice the pixel font is missing).
+	var w: float = fv.get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+	print("pixel font check: 'PLAY'@20 = %.1f px -> %s" % [w,
+		"OK" if w > 1.0 else "*** EMPTY ***"])
+	var err: int = ResourceSaver.save(fv, PIXEL_OUT)
+	print("pixel -> %s (%s)" % [PIXEL_OUT, "OK" if err == OK else "ERR %d" % err])
+	return fv
+
 const CREAM := Color("f4efe2")
 const PAPER := Color("eae5da")
 const INK := Color("4a3f35")
@@ -59,11 +80,12 @@ const SHADOW := Color(0.35, 0.25, 0.18, 0.28)
 
 func _init() -> void:
 	var font := _make_font()
+	var pixel := _make_pixel_font(font)
 	var theme := Theme.new()
-	theme.default_font_size = 18
-	# Bake the weighted font into the theme too, so any Control that reads the
-	# theme gets it even if the project-wide setting is ever changed.
-	theme.default_font = font
+	# 20 is the pixel font's native size — every multiple-of-native size renders
+	# with no resampling at all.
+	theme.default_font_size = 20
+	theme.default_font = pixel
 
 	# --- Button: the star. Four states, same box, different skin. ---
 	theme.set_stylebox("normal", "Button", _button(WOOD, WOOD_EDGE, 7, Vector2(0, 5)))
@@ -94,7 +116,7 @@ func _init() -> void:
 	theme.set_color("title_color", "Window", INK)
 
 	theme.set_color("font_color", "Label", INK)
-	theme.set_font_size("font_size", "Label", 18)
+	theme.set_font_size("font_size", "Label", 20)
 
 	# --- Sliders: bamboo rail, round salmon grabber ---
 	var rail := StyleBoxFlat.new()
