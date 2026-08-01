@@ -39,7 +39,6 @@ regenerated from source:
 | Track | Source | Author | Licence |
 |---|---|---|---|
 | `chill_ambient.ogg` — the still ambient pad under everything | [Ambient Relaxing Loop](https://opengameart.org/content/ambient-relaxing-loop) | isaiah658 | CC0 |
-| `chill_loop.mp3` — second chill track | [Relaxing](https://opengameart.org/content/relaxing) | wipics | CC0 |
 | `rain_loop.ogg` — quiet rain layer | [Rain (loopable)](https://opengameart.org/content/rain-loopable) | Ylmir | CC0 |
 
 ## Fonts
