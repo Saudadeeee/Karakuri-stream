@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://dfn4r8y15xs71"
+path="res://.godot/imported/karakuri_pop.fnt-0bbc825aad76a5b6a4a7fcd93d68b980.fontdata"
+
+[deps]
+
+source_file="res://assets/fonts/pixel/karakuri_pop.fnt"
+dest_files=["res://.godot/imported/karakuri_pop.fnt-0bbc825aad76a5b6a4a7fcd93d68b980.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2

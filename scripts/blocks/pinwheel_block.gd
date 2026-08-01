@@ -54,7 +54,7 @@ func apply_variant(v: Dictionary) -> void:
 ## A stream tick landed on this cell — spin up (with a soft paper flutter).
 func splash() -> void:
 	_speed = minf(_speed + 6.0, 14.0)
-	AudioManager.play_wood_pitch(global_position, 1.85, -8.0)
+	AudioManager.play_flutter(global_position)
 
 func _process(delta: float) -> void:
 	if _speed <= 0.01:

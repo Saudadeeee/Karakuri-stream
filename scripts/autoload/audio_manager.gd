@@ -15,6 +15,14 @@ const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__c
 var _gear_creak := preload("res://assets/sounds/461166__hisoul__wooden-gear-lq-5-sprocket-rattling.wav")
 var _water_flow := preload("res://assets/sounds/249666__tymorafarr__water-stream-looped.ogg")
 const JELLY_BOUNCE: AudioStream = preload("res://assets/sounds/463590__mixtos__jellybounce.wav")
+# Synthesized in-house (rfxgen + ffmpeg) — each instrument finally has its own
+# voice instead of borrowing a repitched wood knock. See CREDITS.md.
+const TAIKO: AudioStream = preload("res://assets/sounds/taiko_boom.ogg")
+const TINE: AudioStream = preload("res://assets/sounds/music_box_tine.ogg")
+const SPLASH: AudioStream = preload("res://assets/sounds/splash_soft.ogg")
+const PLOP: AudioStream = preload("res://assets/sounds/water_plop.ogg")
+const UI_POP: AudioStream = preload("res://assets/sounds/ui_pop.ogg")
+const FLUTTER: AudioStream = preload("res://assets/sounds/paper_flutter.ogg")
 
 # Equal-tempered ratios for C D E G A relative to root note (pentatonic scale).
 const PENTATONIC_RATIOS: Array[float] = [1.0, 1.1225, 1.2599, 1.4983, 1.6818]
@@ -30,6 +38,10 @@ const DEDUPE_MS: int = 35
 func _ready() -> void:
 	_water_flow.loop = true
 	_gear_creak.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	# Every Button in the game gets the soft UI pop automatically — hover answers
+	# press at a brighter pitch. One tree-wide hook instead of wiring each of the
+	# dozen places buttons are built; the 35 ms dedupe stops any doubling.
+	get_tree().node_added.connect(_on_node_added)
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
 		player.bus = "SFX"
@@ -40,6 +52,11 @@ func _ready() -> void:
 		player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_SQUARE_DISTANCE
 		add_child(player)
 		_pool.append(player)
+
+func _on_node_added(n: Node) -> void:
+	if n is Button:
+		n.mouse_entered.connect(play_ui_pop.bind(true))
+		n.button_down.connect(play_ui_pop.bind(false))
 
 func _can_start(kind: String) -> bool:
 	var now: int = Time.get_ticks_msec()
@@ -85,9 +102,17 @@ func play_wood_note(global_pos: Vector3, degree: int, octave_up: bool, base_pitc
 	var p: float = base_pitch * PENTATONIC_RATIOS[degree % PENTATONIC_RATIOS.size()] * (2.0 if octave_up else 1.0)
 	play_wood_pitch(global_pos, clampf(p, 0.6, 2.2), vol_db)
 
-## Deep taiko boom.
+## Deep taiko boom — a real membrane hit (synthesized sweep), not a repitched
+## wood knock. Slight pitch jitter keeps a rhythm section from sounding cloned.
 func play_drum(global_pos: Vector3) -> void:
-	play_wood_pitch(global_pos, 0.52, 2.5)
+	if not _can_start("drum"):
+		return
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = TAIKO
+	player.pitch_scale = randf_range(0.92, 1.06)
+	player.volume_db = randf_range(1.0, 2.5)
+	player.play()
 
 ## Shishi-odoshi tipping back: the classic double knock — "cộc… cốc!".
 func play_shishi_knock(global_pos: Vector3) -> void:
@@ -95,13 +120,16 @@ func play_shishi_knock(global_pos: Vector3) -> void:
 	get_tree().create_timer(0.16).timeout.connect(
 		play_wood_pitch.bind(global_pos, 0.85, 2.0))
 
-## Music-box tinkle: the chime an octave up, quiet and delicate.
+## Music-box tinkle: a real steel tine (synthesized — fundamental plus the
+## inharmonic 6.27× partial of a struck cantilever bar, the sound every wind-up
+## music box makes). Pitched to the pentatonic degree; the sample is already
+## the high root so no octave shift is needed.
 func play_music_box_note(global_pos: Vector3, note_index: int) -> void:
 	var player: AudioStreamPlayer3D = _get_free_player()
 	player.global_position = global_pos
-	player.stream = CHIME
-	player.pitch_scale = PENTATONIC_RATIOS[note_index % PENTATONIC_RATIOS.size()] * 2.0
-	player.volume_db = -9.0
+	player.stream = TINE
+	player.pitch_scale = PENTATONIC_RATIOS[note_index % PENTATONIC_RATIOS.size()]
+	player.volume_db = -7.0
 	player.play()
 
 ## A soft, springy "boing" for the jelly block — on placement and whenever a
@@ -112,6 +140,56 @@ func play_jelly_bounce(global_pos: Vector3) -> void:
 	player.stream = JELLY_BOUNCE
 	player.pitch_scale = randf_range(0.88, 1.18)
 	player.volume_db = randf_range(-5.0, -1.5)
+	player.play()
+
+## A round watery "bloop" — placing a water block. Rubbery jelly keeps its own
+## bounce; water deserved a voice that actually sounds wet.
+func play_water_plop(global_pos: Vector3) -> void:
+	if not _can_start("plop"):
+		return
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = PLOP
+	player.pitch_scale = randf_range(0.9, 1.12)
+	player.volume_db = randf_range(-4.0, -2.0)
+	player.play()
+
+## Soft splash — the sound the splash PARTICLES were always missing: stream
+## landing on open water, a koi re-entering after a leap, water hitting ground.
+func play_splash(global_pos: Vector3, vol_db: float = -6.0) -> void:
+	if not _can_start("splash"):
+		return
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = SPLASH
+	player.pitch_scale = randf_range(0.9, 1.15)
+	player.volume_db = vol_db + randf_range(-1.5, 0.0)
+	player.play()
+
+## Paper flutter for the pinwheel — spinning paper, not knocking wood.
+func play_flutter(global_pos: Vector3) -> void:
+	if not _can_start("flutter"):
+		return
+	var player: AudioStreamPlayer3D = _get_free_player()
+	player.global_position = global_pos
+	player.stream = FLUTTER
+	player.pitch_scale = randf_range(0.95, 1.2)
+	player.volume_db = randf_range(-9.0, -6.0)
+	player.play()
+
+## UI clicks: soft round pop, NON-positional — a button has no place in the
+## world, so routing it through a 3D player would pan and fade with the camera.
+## `up` picks the brighter pitch so hover and press answer each other.
+func play_ui_pop(up: bool = false) -> void:
+	if not _can_start("ui%s" % ("u" if up else "d")):
+		return
+	var player := AudioStreamPlayer.new()
+	player.bus = "SFX"
+	player.stream = UI_POP
+	player.pitch_scale = (1.3 if up else 1.0) * randf_range(0.985, 1.015)
+	player.volume_db = -13.0 if up else -9.0
+	add_child(player)
+	player.finished.connect(player.queue_free)
 	player.play()
 
 func play_chime(global_pos: Vector3, note_index: int = -1, pitch_mul: float = 1.0) -> void:
