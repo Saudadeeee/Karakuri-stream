@@ -12,11 +12,26 @@ game sound like something.
 
 | Sound | ID | Author | Licence |
 |---|---|---|---|
-| Wood block hit — the whole percussion palette, repitched | [218460](https://freesound.org/s/218460/) | thomasjaunism | CC0 |
+| Wood block hit — marimba/shishi/gate knocks, repitched | [218460](https://freesound.org/s/218460/) | thomasjaunism | CC0 |
 | Water stream, looped | [249666](https://freesound.org/s/249666/) | tymorafarr | CC0 |
 | Wooden gear / sprocket rattle | [461166](https://freesound.org/s/461166/) | hisoul | CC0 |
 | Jelly bounce | [463590](https://freesound.org/s/463590/) | Mixtos | CC0 |
 | Chimes | [517660](https://freesound.org/s/517660/) | SamuelGremaud | CC0 |
+
+## Sound effects — synthesized in-house (original, no licence needed)
+
+Generated with [rfxgen](https://raylibtech.itch.io/rfxgen) (zlib) and FFmpeg
+filter synthesis; parameters live in the project history, so each can be
+regenerated from source:
+
+| Sound | Made with |
+|---|---|
+| `taiko_boom.ogg` — drum membrane hit (45–110 Hz sweep + noise slap) | FFmpeg `aevalsrc` |
+| `music_box_tine.ogg` — struck tine, inharmonic 6.27× partial | FFmpeg `aevalsrc` |
+| `splash_soft.ogg` — band-passed noise burst + bubble chirp | FFmpeg |
+| `water_plop.ogg` — rising sine bloop | rfxgen |
+| `ui_pop.ogg` — soft round UI pop | rfxgen |
+| `paper_flutter.ogg` — pinwheel paper flutter | rfxgen |
 
 ## Music & ambience — OpenGameArt, all CC0
 

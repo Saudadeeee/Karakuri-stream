@@ -366,7 +366,7 @@ func _play_place_sound(type: BlockData.Type, pos: Vector3, cell: Vector3i = Vect
 		BlockData.Type.WOOD:
 			AudioManager.play_wood_note(pos, cell.y % 5, cell.y >= 5)
 		BlockData.Type.WATER:
-			AudioManager.play_jelly_bounce(pos)          # soft wet plop
+			AudioManager.play_water_plop(pos)
 		BlockData.Type.JELLY:
 			AudioManager.play_jelly_bounce(pos)
 		BlockData.Type.BELL:

@@ -428,6 +428,7 @@ func _tick_ducks(delta: float, t: float) -> void:
 			if q > 0.8 and not d["splashed"]:
 				d["splashed"] = true
 				StreamManager._spawn_splash(pos, Color(0.85, 0.94, 0.98))
+				AudioManager.play_splash(pos, -13.0)
 		else:
 			d["root"].rotation.z = 0.0
 

@@ -424,10 +424,14 @@ func _play_impact(cell: Vector3i, type: int) -> void:
 		BlockData.Type.GEAR, BlockData.Type.WOOD, BlockData.Type.MUSIC_BOX, \
 		BlockData.Type.SCOOP:
 			AudioManager.play_wood_pitch(pos, 1.0 * pitch_mul, vol)
+		BlockData.Type.WATER:
+			# Stream meeting open water: an actual soft splash, quiet enough to
+			# sit under the instrument voices.
+			AudioManager.play_splash(pos, -9.0)
 		_:
-			# Water: splash only. PIPE/SOURCE deliberately SILENT — water moving
-			# through the bamboo system shouldn't knock; only what it finally
-			# lands on sings (the constant in-pipe noise was overwhelming).
+			# PIPE/SOURCE deliberately SILENT — water moving through the bamboo
+			# system shouldn't knock; only what it finally lands on sings (the
+			# constant in-pipe noise was overwhelming).
 			pass
 	# The splash + pooled ring take the struck NOTE's colour — the machine
 	# paints its melody in the air, in time with the quantized sound.
