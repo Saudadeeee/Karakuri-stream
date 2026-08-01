@@ -20,6 +20,9 @@ var _build_churn := true
 var _scene: Node
 var _probe_type: int = BlockData.Type.BELL
 var _wood := 0
+## Houses are their own cost curve: every house cell rebuilds when any house
+## changes, so a town has to be measurable on its own.
+var _houses := 0
 
 func _ready() -> void:
 	var target := "res://scenes/main.tscn"
@@ -32,6 +35,7 @@ func _ready() -> void:
 		elif a.begins_with("place="): _build_churn = a.substr(6) != "0"
 		elif a.begins_with("ptype="): _probe_type = int(a.substr(6))
 		elif a.begins_with("wood="): _wood = int(a.substr(5))
+		elif a.begins_with("houses="): _houses = int(a.substr(7))
 
 	# WITHOUT THIS EVERY MEASUREMENT IS A LIE. With vsync on, every configuration
 	# reports exactly the refresh interval (6.95ms on a 144Hz panel) whatever the
@@ -186,6 +190,10 @@ func _build(root: Node) -> void:
 	for z in 3:
 		for x in 3:
 			_place(root, Vector3i(2 + x, 0, 1 + z), BlockData.Type.WATER)
+	var hside: int = int(ceil(sqrt(float(_houses))))
+	for i in _houses:
+		_place(root, Vector3i(-10 + (i % hside), i / (hside * hside), -10 + ((i / hside) % hside)),
+				BlockData.Type.HOUSE)
 	# Wood and water are the two types drawn as ONE merged isosurface, so their
 	# count is what drives the marching-cubes cost.
 	var side: int = int(ceil(sqrt(float(_wood))))

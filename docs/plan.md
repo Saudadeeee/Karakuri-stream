@@ -1166,3 +1166,40 @@ Bắt đúng lỗi catalog sinh ra để phòng: type trùng, thiếu scene/hint
 12 mục dạng "muốn đổi X → mở file Y, sửa chỗ Z": 3 lệnh cần thuộc (chơi / test / hoàn tác), thêm block (3 bước có ví dụ code), đổi màu-biến thể, đổi map, đổi chữ UI (kèm cảnh báo emoji vỡ trên web), vườn mẫu, font, tốc độ/nhịp, đo hiệu năng, đọc lỗi (kể cả bẫy "class chưa đăng ký → chạy `--editor --quit`"), bản đồ thư mục đánh dấu ★ chỗ nào sửa an toàn, và commit. Mọi tên hằng số trong doc đã verify tồn tại thật.
 
 REGRESS ALL OK (25 section).
+
+## PHẦN 74 (main): AUDIT "ĐÃ HOÀN THIỆN CHƯA" — đo thật, và trạng thái chốt
+
+Kiểm toàn diện thay vì tự xác nhận. Cách kiểm: đếm lỗi, boot GPU thật cả 2 scene, dò link/file mồ côi, đo perf theo quy mô.
+
+### Sạch
+- Boot `main_menu` + `main` bằng GPU thật: **0 lỗi**.
+- Link .md toàn repo: 0 gãy. File .gd mồ côi: 0.
+- REGRESS ALL OK (25 section).
+
+### Fix được trong lượt này
+**30 lỗi `Parameter "material" is null` mỗi lần chạy → còn 2.** `MeshFit.matte` duplicate material rồi `set_surface_override_material` cho MỌI instance — nhưng matte áp y hệt nhau cho mọi instance nên bản sao là phí thuần: tốn 1 material/instance trong RAM + sinh lỗi null-slot. Đổi sang sửa material dùng chung TẠI CHỖ (bản web đã làm thế từ lâu, main chưa được port). 2 lỗi còn lại đến từ `MeshFit.tint` — cái này buộc phải override per-surface vì mỗi instance nhuộm màu khác nhau; đúng như phân tích trong `docs/web.md`.
+
+`bears_stilts` thêm guard `is_roof_cell` + cache theo `GridManager.version` (đúng pattern `is_terrace` sẵn có) — digest hỏi hàm này cho MỌI ô trong town mỗi lần sửa, giờ ô không phải mái trả lời tức thì.
+
+### Đo perf: một giới hạn thật, đã định lượng
+`tools/perf.gd` thêm tuỳ chọn `houses=` (trước đây không dựng nhà được nên vùng này chưa bao giờ đo).
+
+| Quy mô | Đứng yên | Sửa 1 ô nhà (30 frame sau đó) |
+|---|---|---|
+| 48 nhà, không sửa gì | **2.81ms p50 (356fps), 0/420 rớt** | — |
+| town 4-16 ô | ~3.5ms/frame | ~4.3ms/frame — không cảm nhận được |
+| town 36 ô | ~3.9ms/frame | ~4.9ms/frame — ổn |
+| **town 64 ô (một toà liền khối)** | ~4.9ms/frame | **~250-650ms rải trên ~30 frame** |
+
+- **Render KHÔNG phải vấn đề** — 48 nhà đứng yên chạy 356fps.
+- Chi phí nằm ở *hành động sửa* một toà nhà rất lớn: mọi ô nhà rebuild khi bất kỳ ô nào đổi. Đây là quyết định CỐ Ý ghi trong `house_block.gd` (đổi sang chỉ báo hàng xóm từng gây bug "nhà mất mái sau khi xoá"), đánh đổi đúng ở quy mô chơi thường.
+- Chưa gây khó chịu ở quy mô thường (một toà 64 ô liền khối là bất thường); muốn bỏ trần này thì phải làm rebuild tăng dần (theo vùng ảnh hưởng thay vì toàn town) — là **thiết kế lại thật sự**, không phải chỉnh hằng số. Ghi lại đây kèm số đo để lần sau khỏi phải đoán.
+- Lưu ý đo: sai số giữa các lần chạy rất lớn (cùng code, 242ms vs 652ms) vì cửa sổ 30 frame bắt được số lần rebuild khác nhau — đọc theo BẬC ĐỘ LỚN, đừng đọc con số lẻ. Và luôn tắt vsync, nếu không mọi số đều bằng đúng nhịp màn hình (7ms ở 144Hz) và vô nghĩa.
+
+### Danh sách "còn treo" trong file này phần lớn đã LẠC HẬU
+Nhiều mục ghi ở PHẦN 10-30 đã được giải quyết ở các phần sau nhưng không ai gạch đi. Cụ thể, các mục sau **đã xong**: Save/Load công trình (PHẦN 14), nước metaball phồng (thay bằng occupancy PHẦN 19), vân gỗ chevron quá đậm (PHẦN 25 + 68), foam edge_mask (shader viết lại), export Web/Desktop (PHẦN 13 + 49).
+
+**Thực sự còn treo, đúng 3 nhóm:**
+1. **Cần TAI/MẮT thật của bạn** — cân âm lượng 6 SFX mới, reverb, và mọi chuyển động real-time (sóng nước, gear quay, lá rơi). Máy chỉ chứng minh được cấu trúc và số, không chứng minh được "nghe có thư giãn không".
+2. **Giới hạn kỹ thuật đã chấp nhận** — không có AO/soft-shadow/phản chiếu thật (đánh đổi của `gl_compatibility` để chạy được Web/Mobile).
+3. **Bản web của `main` chưa export lại sau khi merge nhà.** Nhánh `web` cố tình CẮT nhà + wildlife vì lý do hiệu năng trình duyệt; `main` giờ có lại cả hai. Nếu muốn phát hành web từ `main` thì phải đo lại trên trình duyệt — hoặc đơn giản là tiếp tục phát hành web từ nhánh `web` như thiết kế ban đầu.

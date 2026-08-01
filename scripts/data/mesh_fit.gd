@@ -62,9 +62,15 @@ static func flat(col: Color) -> StandardMaterial3D:
 ## Forces every material to the game's matte clay look. glTF import gives
 ## StandardMaterial3D with default specular 0.5, so smooth-shaded imported props
 ## catch bright highlights (a grey stone bell reads as white, wood as cream) —
-## clashing with the flat wood/water shaders. Duplicate each material (don't
-## mutate the shared imported resource) and flatten it: no metal, no specular,
-## full roughness. Keeps the authored base colour.
+## clashing with the flat wood/water shaders.
+##
+## Flattens the shared imported material IN PLACE rather than duplicating it
+## per instance. Every instance of a model gets the identical treatment, so a
+## copy each was pure cost: one material per instance in memory, and a
+## `set_surface_override_material` call that makes the engine query the slot
+## before anything is in it — thirty "Parameter material is null" lines per
+## run. `tint` still overrides per surface, because that one genuinely differs
+## between instances.
 static func matte(root: Node) -> void:
 	for node in root.get_children():
 		matte(node)
@@ -76,11 +82,10 @@ static func matte(root: Node) -> void:
 	for s in range(mi.mesh.get_surface_count()):
 		var m: Material = mi.get_active_material(s)
 		if m is StandardMaterial3D:
-			var d: StandardMaterial3D = (m as StandardMaterial3D).duplicate()
-			d.metallic = 0.0
-			d.metallic_specular = 0.0
-			d.roughness = 1.0
-			mi.set_surface_override_material(s, d)
+			var sm: StandardMaterial3D = m
+			sm.metallic = 0.0
+			sm.metallic_specular = 0.0
+			sm.roughness = 1.0
 
 ## Recolours the surfaces whose current albedo is close to `from` — used to
 ## retint one part of a multi-material model (e.g. the jelly body) to a variant

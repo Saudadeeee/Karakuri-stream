@@ -466,7 +466,24 @@ static var _terrace_cache: Dictionary = {}
 ## straight above at height >= 2 with clear air the whole way between. A
 ## pitched roof under those legs buries the posts and the footpads in its
 ## slope, so the roof patch flattens into a terrace and the legs stand ON it.
+static var _stilt_version := -1
+static var _stilt_cache: Dictionary = {}
+
 static func bears_stilts(cell: Vector3i) -> bool:
+	# Only a roof can carry legs, and the digest asks this of every cell in the
+	# town on every edit — so answer the common case without walking anything.
+	if not is_roof_cell(cell):
+		return false
+	if GridManager.version != _stilt_version:
+		_stilt_version = GridManager.version
+		_stilt_cache = {}
+	if _stilt_cache.has(cell):
+		return _stilt_cache[cell]
+	var found: bool = _scan_stilts(cell)
+	_stilt_cache[cell] = found
+	return found
+
+static func _scan_stilts(cell: Vector3i) -> bool:
 	for k in range(2, MAX_STILT + 1):
 		var above: Vector3i = cell + UP * k
 		if is_house(above):
