@@ -23,6 +23,8 @@ func _ready() -> void:
 	MapThemes.save_current()
 	await get_tree().process_frame
 
+	print("SECTION _sec_catalog")
+	_sec_catalog()
 	print("SECTION _sec_all_types_variants")
 	await _sec_all_types_variants()
 	print("SECTION _sec_save_load")
@@ -107,6 +109,31 @@ func _clear() -> void:
 	UndoManager.clear()
 
 # ------------------------------------------------------------------ sections
+## 0. The catalog is the single registry every block goes through, so the
+## mistake it exists to prevent — a type added to the enum but never
+## registered, or two blocks claiming one shortcut — has to fail loudly here.
+func _sec_catalog() -> void:
+	var seen_types: Dictionary = {}
+	var seen_keys: Dictionary = {}
+	for e in BlockCatalog.ALL:
+		var t: int = int(e["type"])
+		_check(not seen_types.has(t), "catalog lists type %d twice" % t)
+		seen_types[t] = true
+		_check(e.get("scene") is PackedScene, "catalog type %d has no scene" % t)
+		_check(String(e.get("hint", "")) != "", "catalog type %d has no hint" % t)
+		var k: int = int(e.get("key", KEY_NONE))
+		if k != KEY_NONE:
+			_check(not seen_keys.has(k), "two blocks share shortcut %s" % OS.get_keycode_string(k))
+			seen_keys[k] = true
+			_check(BlockCatalog.type_for_key(k) == t, "shortcut for type %d resolves elsewhere" % t)
+	for t in BlockData.Type.values():
+		_check(seen_types.has(int(t)), "BlockData.Type %d is not in the catalog" % int(t))
+		var probe: Node3D = BlockFactory.instantiate(t)
+		_check(probe != null, "type %d does not instantiate" % int(t))
+		if probe != null:
+			probe.free()
+	_check(not BlockCatalog.palette_types().is_empty(), "the hotbar would be empty")
+
 ## 1. Every type × every variant instantiates, applies, and removes cleanly.
 func _sec_all_types_variants() -> void:
 	var i := 0

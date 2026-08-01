@@ -103,8 +103,9 @@ godot --path . tests/regression.tscn  # regression suite → expect "REGRESS ALL
 ```
 
 Use an **official** Godot 4.7.1 binary for exports — the Steam build swallows
-export error text. Build instructions: [BUILD.md](BUILD.md).
-Art style bible: [artstyle.md](artstyle.md) · development log: [plan.md](plan.md)
+export error text. Build instructions: [BUILD.md](docs/BUILD.md).
+Sửa game (thêm block, đổi màu, đổi âm): **[docs/MAINTAIN.md](docs/MAINTAIN.md)** · âm thanh: [docs/AUDIO.md](docs/AUDIO.md)
+Art style bible: [artstyle.md](docs/artstyle.md) · code map: [CODEMAP.md](docs/CODEMAP.md) · development log: [plan.md](docs/plan.md)
 
 ## Project layout
 

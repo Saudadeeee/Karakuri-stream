@@ -124,7 +124,7 @@ func _valid_entries(data: Array) -> Array:
 		if not (entry.has("x") and entry.has("y") and entry.has("z") and entry.has("type")):
 			dropped += 1
 			continue
-		if not BlockFactory.SCENES_BY_TYPE.has(int(entry["type"])):
+		if BlockCatalog.entry(int(entry["type"])).is_empty():
 			dropped += 1
 			continue
 		out.append(entry)

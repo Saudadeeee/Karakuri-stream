@@ -112,32 +112,10 @@ func select_material(type: BlockData.Type) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_1:
-			select_material(BlockData.Type.WOOD)
-		elif event.keycode == KEY_Q:
-			select_material(BlockData.Type.HOUSE)
-		elif event.keycode == KEY_2:
-			select_material(BlockData.Type.WATER)
-		elif event.keycode == KEY_3:
-			select_material(BlockData.Type.SOURCE)
-		elif event.keycode == KEY_4:
-			select_material(BlockData.Type.PIPE)
-		elif event.keycode == KEY_5:
-			select_material(BlockData.Type.GEAR)
-		elif event.keycode == KEY_6:
-			select_material(BlockData.Type.BELL)
-		elif event.keycode == KEY_7:
-			select_material(BlockData.Type.JELLY)
-		elif event.keycode == KEY_8:
-			select_material(BlockData.Type.SHISHI)
-		elif event.keycode == KEY_9:
-			select_material(BlockData.Type.DRUM)
-		elif event.keycode == KEY_0:
-			select_material(BlockData.Type.CHIME)
-		elif event.keycode == KEY_MINUS:
-			select_material(BlockData.Type.MUSIC_BOX)
-		elif event.keycode == KEY_EQUAL:
-			select_material(BlockData.Type.SCOOP)
+		# Shortcuts live in BlockCatalog next to the block they select.
+		var picked: int = BlockCatalog.type_for_key(event.keycode)
+		if picked >= 0:
+			select_material(picked)
 	elif event is InputEventMouseButton and event.pressed:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:

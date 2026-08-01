@@ -16,46 +16,9 @@ const REVEAL_ZONE: float = 170.0  # px from left edge where UI is fully shown
 const FADE_MIN_ALPHA: float = 0.18
 const SPIN_SPEED: float = 0.9
 
-## One-line onboarding hints — hovering an icon tells you what the block DOES
-## (several blocks have hidden pairings a new player would never guess).
-const HINTS: Dictionary = {
-	BlockData.Type.WOOD: "Building block — click again for Wood/Dirt/Moss/Stone",
-	BlockData.Type.WATER: "Still pond — powers any gear touching it",
-	BlockData.Type.SOURCE: "Spout — pours a stream straight down",
-	BlockData.Type.PIPE: "Self-connecting pipe — click again for closed/open",
-	BlockData.Type.GEAR: "Spins when touching water — chain them to transfer power",
-	BlockData.Type.BELL: "Rings when a stream hits it or a gear strikes it",
-	BlockData.Type.JELLY: "Bouncy jelly — boings when water lands on it",
-	BlockData.Type.SHISHI: "Fills with water, then TIPS: pours onward + knock!",
-	BlockData.Type.DRUM: "Drum — beaten by streams or a gear next to it",
-	BlockData.Type.CHIME: "Each colour is a note — line them up = a melody",
-	BlockData.Type.MUSIC_BOX: "Put beside a SPINNING gear → plays a tune",
-	BlockData.Type.SCOOP: "Beside a POND + spinning gear → ladles a new stream",
-	BlockData.Type.STONE_LANTERN: "Glowing lantern — prettiest on the Night map",
-	BlockData.Type.PINWHEEL: "Pinwheel — spins when a stream hits it",
-	BlockData.Type.GATE: "Sluice gate — CLICK it in the world to open/close the flow",
-	BlockData.Type.HOUSE: "House — stack and line them up, they merge into one building",
-}
-
-## Only blocks with a gameplay mechanic. STONE_LANTERN and PINWHEEL are pure
-## decoration and deliberately not offered — their factory/variants/save
-## support still exists, re-adding is one line here.
-const ENTRIES: Array = [
-	BlockData.Type.WOOD,
-	BlockData.Type.HOUSE,
-	BlockData.Type.WATER,
-	BlockData.Type.SOURCE,
-	BlockData.Type.PIPE,
-	BlockData.Type.GEAR,
-	BlockData.Type.BELL,
-	BlockData.Type.JELLY,
-	BlockData.Type.SHISHI,
-	BlockData.Type.DRUM,
-	BlockData.Type.CHIME,
-	BlockData.Type.MUSIC_BOX,
-	BlockData.Type.SCOOP,
-	BlockData.Type.GATE,
-]
+## Contents, order and hover text all come from BlockCatalog — add a block
+## there and it appears here.
+static var ENTRIES: Array = BlockCatalog.palette_types()
 
 @export var placement_controller_path: NodePath
 
@@ -225,7 +188,7 @@ func _on_icon_hover(type: int, entered: bool) -> void:
 	# Hint card floats next to the hovered icon.
 	if entered and _hint_panel != null:
 		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
-		_hint_label.text = "%s\n%s" % [vname, HINTS.get(type, "")]
+		_hint_label.text = "%s\n%s" % [vname, BlockCatalog.hint(type)]
 		var btn: Button = _buttons[type]
 		# Clear of the whole grid, not the hovered button's column.
 		_hint_panel.position = Vector2(16.0 + float(COLUMNS * (ICON_SIZE + ICON_GAP)) + 14.0, btn.global_position.y)

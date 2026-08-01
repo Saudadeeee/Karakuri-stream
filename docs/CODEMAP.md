@@ -139,7 +139,7 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 
 ### 5. Tạo node của 1 khối — CHỈ qua `BlockFactory`, đừng gọi `.instantiate()` trực tiếp nơi khác
 
-`scripts/data/block_factory.gd` (`class_name BlockFactory`, static) là nơi DUY NHẤT map `BlockData.Type -> PackedScene`. `PlacementController` (đặt tay) và `SaveManager` (tải file) đều gọi `BlockFactory.instantiate(type)` — thêm loại khối mới chỉ sửa `BlockFactory.SCENES_BY_TYPE`, không sửa 2 nơi. (Trước đây có `_make_material_unique` cho Nước; bỏ rồi vì Nước không còn material per-block — nó là isosurface gộp.)
+`scripts/data/block_catalog.gd` (`class_name BlockCatalog`) là nơi DUY NHẤT một khối được đăng ký: scene, có nằm trên hotbar không, phím tắt, dòng hint. `BlockFactory.instantiate(type)` (dùng chung bởi `PlacementController` đặt tay và `SaveManager` tải file), `MaterialUI` (thứ tự icon + hint) và `PlacementController` (keymap) đều ĐỌC từ catalog — thêm khối mới = thêm 1 entry vào `BlockCatalog.ALL` (xem docs/MAINTAIN.md mục 2). (Trước đây có `_make_material_unique` cho Nước; bỏ rồi vì Nước không còn material per-block — nó là isosurface gộp.)
 
 ## Autoload (thứ tự load = thứ tự khai báo trong `project.godot`)
 
@@ -217,7 +217,8 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
   **CHỈ ĐỘNG VÀO `scale`/`rotation`, TUYỆT ĐỐI KHÔNG `position`/`size`** — nút nằm trong `VBoxContainer`, mà container ghi đè position/size mỗi lần layout → animate 2 thứ đó là đánh nhau với container và giật. `pivot_offset` phải bám theo size (nối `resized`), không thì nút phóng từ góc trên-trái và trượt ngang.
   `quiet_hover=true` cho hotbar: rê chuột qua 16 icon mà kêu 16 tiếng thì hết dễ thương ngay.
 - **`critter_mesh.gd`** (`class_name CritterMesh`) — chim/mèo/vịt/hươu dựng bằng code (cầu + hộp, flat matte) thay vì .glb: tint được theo map theme, ~vài trăm tri mỗi con. Quy ước MỌI con: **+X là HƯỚNG TRƯỚC (đầu)**, gốc toạ độ nằm SÁT ĐẤT giữa 2 chân → `WildlifeManager` chỉ việc quay +X theo hướng đi và thả gốc lên mặt, không cần offset riêng từng loài.
-- **`block_factory.gd`** (`class_name BlockFactory`) — xem mục 5 "Quy ước cốt lõi". Dùng chung bởi `PlacementController` và `SaveManager`.
+- **`block_catalog.gd`** (`class_name BlockCatalog`) — đăng ký khối: scene / hotbar / phím / hint. Nguồn sự thật duy nhất, xem mục 5.
+- **`block_factory.gd`** (`class_name BlockFactory`) — chỉ còn `instantiate(type)`, đọc scene từ catalog. Dùng chung bởi `PlacementController` và `SaveManager`.
 
 ## `scripts/player/` — input & tương tác
 
