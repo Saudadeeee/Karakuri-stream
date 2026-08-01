@@ -45,34 +45,38 @@ void vertex() {
 }
 
 void fragment() {
-	// SOFT low-contrast blotches only — NO sine "ring" banding. The old
-	// world-Y sine rings drew hard dark zig-zag bands across the faces that
-	// read as carved grooves / hollow folds, making a solid block look
-	// see-through. artstyle.md wants flat matte clay, so keep the grain barely
-	// there: a gentle 3D-noise tint, nothing structured.
-	vec3 gp = v_world_pos * grain_scale * 0.5;
-	float n = value_noise(gp.xz + gp.y) * 0.6 + value_noise(gp.zy * 1.9) * 0.4;
-	float grain = smoothstep(0.35, 0.75, n);
+	// DIRECTIONAL grain — long soft streaks running along the timber, not
+	// isotropic blotches. Isotropic noise patches are exactly what soil looks
+	// like, and that is what this block kept being mistaken for. Real wood
+	// reads as wood through anisotropy: stretch the noise hard along world X
+	// on horizontal faces and along world Y (standing timber) on vertical
+	// ones, blended by the normal so the projection never smears.
+	float side = clamp(abs(v_world_normal.y), 0.0, 1.0); // 1 = top/bottom face
+	vec2 top_uv = vec2(v_world_pos.x * 0.9, v_world_pos.z * 5.0) * grain_scale * 0.5;
+	vec2 side_uv = vec2((v_world_pos.x + v_world_pos.z) * 0.9, v_world_pos.y * 5.0) * grain_scale * 0.5;
+	float n_top = value_noise(top_uv) * 0.7 + value_noise(top_uv * 2.3) * 0.3;
+	float n_side = value_noise(side_uv) * 0.7 + value_noise(side_uv * 2.3) * 0.3;
+	float n = mix(n_side, n_top, side);
+	float grain = smoothstep(0.3, 0.8, n);
 
 	vec3 albedo = mix(base_color, grain_color, grain * grain_strength);
 
 	// Baked directional shade from a fixed "sun" — differentiates EVERY face by
-	// orientation (top bright, sun-side bright, shadow-side dark, underside
-	// darkest). This is the cue that makes a smooth matte block read as a SOLID
-	// convex shape from any camera angle instead of a hollow/see-through one
-	// (a flat-lit rounded blob is otherwise convex/concave ambiguous — the
-	// hollow-face illusion the user kept seeing). Baked so it never depends on
-	// scene lighting lining up.
+	// orientation so a smooth matte block reads as a SOLID convex shape from
+	// any angle (anti hollow-face illusion). The shadow floor is kept HIGH:
+	// multiplying warm sand down past ~0.7 lands in mud territory, which was
+	// the other half of the "looks like dirt" report.
 	const vec3 SUN = normalize(vec3(0.35, 0.82, 0.45));
 	float lambert = dot(v_world_normal, SUN) * 0.5 + 0.5;
-	albedo *= mix(1.0 - top_shade, 1.0 + top_shade * 0.35, lambert);
+	albedo *= mix(1.0 - top_shade * 0.7, 1.0 + top_shade * 0.4, lambert);
 
 	// Rim light: fresnel toward the silhouette, lightened for a soft edge.
 	float fresnel = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), rim_power);
 	albedo = mix(albedo, rim_color, fresnel * rim_strength);
 
-	// Baked vertex AO from the isosurface builder (crevices darken).
-	ALBEDO = albedo * mix(0.55, 1.0, COLOR.r);
+	// Baked vertex AO from the isosurface builder — crevices darken, but only
+	// toward warm shadow, never toward mud.
+	ALBEDO = albedo * mix(0.7, 1.0, COLOR.r);
 	ROUGHNESS = 0.85;
 	SPECULAR = 0.15;
 }

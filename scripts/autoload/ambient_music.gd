@@ -1,26 +1,73 @@
 extends Node
 
-## Ambient soundscape director on the Music bus. Three layers, all feeding the
-## Master reverb for the floating-island wash:
-##  1. a soft looping CHILL MUSIC bed (a real relaxing track, low in the mix);
+## Ambient soundscape director on the Music bus — a small generative COMPOSER,
+## not a random-note sprinkler. Four layers, all feeding the Master reverb:
+##  1. a soft looping CHILL pad bed (real recording, far under everything);
 ##  2. a very quiet RAIN layer for cosy texture;
-##  3. generative pentatonic chime notes sprinkled on top at slow, irregular
-##     gaps — consonant and non-repeating, so the melody never loops audibly.
+##  3. a slow HARMONIC CLOCK: a low drone that wanders between tonal centres;
+##  4. a phrase-based melody engine on top.
+##
+## The music theory, and why it can never go sour:
+##
+##  - Everything — drone, melody, and every instrument the player strikes —
+##    draws from ONE shared pentatonic collection {C D E G A}. The five
+##    ROTATIONS of that collection are five different modes (C major-ish,
+##    A minor-ish, D dorian-ish, ...) built from the SAME pitches. So the
+##    harmonic clock changes the tonal centre — the light changes from major
+##    to minor and back — while the pitch set never moves, which means the
+##    player's chimes stay consonant through every chapter. Colour without
+##    clash risk.
+##  - Melody is a RANDOM WALK with stepwise bias (±1 scale step preferred,
+##    occasional small leaps). Uniform random picks sound like wind chimes in
+##    a storm; stepwise motion with rare leaps is what human melody does.
+##  - Notes come in PHRASES of 2-5 with breathing rests between, and a phrase
+##    sometimes ANSWERS the previous one — the same contour shifted one scale
+##    step (call and response). Structure the ear can follow, yet it never
+##    literally loops.
+##  - A minutes-long DENSITY swell (slow sine on the rest length) makes the
+##    whole thing ebb and flow instead of ticking like a clock.
 
-const MIN_GAP: float = 2.2
-const MAX_GAP: float = 5.5
-
-# CC0 (public domain, OpenGameArt). Only the still ambient PAD is used as the
-# bed — the synth/percussion track proved too lively and fought the water,
-# knocks and chimes that ARE the game. The bed sits far below them.
 const CHILL_BEDS: Array[AudioStream] = [
 	preload("res://assets/sounds/chill_ambient.ogg"),
 ]
 const RAIN_LAYER: AudioStream = preload("res://assets/sounds/rain_loop.ogg")
+const CHIME: AudioStream = preload("res://assets/sounds/517660__samuelgremaud__chimes-5.wav")
+const TINE: AudioStream = preload("res://assets/sounds/music_box_tine.ogg")
 
-var _timer: float = 0.0
-var _next_gap: float = 1.5   # first note comes in soon after start
+## Pentatonic degree ratios within one octave (C D E G A).
+const P: Array[float] = [1.0, 1.1225, 1.2599, 1.4983, 1.6818]
+## Tonal centres ordered so NEIGHBOURS are gentle moves (relative/fifth-ish):
+## C -> Am is the classic major->relative-minor sigh; A -> E and G -> D are
+## fifth-flavoured. The harmonic clock only steps to an adjacent entry.
+const ROOT_CIRCLE: Array[int] = [0, 4, 2, 3, 1]   # degrees: C A E G D
+
+## Melody walk: step distribution, heavily favouring neighbours.
+const STEPS: Array[int] = [-2, -1, -1, -1, 1, 1, 1, 2]
+const DEGREE_SPAN: int = 10          # two octaves of pentatonic degrees
+const CHAPTER_MIN: float = 24.0      # seconds between tonal-centre moves
+const CHAPTER_MAX: float = 44.0
+const PHRASE_REST_MIN: float = 2.6
+const PHRASE_REST_MAX: float = 6.5
+const NOTE_GAP_MIN: float = 0.4
+const NOTE_GAP_MAX: float = 1.05
+const DENSITY_PERIOD: float = 173.0  # slow breath over ~3 minutes
+const ANSWER_CHANCE: float = 0.35    # phrase echoes the previous, shifted
+const ECHO_CHANCE: float = 0.2      # single note repeats softly after a beat
+
 var _rain: AudioStreamPlayer
+
+# Harmonic clock state
+var _circle_pos: int = 0             # index into ROOT_CIRCLE
+var _chapter_timer: float = 0.0
+var _chapter_len: float = 8.0        # first chapter turns over quickly
+
+# Melody state
+var _degree: int = 4                 # where the walk currently stands
+var _phrase: Array[int] = []         # degrees still to play in this phrase
+var _prev_phrase: Array[int] = []    # for call-and-response
+var _note_timer: float = 0.0
+var _next_note_in: float = 3.0
+var _clock: float = 0.0              # for the density breath
 
 ## Rain sits differently in each map's soundscape: cosy and present in autumn,
 ## a whisper in spring/night, muted under snow (snow "absorbs" the world).
@@ -53,8 +100,89 @@ func _start_bed(stream: AudioStream, vol: float) -> AudioStreamPlayer:
 	return player
 
 func _process(delta: float) -> void:
-	_timer += delta
-	if _timer >= _next_gap:
-		_timer = 0.0
-		_next_gap = randf_range(MIN_GAP, MAX_GAP)
-		AudioManager.play_ambient_note()
+	_clock += delta
+
+	# -- harmonic clock: wander to an adjacent tonal centre, announce it with
+	# a low drone (root two octaves down, sometimes joined by a soft partner
+	# a fifth-ish above — 3 scale steps in pentatonic land).
+	_chapter_timer += delta
+	if _chapter_timer >= _chapter_len:
+		_chapter_timer = 0.0
+		_chapter_len = randf_range(CHAPTER_MIN, CHAPTER_MAX)
+		_circle_pos = wrapi(_circle_pos + (1 if randf() < 0.5 else -1), 0, ROOT_CIRCLE.size())
+		var root: int = ROOT_CIRCLE[_circle_pos]
+		_spawn_note(CHIME, P[root] * 0.25, randf_range(-16.0, -13.0))
+		if randf() < 0.6:
+			_spawn_note(CHIME, _degree_pitch(root + 3) * 0.25, -19.0)
+
+	# -- melody engine
+	_note_timer += delta
+	if _note_timer < _next_note_in:
+		return
+	_note_timer = 0.0
+
+	if _phrase.is_empty():
+		_phrase = _plan_phrase()
+		# The rest BEFORE a phrase carries the breathing: a minutes-long sine
+		# swells the music denser and thinner.
+		var breath: float = 1.0 + 0.5 * sin(TAU * _clock / DENSITY_PERIOD)
+		_next_note_in = randf_range(PHRASE_REST_MIN, PHRASE_REST_MAX) * breath
+		return
+
+	var degree: int = _phrase.pop_front()
+	_degree = degree
+	# First note of a phrase speaks; the rest trail quieter (natural taper).
+	var lead: bool = _phrase.size() >= 1
+	var vol: float = randf_range(-11.0, -8.0) if lead else randf_range(-15.0, -12.0)
+	# Timbre: music-box tine carries the line; a phrase-leading note sometimes
+	# rings brighter as real chimes.
+	var bright: bool = lead and randf() < 0.35
+	var pitch: float = _degree_pitch(degree) * (1.0 if bright else 0.5)
+	_spawn_note(CHIME if bright else TINE, pitch, vol)
+	if randf() < ECHO_CHANCE:
+		get_tree().create_timer(0.34).timeout.connect(
+			_spawn_note.bind(TINE, pitch, vol - 7.0))
+	_next_note_in = randf_range(NOTE_GAP_MIN, NOTE_GAP_MAX)
+
+## Compose the next phrase: either an ANSWER to the previous one (same contour
+## shifted a scale step — call and response) or a fresh walk that opens on a
+## chord tone of the current centre (root, or its third two steps up).
+func _plan_phrase() -> Array[int]:
+	var out: Array[int] = []
+	if not _prev_phrase.is_empty() and randf() < ANSWER_CHANCE:
+		var shift: int = 1 if randf() < 0.5 else -1
+		for d in _prev_phrase:
+			out.append(clampi(d + shift, 0, DEGREE_SPAN - 1))
+	else:
+		var root: int = ROOT_CIRCLE[_circle_pos]
+		var start: int = root + (0 if randf() < 0.6 else 2)
+		# Choose the octave nearest the walk's current position, so phrases
+		# connect instead of teleporting.
+		if absi(start + 5 - _degree) < absi(start - _degree):
+			start += 5
+		var d: int = clampi(start, 0, DEGREE_SPAN - 1)
+		out.append(d)
+		for i in randi_range(1, 4):
+			# Mostly stepwise; a rare leap resets toward the root's octave.
+			if randf() < 0.15:
+				d = clampi(root + (5 if d < 5 else 0), 0, DEGREE_SPAN - 1)
+			else:
+				d = clampi(d + STEPS.pick_random(), 0, DEGREE_SPAN - 1)
+			out.append(d)
+	_prev_phrase = out.duplicate()
+	return out
+
+## Degree index (0..9, two octaves) -> pitch ratio.
+func _degree_pitch(degree: int) -> float:
+	var d: int = clampi(degree, 0, DEGREE_SPAN - 1)
+	return P[d % 5] * (2.0 if d >= 5 else 1.0)
+
+func _spawn_note(stream: AudioStream, pitch: float, vol: float) -> void:
+	var player := AudioStreamPlayer.new()
+	player.bus = "Music"
+	player.stream = stream
+	player.pitch_scale = pitch * randf_range(0.995, 1.005)
+	player.volume_db = vol
+	add_child(player)
+	player.finished.connect(player.queue_free)
+	player.play()

@@ -20,7 +20,10 @@ const THEMES: Array = [
 		"sky_top": Color(0.42, 0.72, 0.71), "sky_horizon": Color(0.92, 0.78, 0.79),
 		"fog_color": Color(0.9, 0.82, 0.85), "fog_density": 0.006,
 		"sun_color": Color(1.0, 0.98, 0.92), "sun_energy": 0.9, "ambient_energy": 0.45,
-		"island_top": Color(0.55, 0.58, 0.44), "island_base": Color(0.4, 0.3, 0.22),
+		# Deep enough that a full-sun top-down view still reads GREEN — the old
+		# (0.55, 0.58, 0.44) went cream-white under sun 0.9 + ambient 0.45 +
+		# filmic, and the whole island looked overexposed from high angles.
+		"island_top": Color(0.45, 0.52, 0.35), "island_base": Color(0.4, 0.3, 0.22),
 		"mountain_tint": Color(1, 1, 1),
 		"foliage": Color(),  # keep authored greens
 		"feature": "sakura",
@@ -34,7 +37,7 @@ const THEMES: Array = [
 		"sky_top": Color(0.78, 0.55, 0.38), "sky_horizon": Color(0.97, 0.80, 0.55),
 		"fog_color": Color(0.95, 0.80, 0.60), "fog_density": 0.008,
 		"sun_color": Color(1.0, 0.85, 0.65), "sun_energy": 1.0, "ambient_energy": 0.4,
-		"island_top": Color(0.62, 0.50, 0.30), "island_base": Color(0.38, 0.26, 0.18),
+		"island_top": Color(0.54, 0.42, 0.24), "island_base": Color(0.38, 0.26, 0.18),
 		"mountain_tint": Color(1.0, 0.88, 0.76),
 		"foliage": Color(0.85, 0.45, 0.18),  # maple orange
 		"feature": "maple",
