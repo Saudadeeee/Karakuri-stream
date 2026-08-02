@@ -76,7 +76,8 @@ Wildlife arrives because of what you built, and does something back:
 - **1–0, -, =** select blocks · **Q** houses · click a hotbar icon again to cycle its variant
 - **Ctrl+Z / Ctrl+Y** undo/redo · **H** hide UI · **U** move the sun · **P** screenshot
 - **F11** fullscreen · **Esc** pause, where the journal and save/load live
-- Touch: one finger orbits, two fingers pinch-zoom
+- Touch: one finger orbits, two fingers pinch-zoom, and the **Erase / Undo**
+  buttons in the corner do what right-click and Ctrl+Z do on a desktop
 
 ### The journal
 

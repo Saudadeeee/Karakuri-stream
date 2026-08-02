@@ -110,6 +110,10 @@ func select_material(type: BlockData.Type) -> void:
 		_current_variant = 0
 	material_changed.emit(type, _current_variant)
 
+## When true a tap/left click DELETES instead of placing. Touch-only in practice;
+## the mouse keeps its right button.
+var erase_mode: bool = false
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		# Shortcuts live in BlockCatalog next to the block they select.
@@ -119,7 +123,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			_place_block()
+			# A tap on a touchscreen arrives here as an emulated left click, and
+			# there is no gesture that emulates a right one — so on a phone the
+			# only way to delete is this mode, driven by the on-screen Erase
+			# button (scripts/ui/touch_controls.gd).
+			if erase_mode:
+				_remove_block()
+			else:
+				_place_block()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
 			_remove_block()
 
@@ -139,7 +150,9 @@ func _raycast_from_mouse() -> Dictionary:
 var photo_mode: bool = false
 
 func _update_ghost() -> void:
-	if photo_mode:
+	# In erase mode the next tap deletes, so previewing a block that will never be
+	# placed there is a lie about what the finger is about to do.
+	if photo_mode or erase_mode:
 		_ghost_root.visible = false
 		_ghost_shadow.visible = false
 		_brackets.visible = false

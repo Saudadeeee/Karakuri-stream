@@ -10,6 +10,7 @@ extends Node
 ##   ui         keep the HUD visible (default hides it, as photo mode does)
 ##   settings   open the menu's settings panel before the shot
 ##   journal    open the pause menu's discovery journal before the shot
+##   credits    open the menu's credits panel before the shot
 var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
@@ -20,6 +21,7 @@ var _mixed := false
 var _pitch := -1.0
 var _open_settings := false
 var _open_journal := false
+var _open_credits := false
 var _yaw := 999.0
 
 func _ready() -> void:
@@ -40,6 +42,7 @@ func _ready() -> void:
 		elif a == "mixed": _mixed = true
 		elif a == "settings": _open_settings = true
 		elif a == "journal": _open_journal = true
+		elif a == "credits": _open_credits = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -163,6 +166,10 @@ func _ready() -> void:
 		s.call("_on_settings")
 		for _f in range(10):
 			await get_tree().process_frame
+	if _open_credits and s.has_method("_on_credits"):
+		s.call("_on_credits")
+		for _f in range(10):
+			await get_tree().process_frame
 	var pc := s.find_child("PlacementController", true, false)
 	if pc != null:
 		pc.set("photo_mode", true)
@@ -249,7 +256,9 @@ func _frame(root: Node) -> void:
 	if _pitch > 0.0:
 		cam.set("_pitch", deg_to_rad(_pitch))
 	if _yaw < 900.0:
-		cam.set("_yaw", deg_to_rad(_yaw))
+		# The rig turns by rotating the NODE (orbit_camera has no _yaw field), so
+		# setting one did nothing at all and every yaw= shot came out identical.
+		cam.rotation.y = deg_to_rad(_yaw)
 
 ## What the managers think exists, so a screenshot can be checked against it.
 ## WildlifeManager exists only on the web branch — resolved dynamically.

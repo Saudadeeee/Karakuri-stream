@@ -31,11 +31,16 @@ const THEMES: Array = [
 	},
 	{
 		"name": "Autumn",
-		"sky_top": Color(0.78, 0.55, 0.38), "sky_horizon": Color(0.97, 0.80, 0.55),
-		"fog_color": Color(0.95, 0.80, 0.60), "fog_density": 0.008,
+		# Every value here used to sit in one amber band — ground, rocks, sky and
+		# leaves — and the island read as a desert with a machine on it. The fix is
+		# a second anchor, not a different hue: a dusk-blue zenith over the warm
+		# horizon, cooler distant rock, and a ground dark enough to sit UNDER the
+		# sky instead of blending into it.
+		"sky_top": Color(0.46, 0.44, 0.56), "sky_horizon": Color(0.97, 0.80, 0.55),
+		"fog_color": Color(0.93, 0.79, 0.62), "fog_density": 0.008,
 		"sun_color": Color(1.0, 0.85, 0.65), "sun_energy": 1.0, "ambient_energy": 0.25,
-		"island_top": Color(0.62, 0.50, 0.30), "island_base": Color(0.38, 0.26, 0.18),
-		"mountain_tint": Color(1.0, 0.88, 0.76),
+		"island_top": Color(0.46, 0.38, 0.24), "island_base": Color(0.30, 0.21, 0.15),
+		"mountain_tint": Color(0.88, 0.84, 0.86),
 		"foliage": Color(0.85, 0.45, 0.18),  # maple orange
 		"feature": "maple",
 		"drift": {"color": Color(0.85, 0.42, 0.14), "size": Vector2(0.18, 0.18),
@@ -45,12 +50,16 @@ const THEMES: Array = [
 	},
 	{
 		"name": "Snow",
-		"sky_top": Color(0.55, 0.68, 0.82), "sky_horizon": Color(0.88, 0.92, 0.96),
+		# Snow was white ground under a white sky behind white rock: nothing for the
+		# eye to hold on to, and a build in the middle of it lost its silhouette.
+		# A real snow scene is carried by the DARK things left in it, so the pines
+		# go deep evergreen, the rock turns blue-grey and the zenith deepens.
+		"sky_top": Color(0.40, 0.55, 0.74), "sky_horizon": Color(0.88, 0.92, 0.96),
 		"fog_color": Color(0.88, 0.92, 0.96), "fog_density": 0.011,
 		"sun_color": Color(0.92, 0.96, 1.0), "sun_energy": 0.8, "ambient_energy": 0.34,
-		"island_top": Color(0.90, 0.93, 0.95), "island_base": Color(0.52, 0.56, 0.62),
-		"mountain_tint": Color(1, 1, 1),
-		"foliage": Color(0.80, 0.88, 0.90),  # frosted
+		"island_top": Color(0.85, 0.89, 0.93), "island_base": Color(0.44, 0.49, 0.57),
+		"mountain_tint": Color(0.80, 0.86, 0.94),
+		"foliage": Color(0.30, 0.44, 0.42),  # evergreen under snow, not frosted white
 		"feature": "pine",
 		"drift": {"color": Color(0.98, 0.99, 1.0), "size": Vector2(0.10, 0.10),
 			"gravity": -0.28, "amount": 34, "glow": false},

@@ -338,7 +338,7 @@ func refresh_shape() -> bool:
 	# Everything above went into ONE mesh, grouped by colour: four or five draw
 	# calls per cell instead of one per plank.
 	var mi := MeshInstance3D.new()
-	mi.mesh = _batch.build(_material_for)
+	mi.mesh = _batch.build_merged(shared_material(), _special_material)
 	_visual.add_child(mi)
 	_batch = null
 	if _pop_pending:
@@ -504,14 +504,28 @@ func _glass_col() -> Color:
 
 ## One material per batched colour. Glass at night becomes the emitter the
 ## windows breathe through.
-func _material_for(col: Color) -> StandardMaterial3D:
-	var m := MeshFit.flat(col)
+## The whole town shares this one matte material and carries its colours in the
+## vertex stream. Created once, never per cell — a town of 120 houses used to
+## allocate ~600 StandardMaterial3D and pay a draw call for each.
+static var _shared_mat: StandardMaterial3D
+
+static func shared_material() -> StandardMaterial3D:
+	if _shared_mat == null:
+		_shared_mat = MeshFit.flat(Color.WHITE)
+		_shared_mat.vertex_color_use_as_albedo = true
+	return _shared_mat
+
+## Only the lit night window needs a material of its own, because it emits. Every
+## other colour rides the shared one, so this returns null for them.
+func _special_material(col: Color) -> Variant:
 	if MapThemes.current == NIGHT_THEME and col.is_equal_approx(GLASS_NIGHT):
+		var m := MeshFit.flat(col)
 		m.emission_enabled = true
 		m.emission = GLASS_NIGHT
 		m.emission_energy_multiplier = 1.0
 		_glow.append(m)
-	return m
+		return m
+	return null
 
 # ---------------------------------------------------------------- underneath
 ## What a cell standing in mid-air does about it. Without this, a house placed on

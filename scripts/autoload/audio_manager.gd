@@ -50,6 +50,51 @@ func _ready() -> void:
 		add_child(player)
 		_pool.append(player)
 
+## Alt-tabbing away used to leave the garden playing into an empty desktop. The
+## Master bus ducks instead of muting so coming back is a fade, not a click, and
+## the player's own volume is untouched — the offset is applied on top of it.
+##
+## Off by default is wrong for a game people leave running on purpose, so it is a
+## setting; on by default because a background window that keeps making noise is
+## the more common complaint.
+const UNFOCUSED_DUCK_DB: float = -32.0
+const SETTINGS_PATH: String = "user://settings.cfg"
+
+var _ducked: bool = false
+
+func duck_when_unfocused() -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) != OK:
+		return true
+	return bool(cfg.get_value("audio", "duck_unfocused", true))
+
+func set_duck_when_unfocused(on: bool) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("audio", "duck_unfocused", on)
+	cfg.save(SETTINGS_PATH)
+	if not on and _ducked:
+		_set_duck(false)
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED:
+			if duck_when_unfocused():
+				_set_duck(true)
+		NOTIFICATION_APPLICATION_FOCUS_IN, NOTIFICATION_APPLICATION_RESUMED:
+			_set_duck(false)
+
+func _set_duck(on: bool) -> void:
+	if on == _ducked:
+		return
+	_ducked = on
+	var idx: int = AudioServer.get_bus_index("Master")
+	if idx < 0:
+		return
+	# Relative, so a player who set Master to 30% comes back to 30%.
+	var db: float = AudioServer.get_bus_volume_db(idx)
+	AudioServer.set_bus_volume_db(idx, db + (UNFOCUSED_DUCK_DB if on else -UNFOCUSED_DUCK_DB))
+
 func _on_node_added(n: Node) -> void:
 	if n is Button:
 		n.mouse_entered.connect(play_ui_pop.bind(true))

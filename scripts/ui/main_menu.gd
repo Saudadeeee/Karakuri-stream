@@ -22,6 +22,7 @@ var _map_cards: Array[Button] = []
 ## refreshes from the real state every time it opens rather than trusting a
 ## cached bool.
 var _settings_widgets: Array[Callable] = []
+var _credits_panel: PanelContainer
 
 func _ready() -> void:
 	MapThemes.load_current()
@@ -293,6 +294,15 @@ func _build_ui() -> void:
 		quit_b.custom_minimum_size = Vector2(130, 48)
 		row.add_child(quit_b)
 
+	# Credits. CC0 asks for nothing and the font's OFL only asks that the licence
+	# travel with the file, so this is not a legal obligation — it is the one
+	# place the people whose recordings this game is built out of get named where
+	# a player can actually see it.
+	var credits_b := _menu_button("Credits", _on_credits)
+	credits_b.custom_minimum_size = Vector2(130, 40)
+	credits_b.add_theme_font_size_override("font_size", 15)
+	col.add_child(credits_b)
+
 	# Version, small and out of the way. A build with no version on it is
 	# untraceable the moment two copies exist in the wild.
 	var ver := Label.new()
@@ -380,7 +390,7 @@ func _menu_button(text: String, cb: Callable) -> Button:
 func _build_settings_panel(root: Control) -> void:
 	_settings_panel = Panel.new()
 	var tall: bool = not OS.has_feature("web")
-	var panel_size := Vector2(380, 470 if tall else 340)
+	var panel_size := Vector2(380, 512 if tall else 382)
 	_settings_panel.custom_minimum_size = panel_size
 	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_settings_panel.position = -panel_size * 0.5
@@ -404,6 +414,9 @@ func _build_settings_panel(root: Control) -> void:
 	box.add_child(_slider_row("Master", "Master"))
 	box.add_child(_slider_row("Music", "Music"))
 	box.add_child(_slider_row("Effects", "SFX"))
+	box.add_child(_toggle_row("Mute away",
+		func() -> bool: return AudioManager.duck_when_unfocused(),
+		func(on: bool) -> void: AudioManager.set_duck_when_unfocused(on)))
 
 	box.add_child(_section_label("Screen"))
 	# A browser tab cannot resize itself and has no vsync switch of its own, so
@@ -540,6 +553,86 @@ func _slider_row(label_text: String, bus_name: String) -> HBoxContainer:
 # --------------------------------------------------------------- actions
 func _on_play() -> void:
 	get_tree().change_scene_to_file(MAIN_SCENE)
+
+## The panel reads CREDITS.md straight out of the pack rather than keeping a
+## second copy of the same list in code — two copies of an attribution list is
+## how one of them ends up wrong.
+func _on_credits() -> void:
+	if _credits_panel != null and is_instance_valid(_credits_panel):
+		_credits_panel.visible = not _credits_panel.visible
+		return
+	var size := Vector2(620, 470)
+	_credits_panel = PanelContainer.new()
+	_credits_panel.custom_minimum_size = size
+	_credits_panel.size = size
+	var ui: Control = _settings_panel.get_parent()
+	ui.add_child(_credits_panel)
+	var place := func() -> void:
+		var vp: Vector2 = _credits_panel.get_viewport_rect().size
+		_credits_panel.position = (vp - _credits_panel.size) * 0.5
+	_credits_panel.resized.connect(place)
+	get_viewport().size_changed.connect(place)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	_credits_panel.add_child(box)
+	var head := Label.new()
+	head.text = "Credits"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 22)
+	box.add_child(head)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	var text := Label.new()
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.add_theme_font_size_override("font_size", 12)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.text = _credits_text()
+	scroll.add_child(text)
+
+	var close := Button.new()
+	close.text = "Close"
+	close.custom_minimum_size = Vector2(0, 40)
+	close.pressed.connect(func() -> void: _credits_panel.visible = false)
+	box.add_child(close)
+	CuteButton.apply_all(_credits_panel)
+	place.call()
+
+## Markdown stripped down to something a Label can show: the tables in
+## CREDITS.md are for reading on GitHub, and pipes and hashes on screen just look
+## like a file someone forgot to format.
+func _credits_text() -> String:
+	var f := FileAccess.open("res://CREDITS.md", FileAccess.READ)
+	if f == null:
+		return "See CREDITS.md in the game folder."
+	var out: PackedStringArray = []
+	for raw in f.get_as_text().split("
+"):
+		var line: String = raw.strip_edges()
+		f = f  # keep the handle alive for the whole loop
+		if line.begins_with("|---") or line.is_empty():
+			continue
+		if line.begins_with("#"):
+			out.append("")
+			out.append(line.lstrip("# ").to_upper())
+			continue
+		if line.begins_with("|"):
+			var cells: PackedStringArray = []
+			for c in line.split("|"):
+				var t: String = c.strip_edges()
+				if t.is_empty():
+					continue
+				# "[218460](https://…)" -> "218460"
+				if t.begins_with("["):
+					t = t.substr(1, maxi(t.find("]") - 1, 0))
+				cells.append(t)
+			out.append("  " + " · ".join(cells))
+			continue
+		out.append(line.replace("**", ""))
+	return "
+".join(out)
 
 func _on_settings() -> void:
 	_settings_panel.visible = not _settings_panel.visible

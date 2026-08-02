@@ -40,10 +40,19 @@ func _ready() -> void:
 ## Shadows stay OFF even on desktop: an omni shadow costs a cubemap pass per
 ## light, and a garden can hold a lot of lanterns. The pool of light is the whole
 ## point; the shadows are not.
+## How much of the cast pool survives each map's daylight, by theme index.
+## One energy for every map put a hard white blob on the grass in daylight — the
+## pool only reads as lantern light when there is darkness for it to sit in.
+## At night it is the whole point, so night keeps all of it.
+const LIGHT_BY_THEME: Array[float] = [0.30, 0.38, 0.22, 1.0]
+
+static func _theme_light() -> float:
+	return LIGHT_BY_THEME[clampi(MapThemes.current, 0, LIGHT_BY_THEME.size() - 1)]
+
 func _add_real_light() -> void:
 	var lamp := OmniLight3D.new()
 	lamp.light_color = GLOW
-	lamp.light_energy = 1.5
+	lamp.light_energy = 1.5 * _theme_light()
 	lamp.omni_range = 4.2
 	lamp.omni_attenuation = 1.6
 	lamp.shadow_enabled = false
@@ -87,4 +96,4 @@ func _process(_delta: float) -> void:
 	# The cast light breathes with the panels, or the pool on the ground would sit
 	# dead still while the lantern itself flickers.
 	if is_instance_valid(_lamp):
-		_lamp.light_energy = lerpf(_lamp.light_energy, e * 1.35, 0.25)
+		_lamp.light_energy = lerpf(_lamp.light_energy, e * 1.35 * _theme_light(), 0.25)

@@ -88,6 +88,51 @@ func is_empty() -> bool:
 
 ## Bake into one mesh. `mat_for` is called once per colour so the caller can
 ## return a plain matte material, an emissive one for glass, and so on.
+## ONE surface for the whole batch, colours carried per vertex.
+##
+## `build()` cuts a surface per colour, which is four or five draw calls for a
+## house cell — fine for one house, 600 for a town of 120. Everything here shares
+## one flat matte material, so the only reason for the split was the colour, and
+## a vertex colour carries that for free: 120 draw calls instead of 600, and one
+## material for the whole town instead of five per cell.
+##
+## `special` may return a Material for colours that genuinely need their own
+## (the night window glow, which is emissive). Those keep a surface of their own.
+##
+## Colours are written into the vertex stream exactly as authored. Converting
+## them to linear first (the usual advice) came out black on the compatibility
+## renderer, which already treats a vertex colour the same way it treats an
+## albedo colour.
+func build_merged(shared: Material, special: Callable = Callable()) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	for key in _verts:
+		var col: Color = _colors[key]
+		var mat: Variant = special.call(col) if special.is_valid() else null
+		if mat != null:
+			var arrays: Array = []
+			arrays.resize(Mesh.ARRAY_MAX)
+			arrays[Mesh.ARRAY_VERTEX] = _verts[key]
+			arrays[Mesh.ARRAY_NORMAL] = _norms[key]
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+			mesh.surface_set_material(mesh.get_surface_count() - 1, mat as Material)
+			continue
+		verts.append_array(_verts[key])
+		norms.append_array(_norms[key])
+		for _i in (_verts[key] as PackedVector3Array).size():
+			cols.append(col)
+	if not verts.is_empty():
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = norms
+		arrays[Mesh.ARRAY_COLOR] = cols
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, shared)
+	return mesh
+
 func build(mat_for: Callable) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var i := 0

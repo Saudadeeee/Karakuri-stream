@@ -55,6 +55,8 @@ func _ready() -> void:
 	await _sec_save_durability()
 	print("SECTION _sec_discovery")
 	await _sec_discovery()
+	print("SECTION _sec_batching_and_touch")
+	await _sec_batching_and_touch()
 	print("SECTION _sec_house_audit")
 	await _sec_house_audit()
 	print("SECTION _sec_no_stale_geometry")
@@ -1528,6 +1530,42 @@ func _sec_discovery() -> void:
 	DiscoveryLog._found = before
 	DiscoveryLog._save()
 	await get_tree().process_frame
+
+## 6d. Two things that are invisible until they are gone: the town's draw calls,
+## and the only way a touch player can delete anything.
+func _sec_batching_and_touch() -> void:
+	# One surface for every plain colour, not one surface per colour. This is the
+	# difference between ~1400 and ~4100 draw calls in a 120-house town, and
+	# nothing on screen would look different if it silently went back.
+	var batch := MeshBatch.new()
+	batch.box(Vector3.ONE, Vector3.ZERO, Color.RED)
+	batch.box(Vector3.ONE, Vector3(2, 0, 0), Color.GREEN)
+	batch.box(Vector3.ONE, Vector3(4, 0, 0), Color.BLUE)
+	var shared := MeshFit.flat(Color.WHITE)
+	shared.vertex_color_use_as_albedo = true
+	var merged: ArrayMesh = batch.build_merged(shared)
+	_check(merged.get_surface_count() == 1, "three colours batch into one surface")
+	var arrays: Array = merged.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var cols: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	_check(cols.size() == verts.size(), "every vertex carries its colour")
+	var seen: Dictionary = {}
+	for c in cols:
+		seen[c.to_html()] = true
+	_check(seen.size() == 3, "the three colours survive the merge")
+
+	# A colour that needs its own material (the lit night window) still gets one.
+	var split := func(col: Color) -> Variant:
+		return MeshFit.flat(col) if col.is_equal_approx(Color.GREEN) else null
+	var mixed: ArrayMesh = batch.build_merged(shared, split)
+	_check(mixed.get_surface_count() == 2, "a special colour keeps a surface of its own")
+
+	# Touch: erase mode is the only delete a phone has, and it must start OFF or
+	# the first tap of a new game destroys something.
+	var pc: Node = game.find_child("PlacementController", true, false)
+	_check(pc != null and not bool(pc.get("erase_mode")), "erase mode starts off")
+	var touch := preload("res://scripts/ui/touch_controls.gd")
+	_check(touch.should_show() == touch.should_show(), "touch detection does not crash")
 
 ## 7. Removing blocks mid-activity must not error or leave ghosts.
 func _sec_removal_during_activity() -> void:
