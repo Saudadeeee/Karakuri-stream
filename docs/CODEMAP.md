@@ -78,9 +78,11 @@ assets/
   3DModel/blockbench/    Source authoring cho pipeline Blockbench→GLB: `*.obj` + `*_cmap.json` + `bb_bridge.py` + README. GLB thành phẩm được copy sang `generated/`, KHÔNG giữ bản trung gian ở đây
 
 default_bus_layout.tres  3 bus: Master (Reverb) ← Music (-10dB) + SFX. Đăng ký trong project.godot [audio]
-export_presets.cfg       Cấu hình export Windows Desktop + Web (xem mục Export bên dưới)
-build/                   Output export DUY NHẤT — KHÔNG commit (.gitignore), tự tạo lại bằng lệnh export.
-                         `build/.gdignore` được commit CÓ CHỦ Ý (`git add -f`): thiếu nó Godot quét lại
+export_presets.cfg       5 preset: Windows Desktop, Linux, Android, iOS, Web (xem mục Export bên dưới)
+tools/package.ps1        Build + đóng gói cả 4 nền tảng build được (win/linux/android/web) bằng 1 lệnh
+export/                  Output export DUY NHẤT — KHÔNG commit (.gitignore), tự tạo lại bằng lệnh export.
+                         `export/<platform>/` = bản chạy được, `export/dist/` = file .zip/.apk đem phát hành.
+                         `export/.gdignore` được commit CÓ CHỦ Ý (`git add -f`): thiếu nó Godot quét lại
                          PNG trong output export thành asset project → import ngược vào .godot/imported →
                          bị nhồi vào lần export sau (vòng lặp phình dung lượng). ĐỪNG xoá file đó
 ```
@@ -297,17 +299,24 @@ Mọi file trong `assets/sounds/` đều có ref thật trong code. Thêm file m
 | `rain_loop.ogg` | `AmbientMusic.RAIN_LAYER` (layer mưa) | |
 | `default_bus_layout.tres` | Bus Master + `AudioEffectReverb` | Thông số `room_size`/`wet`/`damping` là ước lượng, CHƯA nghe thử thật — cần tinh chỉnh bằng tai |
 
-## Export (Windows Desktop + Web)
+## Export (5 preset)
 
-`export_presets.cfg` có preset `"Windows Desktop"`, `"Web"`, `"Android"`, `"iOS"`. Dùng **binary Godot official**, KHÔNG dùng bản Steam (bản Steam nuốt text lỗi export → debug mù). Template ở `%APPDATA%/Godot/export_templates/4.7.1.stable/`. Chi tiết đầy đủ 3 nền tảng: `docs/BUILD.md`.
+`export_presets.cfg` có `"Windows Desktop"`, `"Linux"`, `"Android"`, `"iOS"`, `"Web"`. Dùng **binary Godot official**, KHÔNG dùng bản Steam (bản Steam nuốt text lỗi export → debug mù). Template ở `%APPDATA%/Godot/export_templates/4.7.1.stable/` (bản .tpz đầy đủ, không phải bản chỉ có web/android). Chi tiết đầy đủ từng nền tảng: `docs/BUILD.md`.
 
-Lệnh export (chạy từ thư mục project, headless không cần mở editor). Output vào `build/` — thư mục output DUY NHẤT, khớp `export_path` trong preset:
+Đóng gói tất cả bằng 1 lệnh — build + kèm README + zip vào `export/dist/`:
 ```
-godot --headless --path . --export-release "Windows Desktop" build/windows/karakuri-stream.exe
-godot --headless --path . --export-release "Web" build/web/index.html
+powershell -ExecutionPolicy Bypass -File tools/package.ps1
+powershell -ExecutionPolicy Bypass -File tools/package.ps1 -Only windows,web
 ```
 
-**Web — bắt buộc serve qua HTTP, không mở trực tiếp file `index.html`** (WASM/CORS sẽ chặn nếu mở qua `file://`). Web export cần header `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` (do `GODOT_CONFIG.ensureCrossOriginIsolationHeaders=true` trong `index.html`) — server tĩnh trần (`python -m http.server`) KHÔNG tự gắn 2 header này, cần server tuỳ chỉnh set thêm (xem ví dụ inline trong `end_headers()` override của `http.server.SimpleHTTPRequestHandler`). Các host thật như itch.io/GitHub Pages (qua service worker) thường tự lo việc này.
+Hoặc gọi trực tiếp từng preset (thư mục đích phải tồn tại sẵn, Godot không tự tạo):
+```
+godot --headless --path . --export-release "Windows Desktop" export/windows/KarakuriStream.exe
+godot --headless --path . --export-release "Web" export/web/index.html
+```
+Output vào `export/` — thư mục output DUY NHẤT, khớp `export_path` trong preset. iOS không build được trên Windows (toolchain ký của Apple chỉ chạy macOS).
+
+**Web — bắt buộc serve qua HTTP, không mở trực tiếp file `index.html`** (WASM/CORS sẽ chặn nếu mở qua `file://`). Nhưng KHÔNG cần header COOP/COEP: preset dùng template `web_nothreads` (`variant/thread_support=false`) nên không đụng SharedArrayBuffer, và `progressive_web_app/enabled=false` nên nhánh `ensureCrossOriginIsolationHeaders` trong `index.html` không bao giờ chạy (nó đòi cả `GODOT_CONFIG['serviceWorker']`). `python -m http.server` trần là đủ; itch.io / GitHub Pages / S3 cũng đủ. Nếu sau này bật `thread_support=true` thì 2 header đó trở lại thành bắt buộc.
 
 `variant/thread_support=false` trong preset Web — cố tình tắt threading để tương thích rộng hơn (không cần server đặc biệt nào khác ngoài 2 header COOP/COEP ở trên). Nếu sau này cần threading (đa luồng thật trong WASM), phải bật lại field này VÀ đảm bảo host set đúng header, nếu không trang sẽ load được nhưng game treo/lỗi khi khởi tạo.
 
