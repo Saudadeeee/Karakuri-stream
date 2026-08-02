@@ -75,14 +75,23 @@ Wildlife arrives because of what you built, and does something back:
 - **Left click** place · **Right click** remove · **Middle drag** orbit · **Scroll** zoom
 - **1–0, -, =** select blocks · **Q** houses · click a hotbar icon again to cycle its variant
 - **Ctrl+Z / Ctrl+Y** undo/redo · **H** hide UI · **U** move the sun · **P** screenshot
+- **F11** fullscreen · **Esc** pause, where the journal and save/load live
 - Touch: one finger orbits, two fingers pinch-zoom
+
+### The journal
+
+The town does things nobody asked it to — a spire, a terrace, a courtyard,
+bunting — and all of them are earned by a shape, not rolled. The journal notices
+the first time your garden produces one, says what happened, and keeps the list
+(**Esc → Journal**). Everything you have not found yet reads `? ? ?`: naming it
+would be handing out the recipe, and finding it is the game.
 
 ### Four maps
 
 Spring (sakura & petals), Autumn (amber & falling leaves), Snow (hushed
 white), Night (fireflies — percussion sparks light). Same garden, different
-world; ambience and palette retune per map. Progress saves to `user://` —
-save, load, and clear from the pause menu.
+world; ambience and palette retune per map. Progress saves to `user://` — and
+saves itself: on a timer, when the window loses focus, and when you close it.
 
 ## The sound
 
@@ -123,4 +132,4 @@ tests/           regression suite
 ```
 
 All third-party assets are CC0; the font is OFL — details in
-[CREDITS.md](CREDITS.md). Version: 0.0.0.
+[CREDITS.md](CREDITS.md). Version: 1.0.0.

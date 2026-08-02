@@ -17,6 +17,11 @@ var _settings_panel: Panel
 var _env: Environment
 var _sun: DirectionalLight3D
 var _map_cards: Array[Button] = []
+## Re-read-your-own-state callbacks for the settings rows. F11 and the window
+## manager can change fullscreen without going through the panel, so the panel
+## refreshes from the real state every time it opens rather than trusting a
+## cached bool.
+var _settings_widgets: Array[Callable] = []
 
 func _ready() -> void:
 	MapThemes.load_current()
@@ -288,6 +293,15 @@ func _build_ui() -> void:
 		quit_b.custom_minimum_size = Vector2(130, 48)
 		row.add_child(quit_b)
 
+	# Version, small and out of the way. A build with no version on it is
+	# untraceable the moment two copies exist in the wild.
+	var ver := Label.new()
+	ver.text = "v%s" % str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.4)
+	ver.add_theme_font_size_override("font_size", 12)
+	col.add_child(ver)
+
 	var hint := Label.new()
 	hint.text = "drop blocks · hear the stream · relax"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -365,28 +379,49 @@ func _menu_button(text: String, cb: Callable) -> Button:
 # ------------------------------------------------------------ settings panel
 func _build_settings_panel(root: Control) -> void:
 	_settings_panel = Panel.new()
-	_settings_panel.custom_minimum_size = Vector2(360, 300)
+	var tall: bool = not OS.has_feature("web")
+	var panel_size := Vector2(380, 470 if tall else 340)
+	_settings_panel.custom_minimum_size = panel_size
 	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_settings_panel.position = Vector2(-180, -150)
+	_settings_panel.position = -panel_size * 0.5
 	_settings_panel.visible = false
 	root.add_child(_settings_panel)
 
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.add_theme_constant_override("separation", 14)
+	box.add_theme_constant_override("separation", 10)
 	box.offset_left = 24; box.offset_top = 22
 	box.offset_right = -24; box.offset_bottom = -22
 	_settings_panel.add_child(box)
 
 	var head := Label.new()
-	head.text = "Audio settings"
+	head.text = "Settings"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 24)
 	box.add_child(head)
 
+	box.add_child(_section_label("Sound"))
 	box.add_child(_slider_row("Master", "Master"))
 	box.add_child(_slider_row("Music", "Music"))
 	box.add_child(_slider_row("Effects", "SFX"))
+
+	box.add_child(_section_label("Screen"))
+	# A browser tab cannot resize itself and has no vsync switch of its own, so
+	# the web build gets the one control that does work there.
+	if not OS.has_feature("web"):
+		box.add_child(_size_row())
+		box.add_child(_toggle_row("V-Sync",
+			func() -> bool: return DisplaySettings.is_vsync(),
+			func(on: bool) -> void: DisplaySettings.set_vsync(on)))
+	box.add_child(_toggle_row("Fullscreen",
+		func() -> bool: return DisplaySettings.is_fullscreen(),
+		func(on: bool) -> void: DisplaySettings.set_fullscreen(on)))
+	var f11 := Label.new()
+	f11.text = "F11 toggles fullscreen anywhere"
+	f11.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	f11.add_theme_font_size_override("font_size", 12)
+	f11.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.6)
+	box.add_child(f11)
 
 	var gap := Control.new()
 	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -394,9 +429,96 @@ func _build_settings_panel(root: Control) -> void:
 
 	var close := Button.new()
 	close.text = "Close"
-	close.custom_minimum_size = Vector2(0, 48)
+	close.custom_minimum_size = Vector2(0, 44)
 	close.pressed.connect(func(): _settings_panel.visible = false)
 	box.add_child(close)
+
+func _section_label(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 15)
+	l.modulate = Color(SALMON.r, SALMON.g, SALMON.b, 0.95)
+	return l
+
+## Label + a button that reads its own state. The getter is re-read after every
+## press instead of tracking a bool here, because F11 and the OS can both change
+## fullscreen behind this panel's back.
+func _toggle_row(label_text: String, getter: Callable, setter: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var l := Label.new()
+	l.text = label_text
+	l.custom_minimum_size = Vector2(96, 0)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(96, 36)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.text = "On" if bool(getter.call()) else "Off"
+	b.pressed.connect(func() -> void:
+		setter.call(not bool(getter.call()))
+		b.text = "On" if bool(getter.call()) else "Off")
+	row.add_child(b)
+	_settings_widgets.append(func() -> void:
+		b.text = "On" if bool(getter.call()) else "Off")
+	return row
+
+## < 1280 x 720 > — a stepper rather than a dropdown so the popup never has to be
+## themed to match a UI that is otherwise entirely hand-built. ASCII arrows on
+## purpose: the pixel font has no U+25C0/U+25B6 and drew them as tofu boxes.
+func _size_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var l := Label.new()
+	l.text = "Window"
+	l.custom_minimum_size = Vector2(96, 0)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+
+	var value := Label.new()
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var refresh := func() -> void:
+		var i: int = DisplaySettings.size_index()
+		var s: Vector2i = DisplaySettings.SIZES[i] if i >= 0 else DisplayServer.window_get_size()
+		value.text = "%d x %d" % [s.x, s.y]
+
+	var step := func(dir: int) -> void:
+		var sizes: Array[Vector2i] = DisplaySettings.SIZES
+		var i: int = DisplaySettings.size_index()
+		if i < 0:
+			# Currently a hand-dragged size: step to the nearest listed one.
+			i = 0
+			var w: int = DisplayServer.window_get_size().x
+			for k in sizes.size():
+				if sizes[k].x <= w:
+					i = k
+		var next: int = clampi(i + dir, 0, sizes.size() - 1)
+		# Never offer a window taller than the screen it has to fit on.
+		var usable: Vector2i = DisplayServer.screen_get_usable_rect(
+			DisplayServer.window_get_current_screen()).size
+		while next > 0 and (sizes[next].x > usable.x or sizes[next].y > usable.y):
+			next -= 1
+		DisplaySettings.set_window_size(sizes[next])
+		refresh.call()
+
+	var left := Button.new()
+	left.text = "<"
+	left.custom_minimum_size = Vector2(38, 36)
+	left.pressed.connect(func() -> void: step.call(-1))
+	row.add_child(left)
+	row.add_child(value)
+	var right := Button.new()
+	right.text = ">"
+	right.custom_minimum_size = Vector2(38, 36)
+	right.pressed.connect(func() -> void: step.call(1))
+	row.add_child(right)
+
+	refresh.call()
+	_settings_widgets.append(refresh)
+	return row
 
 func _slider_row(label_text: String, bus_name: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
@@ -421,6 +543,9 @@ func _on_play() -> void:
 
 func _on_settings() -> void:
 	_settings_panel.visible = not _settings_panel.visible
+	if _settings_panel.visible:
+		for refresh in _settings_widgets:
+			refresh.call()
 
 func _on_quit() -> void:
 	get_tree().quit()

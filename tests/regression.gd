@@ -51,6 +51,10 @@ func _ready() -> void:
 	await _sec_stream_ground()
 	print("SECTION _sec_save_corruption")
 	await _sec_save_corruption()
+	print("SECTION _sec_save_durability")
+	await _sec_save_durability()
+	print("SECTION _sec_discovery")
+	await _sec_discovery()
 	print("SECTION _sec_house_audit")
 	await _sec_house_audit()
 	print("SECTION _sec_no_stale_geometry")
@@ -99,6 +103,23 @@ func _b(cell: Vector3i, type: int, variant: int = 0, axis = null) -> Node3D:
 	if inst.has_method("refresh_shape"):
 		inst.refresh_shape()
 	return inst
+
+## House rebuilds are budgeted to a few cells per frame (house_block.gd), so a
+## town converges over several frames instead of one. Waiting a fixed number of
+## frames would make these tests a race against that budget; wait for the work
+## to actually be finished instead.
+func _settle_houses(limit: int = 90) -> void:
+	for _f in range(limit):
+		await get_tree().process_frame
+		var pending := false
+		for cell in GridManager.get_all_cells_of_type(BlockData.Type.HOUSE):
+			var node: Node = GridManager.get_block(cell).node
+			if is_instance_valid(node) and bool(node.get("_dirty")):
+				pending = true
+				break
+		if not pending:
+			return
+	_fails.append("houses never stopped rebuilding within %d frames" % limit)
 
 func _check(cond: bool, label: String) -> void:
 	if not cond:
@@ -842,6 +863,12 @@ func _sec_no_stale_geometry() -> void:
 		# roof surface that the edit should have taken away.
 		{"n": "3x3x2 blob, corner removed", "cells": _blob(Vector3i(0, 0, z + 10), 3, 2, 3),
 			"drop": Vector3i(2, 1, z + 12)},
+		# Crossing the decor-tier threshold (8 cells) changes planters, awnings and
+		# roof gardens on cells nowhere near the edit. house_block reuses the
+		# expensive half of its digest when an edit lands outside REACH, so this is
+		# the case that catches it reusing when it must not.
+		{"n": "row drops below the decor-tier threshold",
+			"cells": _row(Vector3i(0, 0, z + 18), Vector3i(1, 0, 0), 8), "drop": Vector3i(7, 0, z + 18)},
 		{"n": "tower beside a wing, tower topped",
 			"cells": [Vector3i(0,0,z+14), Vector3i(0,1,z+14), Vector3i(0,2,z+14), Vector3i(0,3,z+14),
 					Vector3i(1,0,z+14), Vector3i(1,0,z+15), Vector3i(0,0,z+15)],
@@ -860,11 +887,9 @@ func _sec_no_stale_geometry() -> void:
 		await get_tree().process_frame
 		for c in cells:
 			_b(c, BlockData.Type.HOUSE)
-		for _f in range(3):
-			await get_tree().process_frame
+		await _settle_houses()
 		GridManager.remove_block(drop)
-		for _f in range(4):
-			await get_tree().process_frame
+		await _settle_houses()
 		var edited := _house_print(left)
 
 		# Route B: build only the survivors, from nothing.
@@ -872,8 +897,7 @@ func _sec_no_stale_geometry() -> void:
 		await get_tree().process_frame
 		for c in left:
 			_b(c, BlockData.Type.HOUSE)
-		for _f in range(4):
-			await get_tree().process_frame
+		await _settle_houses()
 		var fresh := _house_print(left)
 
 		_check(edited == fresh, "stale geometry after '%s'\n    edited %s\n    fresh  %s" % [case["n"], edited, fresh])
@@ -1341,6 +1365,10 @@ func _sec_stream_ground() -> void:
 ## error partway through rebuilding, so a truncated file (a browser tab closed
 ## mid-flush is enough) wiped the current build and restored nothing.
 func _sec_save_corruption() -> void:
+	# load_game() falls back to the backup generation, so a leftover backup from
+	# an earlier section would rescue these deliberately-broken files and the
+	# "refuses" checks would pass for the wrong reason.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.BACKUP_PATH))
 	var cases: Array = [
 		["not json at all", "garbage text"],
 		['{"nope": 1}', "JSON object instead of an array"],
@@ -1389,6 +1417,116 @@ func _sec_save_corruption() -> void:
 	_check(GridManager.has_block(Vector3i(0, 0, 20)), "round trip intact")
 	_clear()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.SAVE_PATH))
+	await get_tree().process_frame
+
+## 6b. Losing an hour of building to a window close, a crash mid-write, or an
+## autosave that fired at the wrong moment are all the same bug wearing
+## different hats: the file on disk stops matching the garden the player had.
+func _sec_save_durability() -> void:
+	for p in [SaveManager.SAVE_PATH, SaveManager.BACKUP_PATH, SaveManager.TMP_PATH]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+	_clear()
+	await get_tree().process_frame
+
+	# A save must leave no temp file behind — one left on disk would be loaded by
+	# nothing and confuse the next write.
+	_b(Vector3i(0, 0, 21), BlockData.Type.WOOD)
+	_check(SaveManager.save_game(), "save_game succeeds")
+	_check(not FileAccess.file_exists(SaveManager.TMP_PATH), "no temp file survives a save")
+	_check(FileAccess.file_exists(SaveManager.SAVE_PATH), "save file exists after save")
+
+	# Second save promotes the first to backup, so the previous garden is still
+	# recoverable one generation back.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(1, 0, 21), BlockData.Type.BELL)
+	_check(SaveManager.save_game(), "second save succeeds")
+	_check(FileAccess.file_exists(SaveManager.BACKUP_PATH), "previous save is kept as the backup")
+
+	# The realistic crash: the newest file is truncated garbage. The backup is
+	# what the player gets, not an error message.
+	var f := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	f.store_string('[{"x":0,"y":0,"z":0,"typ')
+	f.close()
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(), "a truncated save falls back to the backup")
+	await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(0, 0, 21)), "the backup's build is what came back")
+
+	# Autosave guards. Each of these firing would overwrite a real save with an
+	# empty or stale grid.
+	SaveManager.autosave_armed = false
+	_clear()
+	await get_tree().process_frame
+	SaveManager.autosave()
+	_check(SaveManager.load_game(), "autosave while disarmed leaves the file alone")
+	await get_tree().process_frame
+
+	SaveManager.autosave_armed = true
+	_clear()
+	await get_tree().process_frame
+	SaveManager.autosave()
+	_check(SaveManager.load_game(), "autosave refuses to write an empty grid over a save")
+	await get_tree().process_frame
+
+	SaveManager.autosave_armed = false
+	_clear()
+	for p in [SaveManager.SAVE_PATH, SaveManager.BACKUP_PATH]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+	await get_tree().process_frame
+
+## 6c. The journal is the only thing that tells a player the town has rules, so a
+## rule that never fires is a feature that does not exist. Each entry is checked
+## against a shape that must produce it.
+func _sec_discovery() -> void:
+	# The log writes to the player's own settings.cfg — put it back afterwards so
+	# running the suite does not hand somebody a journal they did not earn.
+	var before: Dictionary = DiscoveryLog._found.duplicate()
+
+	var ids: Dictionary = {}
+	for e in DiscoveryLog.ENTRIES:
+		var id: String = String(e["id"])
+		_check(not ids.has(id), "journal lists %s twice" % id)
+		ids[id] = true
+		_check(String(e.get("title", "")) != "" and String(e.get("note", "")) != "",
+			"journal entry %s has no title or note" % id)
+		_check(not DiscoveryLog.entry(id).is_empty(), "journal can look up %s" % id)
+
+	# Four storeys on one cell: the tower earns a spire, and the log says so.
+	DiscoveryLog._found.erase("spire")
+	DiscoveryLog._found.erase("stilts")
+	_clear()
+	await get_tree().process_frame
+	for y in 4:
+		_b(Vector3i(0, y, 80), BlockData.Type.HOUSE)
+	await _settle_houses()
+	DiscoveryLog._scan_houses()
+	_check(DiscoveryLog.has("spire"), "a four-storey tower is recorded as a spire")
+
+	# A house in mid-air walks down on stilts.
+	_clear()
+	await get_tree().process_frame
+	_b(Vector3i(0, 3, 82), BlockData.Type.HOUSE)
+	await _settle_houses()
+	DiscoveryLog._scan_houses()
+	_check(DiscoveryLog.has("stilts"), "a house over open air is recorded as stilts")
+
+	# What a player has SEEN outlives the garden they saw it in.
+	_clear()
+	await get_tree().process_frame
+	DiscoveryLog._scan_houses()
+	_check(DiscoveryLog.has("spire"), "clearing the build does not un-discover anything")
+
+	# Cards are drained one at a time and never repeat.
+	while DiscoveryLog.take_pending() != "":
+		pass
+	_check(DiscoveryLog.take_pending() == "", "no card is queued twice")
+	DiscoveryLog.mark("spire")
+	_check(DiscoveryLog.take_pending() == "", "an already-found rule does not queue a card")
+
+	DiscoveryLog._found = before
+	DiscoveryLog._save()
 	await get_tree().process_frame
 
 ## 7. Removing blocks mid-activity must not error or leave ghosts.

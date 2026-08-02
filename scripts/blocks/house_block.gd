@@ -82,7 +82,14 @@ var _dirty: bool = false
 var _visual: Node3D
 var _batch: MeshBatch
 var _base_palette: int = 0
-var _digest_cache: String = ""
+## The digest is split in two so a distant edit does not force ~40 shape queries
+## on every cell of a big building. See _digest.
+var _digest_cache: PackedByteArray = PackedByteArray()
+var _digest_whole: PackedByteArray = PackedByteArray()
+var _digest_local: PackedByteArray = PackedByteArray()
+## Set when an edit lands within REACH of this cell; cleared once consumed.
+## Starts true so the first refresh computes everything.
+var _near_local_dirty: bool = true
 var _palette: Dictionary = PALETTES[0]
 
 ## The player's variant picks a FAMILY; the building picks its own exact shade
@@ -153,6 +160,11 @@ func _on_grid_changed(cell: Vector3i) -> void:
 		return
 	if cell != grid_cell and not HouseShape.affects(grid_cell, cell):
 		return
+	# Did the edit land close enough to change what this cell derives from its own
+	# neighbourhood? If not, the expensive half of the digest cannot have moved
+	# and is reused — see _digest.
+	if HouseShape.touches_locally(grid_cell, cell):
+		_near_local_dirty = true
 	_dirty = true
 	set_process(true)
 
@@ -162,13 +174,36 @@ func _on_grid_changed(cell: Vector3i) -> void:
 ## geometry` in the regression suite is the guard: it rebuilds a town by editing
 ## and again from scratch and demands the two match exactly, which is precisely
 ## the failure a missing entry produces.
-func _digest(ctx: Dictionary) -> String:
-	var d: Array = [ctx, _base_palette, _palette, MapThemes.current]
+func _digest(ctx: Dictionary) -> PackedByteArray:
+	# WHOLE-BUILDING half. Cheap: every one of these is a lookup into a component
+	# flood that is cached per grid version.
+	#
+	# `building_size` is deliberately dropped. It is the raw cell count, the
+	# geometry never reads it, and everything decided FROM it (the decor tier, and
+	# so the planters, awnings and roof gardens) appears below as the boolean that
+	# came out. Leaving the count in meant adding one cell to a 48-cell building
+	# changed all 48 digests, so all 48 threw away a finished mesh and rebuilt an
+	# identical one — 76 ms of geometry per click, all of it wasted.
+	var shape: Dictionary = ctx.duplicate()
+	shape.erase("building_size")
+	var whole: Array = [shape, _base_palette, _palette, MapThemes.current]
 	if not _placed:
-		return str(d)
-	d.append([HouseShape.has_spire(grid_cell), HouseShape.is_terrace(grid_cell),
+		return var_to_bytes(whole)
+	whole.append([HouseShape.has_spire(grid_cell), HouseShape.is_terrace(grid_cell),
 			HouseShape.has_roof_garden(grid_cell), HouseShape.has_shutters(grid_cell),
-			HouseShape.bears_stilts(grid_cell)])
+			HouseShape.bears_stilts(grid_cell), HouseShape.decor_tier(grid_cell),
+			HouseShape.component_height(grid_cell)])
+	var whole_bytes := var_to_bytes(whole)
+
+	# NEIGHBOURHOOD half. ~40 queries, and the expensive part of a refresh. It can
+	# only have changed if an edit landed within REACH of this cell — or if the
+	# building-wide half moved, since the decor tier feeds the per-face trim.
+	if not _near_local_dirty and whole_bytes == _digest_whole and not _digest_local.is_empty():
+		_digest_whole = whole_bytes
+		return whole_bytes + _digest_local
+	_digest_whole = whole_bytes
+
+	var d: Array = []
 	d.append([HouseShape.dormer_side(grid_cell), HouseShape.courtyard_dir(grid_cell),
 			HouseShape.bunting_dir(grid_cell)])
 	d.append([HouseShape.arch_axis(grid_cell), HouseShape.arch_run(grid_cell),
@@ -199,15 +234,38 @@ func _digest(ctx: Dictionary) -> String:
 				HouseShape.has_planter(grid_cell, side, ground),
 				HouseShape.has_awning(grid_cell, side, true)])
 	d.append(faces)
-	return str(d)
+	# var_to_bytes, not str(): identical information, exactly comparable, and six
+	# times cheaper on a nested array this size (measured).
+	_digest_local = var_to_bytes(d)
+	return whole_bytes + _digest_local
 
 func apply_variant(v: Dictionary) -> void:
 	_base_palette = int(v.get("palette", 0)) % PALETTES.size()
 	if is_inside_tree():
 		refresh_shape()
 
+## How much of a frame every house in the town may spend rebuilding, together.
+## A time budget rather than a cell count because cells are not equal: a plain
+## middle-of-a-terrace cell is a fraction of a corner cell carrying a spire, an
+## arch and a courtyard, and three of the latter is a dropped frame.
+##
+## 3 ms leaves the rest of the frame — rendering a 48-house town, the streams,
+## the wildlife scan — inside 16 ms on the machine this was measured on.
+const REBUILD_BUDGET_US := 3000
+static var _budget_frame: int = -1
+static var _budget_us_left: int = 0
+
 # ----------------------------------------------------------------- assembly
-func refresh_shape() -> void:
+## Returns true when geometry was actually rebuilt, which is what the per-frame
+## budget is spent on.
+func refresh_shape() -> bool:
+	# Cleared HERE, not in _process: refresh_shape is also called directly by
+	# _ready, the grid_cell setter and apply_variant, and each of those ends by
+	# turning _process off again. A cell that was already dirty when one of them
+	# ran kept the flag set with nothing left to service it — harmless while the
+	# flag only caused a redundant rebuild, but a permanent "still rebuilding" as
+	# soon as anything waits on it.
+	_dirty = false
 	var ctx: Dictionary = HouseShape.context(grid_cell) if _placed else HouseShape.lone_context()
 	_resolve_palette()
 
@@ -224,8 +282,9 @@ func refresh_shape() -> void:
 	# lookups over a cached flood; the geometry is ~1000 triangles and ten
 	# surface uploads.
 	var digest := _digest(ctx)
+	_near_local_dirty = false
 	if digest == _digest_cache and _visual != null and is_instance_valid(_visual):
-		return
+		return false
 	_digest_cache = digest
 
 	if _visual != null and is_instance_valid(_visual):
@@ -289,6 +348,7 @@ func refresh_shape() -> void:
 	# Only night houses breathe; every other map leaves the panes flat, so a big
 	# town costs nothing per frame.
 	set_process(MapThemes.current == NIGHT_THEME and not _glow.is_empty())
+	return true
 
 ## One exposed wall: plaster panel, then whatever that face earned — a door, some
 ## windows, maybe a balcony.
@@ -847,8 +907,24 @@ func _pop() -> void:
 ## so a town lit at night pulses gently along with the machine.
 func _process(_delta: float) -> void:
 	if _dirty:
-		_dirty = false
+		# A frame may only pay for so much geometry. After the digest split the
+		# cells that actually change are few, but "few" is 4-6 on a click and each
+		# is ~2 ms of mesh building — enough to push a frame past 16 ms and be felt
+		# as a stutter in a game whose whole promise is calm. Cells over the budget
+		# stay dirty and rebuild next frame; the lag is a frame or two on houses
+		# away from the cursor, which is invisible, and the frame time stays flat.
+		var frame: int = Engine.get_process_frames()
+		if _budget_frame != frame:
+			_budget_frame = frame
+			_budget_us_left = REBUILD_BUDGET_US
+		if _budget_us_left <= 0:
+			return
+		var started: int = Time.get_ticks_usec()
 		refresh_shape()
+		# Charged whether or not geometry was rebuilt: confirming that nothing
+		# changed still costs shape queries, and it is the TOTAL the frame has to
+		# stay inside.
+		_budget_us_left -= Time.get_ticks_usec() - started
 		# refresh_shape decides for itself whether the night glow needs _process;
 		# respect that rather than forcing it back on.
 		return

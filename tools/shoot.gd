@@ -4,6 +4,12 @@ extends Node
 ## Headless uses a dummy driver and renders nothing, so this is the only way to
 ## actually look at the game from a script.
 ##   godot --path . --rendering-driver opengl3 --resolution 1280x720 tools/shoot.tscn -- scene=... out=...
+##
+## Flags after the `--`: scene= out= theme= zoom= pitch= yaw= crop=x,y,w,h
+##   build      a sample garden instead of whatever is in the save
+##   ui         keep the HUD visible (default hides it, as photo mode does)
+##   settings   open the menu's settings panel before the shot
+##   journal    open the pause menu's discovery journal before the shot
 var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
@@ -12,6 +18,8 @@ var _stilt_case := false
 var _pool := false
 var _mixed := false
 var _pitch := -1.0
+var _open_settings := false
+var _open_journal := false
 var _yaw := 999.0
 
 func _ready() -> void:
@@ -30,6 +38,8 @@ func _ready() -> void:
 		elif a == "stiltcase": _stilt_case = true
 		elif a == "pool": _pool = true
 		elif a == "mixed": _mixed = true
+		elif a == "settings": _open_settings = true
+		elif a == "journal": _open_journal = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -142,6 +152,17 @@ func _ready() -> void:
 	# at the middle of the screen — a big translucent cube parked over whatever
 	# the shot was meant to show. Photo mode is what the P key uses; use it here
 	# too so a screenshot shows the GARDEN.
+	if _open_journal:
+		var pm := s.find_child("PauseMenu", true, false)
+		if pm != null:
+			pm.call("toggle")
+			pm.call("_toggle_journal")
+			for _f in range(10):
+				await get_tree().process_frame
+	if _open_settings and s.has_method("_on_settings"):
+		s.call("_on_settings")
+		for _f in range(10):
+			await get_tree().process_frame
 	var pc := s.find_child("PlacementController", true, false)
 	if pc != null:
 		pc.set("photo_mode", true)

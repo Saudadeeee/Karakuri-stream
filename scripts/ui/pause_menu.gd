@@ -32,6 +32,7 @@ func _ready() -> void:
 	confirm_load_dialog.confirmed.connect(_on_load_confirmed)
 	volume_slider.value_changed.connect(_on_volume_changed)
 
+	_build_journal()
 	_load_settings()
 	CuteButton.apply_all(self)
 
@@ -52,6 +53,9 @@ func _pause() -> void:
 	_set_music_muffle(true)
 
 func _resume() -> void:
+	if _journal_panel != null and _journal_panel.visible:
+		_journal_panel.visible = false
+		$Panel.visible = true
 	visible = false
 	get_tree().paused = false
 	_set_music_muffle(false)
@@ -96,10 +100,73 @@ func _on_clear_confirmed() -> void:
 ## Unpause first (the tree stays paused across a scene change otherwise).
 func _on_menu_pressed() -> void:
 	SaveManager.save_game()
+	# Disarm BEFORE clearing: clear_all() is a grid change like any other, and an
+	# autosave landing after it would write an empty build over the one just saved.
+	SaveManager.autosave_armed = false
 	GridManager.clear_all()
 	get_tree().paused = false
 	_set_music_muffle(false)   # the low-pass must not follow us to the menu
 	get_tree().change_scene_to_file(MAIN_MENU)
+
+# ------------------------------------------------------------------ journal
+## The list of things the town can do, and which of them this player has seen.
+## Undiscovered rows show the shape of the secret and nothing else — a name would
+## be a recipe, and the point is that these are found by building, not by reading.
+var _journal_panel: PanelContainer
+
+func _build_journal() -> void:
+	var button := Button.new()
+	button.text = "Journal"
+	button.custom_minimum_size = Vector2(0, 44)
+	var box: VBoxContainer = $Panel/VBoxContainer
+	box.add_child(button)
+	box.move_child(button, resume_button.get_index() + 1)
+	button.pressed.connect(_toggle_journal)
+
+	_journal_panel = PanelContainer.new()
+	_journal_panel.visible = false
+	_journal_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_journal_panel.custom_minimum_size = Vector2(430, 0)
+	_journal_panel.position = Vector2(-215, -250)
+	add_child(_journal_panel)
+
+func _toggle_journal() -> void:
+	_journal_panel.visible = not _journal_panel.visible
+	# One card at a time: the journal is taller than the pause menu and stacking
+	# the two just buries the buttons behind it.
+	$Panel.visible = not _journal_panel.visible
+	if not _journal_panel.visible:
+		return
+	# Rebuilt on open: things get discovered while the panel is closed.
+	for c in _journal_panel.get_children():
+		c.queue_free()
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	_journal_panel.add_child(box)
+
+	var head := Label.new()
+	head.text = "Journal  %d / %d" % [DiscoveryLog.count_found(), DiscoveryLog.ENTRIES.size()]
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 20)
+	box.add_child(head)
+
+	for e in DiscoveryLog.ENTRIES:
+		var row := Label.new()
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_theme_font_size_override("font_size", 13)
+		if DiscoveryLog.has(String(e["id"])):
+			row.text = "%s — %s" % [e["title"], e["note"]]
+		else:
+			row.text = "? ? ?"
+			row.modulate.a = 0.35
+		box.add_child(row)
+
+	var close := Button.new()
+	close.text = "Close"
+	close.custom_minimum_size = Vector2(0, 38)
+	close.pressed.connect(_toggle_journal)
+	box.add_child(close)
+	CuteButton.apply_all(_journal_panel)
 
 func _show_status(text: String) -> void:
 	status_label.text = text

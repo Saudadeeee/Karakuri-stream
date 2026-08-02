@@ -105,7 +105,7 @@ script = ExtResource("1_orbit")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="OrbitRig" unique_id=488645792]
 collision_mask = 0
-spring_length = 15.0
+spring_length = 10.0
 
 [node name="Camera3D" type="Camera3D" parent="OrbitRig/SpringArm3D" unique_id=768921466]
 current = true

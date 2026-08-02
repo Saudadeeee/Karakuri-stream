@@ -333,6 +333,27 @@ static func affects(cell: Vector3i, changed: Vector3i) -> bool:
 		return false
 	return true
 
+## Narrower than `affects`: can an edit at `changed` alter what THIS CELL draws
+## from its own NEIGHBOURHOOD — its roof surface, arch, corbels, bunting,
+## courtyard, corner ownership, windows?
+##
+## Those queries all read cells within `REACH` (an arch hunts the farthest, and
+## a stilted cell reads the column beneath it). Everything else a cell draws —
+## its door, chimney, palette, spire, terrace, decor tier — comes from the
+## building as a whole and is answered by cached component data instead.
+##
+## `affects` says "this cell must look again", which is true for the whole
+## building. This says "and it must look at ALL of it", which is true for very
+## few cells. house_block splits its digest along that line: 50 cells asking
+## every question after each click was 16 ms of pure re-derivation, most of it
+## for cells that could not have changed locally.
+static func touches_locally(cell: Vector3i, changed: Vector3i) -> bool:
+	if absi(changed.x - cell.x) > REACH or absi(changed.z - cell.z) > REACH:
+		return false
+	if changed.y > cell.y + REACH or changed.y < cell.y - (MAX_STILT + 2):
+		return false
+	return true
+
 ## Lexicographic order on cells, so "the building's first cell" is well defined
 ## for any shape — that is what makes exactly one door possible.
 static func _less(a: Vector3i, b: Vector3i) -> bool:

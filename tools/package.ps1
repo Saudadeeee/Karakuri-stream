@@ -57,10 +57,18 @@ foreach ($t in $targets) {
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
     Write-Host "`n=== $($t.preset) ===" -ForegroundColor Cyan
+    # Anything Godot writes to stderr arrives here as an ErrorRecord, and under
+    # $ErrorActionPreference='Stop' the first one aborts the whole script — the
+    # godot_mcp addon failing to bind its port when the editor is already open
+    # was enough to kill an otherwise perfect export. Judge the export by its
+    # output file (checked below), not by whether it printed to stderr.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & $Godot --headless --path $root $t.mode $t.preset $outFile 2>&1 |
         Select-String -Pattern "ERROR|WARNING: |error:" -CaseSensitive |
         Where-Object { $_ -notmatch "port9080|build tools" } |
         ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
+    $ErrorActionPreference = $prevEAP
 
     if (-not (Test-Path $outFile)) { throw "$($t.preset): export produced no $($t.out) - rerun without the log filter to see why." }
 

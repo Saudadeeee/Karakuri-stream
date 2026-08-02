@@ -21,7 +21,10 @@ var _dragging: bool = false
 var _pitch: float = deg_to_rad(45.0)
 var _yaw_vel: float = 0.0           # rad/s carried after release
 var _pitch_vel: float = 0.0
-var _target_zoom: float = 15.0
+## Starting distance. 15 framed the whole island and made the player's machine a
+## thumbnail in the middle of empty grass; the models, the water and the animals
+## only read from about here. Pull out with the wheel for the postcard view.
+var _target_zoom: float = 10.0
 var _touches: Dictionary = {}       # index -> position (pinch tracking)
 var _pinch_dist: float = -1.0
 

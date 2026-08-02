@@ -30,6 +30,17 @@ func _ready() -> void:
 	if not SaveManager.has_save():
 		_build_starter_garden.call_deferred()
 	_maybe_show_controls.call_deferred()
+	# Autosave only runs while a garden is on screen — see save_manager.gd.
+	SaveManager.autosave_armed = true
+	DiscoveryLog.discovered.connect(func(_id: String) -> void: _drain_discoveries())
+	# A garden loaded from a save may already contain things this player has never
+	# been told about; the log notices them on its first scan.
+	_drain_discoveries.call_deferred()
+
+## Leaving the scene at all (menu, quit, reload) ends the window in which an
+## autosave means anything: the grid is about to be cleared.
+func _exit_tree() -> void:
+	SaveManager.autosave_armed = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed):
@@ -72,7 +83,7 @@ func _maybe_show_controls() -> void:
 		+ "Click a hotbar icon again — change its style / tempo\n" \
 		+ "Q — houses. Line them up and they become one building.\n" \
 		+ "Build a village and animals move in. Birds play your bells.\n" \
-		+ "Ctrl+Z undo · H hide UI · U move the sun · P screenshot"
+		+ "Ctrl+Z undo · H hide UI · U move the sun · P screenshot · F11 fullscreen"
 	body.add_theme_font_size_override("font_size", 15)
 	box.add_child(body)
 	var ok := Button.new()
@@ -86,6 +97,56 @@ func _maybe_show_controls() -> void:
 		c.load("user://settings.cfg")
 		c.set_value("ui", "seen_controls", true)
 		c.save("user://settings.cfg"))
+
+# ------------------------------------------------------- discovery cards
+## One card at a time, bottom centre, gone in a few seconds. It says what the
+## town just did and why — the whole feature is "notice it out loud once".
+## Deliberately not a popup: nothing pauses, nothing needs dismissing, and if the
+## player is mid-drag they can ignore it entirely and find it again in the pause
+## menu's journal.
+var _card_busy: bool = false
+
+func _drain_discoveries() -> void:
+	if _card_busy:
+		return
+	var id := DiscoveryLog.take_pending()
+	if id == "":
+		return
+	var e: Dictionary = DiscoveryLog.entry(id)
+	if e.is_empty():
+		return
+	_card_busy = true
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	panel.position = Vector2(-190, -150)
+	panel.custom_minimum_size = Vector2(380, 0)
+	panel.modulate.a = 0.0
+	$UI.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	panel.add_child(box)
+	var head := Label.new()
+	head.text = "The town made %s" % String(e["title"]).to_lower()
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 18)
+	box.add_child(head)
+	var note := Label.new()
+	note.text = String(e["note"])
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 13)
+	note.modulate.a = 0.75
+	box.add_child(note)
+
+	var tw := create_tween()
+	tw.tween_property(panel, "modulate:a", 1.0, 0.35)
+	tw.tween_interval(4.2)
+	tw.tween_property(panel, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(panel.queue_free)
+	tw.tween_callback(func() -> void:
+		_card_busy = false
+		_drain_discoveries())
 
 # ------------------------------------------------------------- screenshot
 ## P: clean screenshot (UI + ghost hidden for the frame). Desktop saves to

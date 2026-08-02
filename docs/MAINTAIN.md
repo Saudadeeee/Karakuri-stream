@@ -201,6 +201,34 @@ godot --path . --rendering-driver opengl3 --resolution 1280x720 \
 Bình thường: `worst` dưới ~15ms, `over16ms=0/420`. Nếu tệ hơn nhiều thì thứ
 vừa thêm đang tốn — thường là particle hoặc đèn.
 
+Thị trấn đông nhà là ca nặng nhất, đo riêng bằng `houses=48`:
+
+```bash
+godot --path . --rendering-driver opengl3 --resolution 1600x900       tools/perf.tscn -- scene=res://scenes/main.tscn lite=0 blocks=24 houses=48
+```
+
+Mong đợi `worst` khoảng 12ms, `over16ms=0/420`. Nhà tự giới hạn 3ms dựng hình
+mỗi frame (`house_block.REBUILD_BUDGET_US`) nên hình học hội tụ sau vài frame —
+**đó là lý do test phải `await _settle_houses()` chứ không chờ số frame cố định**.
+Nếu số xấu đi sau khi bạn sửa nhà: xem lại `_digest` trong `house_block.gd`, thêm
+một thứ đổi-theo-toà-nhà vào đó là bắt cả thị trấn dựng lại mỗi lần click.
+
+---
+
+## 9b. Thêm một mục vào Sổ khám phá (Journal)
+
+Sổ nằm ở `scripts/autoload/discovery_log.gd`. Thêm 1 mục = 2 chỗ:
+
+1. Thêm vào `ENTRIES`: `id` (chuỗi, đừng đổi sau khi phát hành — nó là khoá lưu
+   trong `settings.cfg`), `title`, và `note` giải thích ĐIỀU KIỆN. Note chỉ hiện
+   SAU khi người chơi tự tìm ra, nên viết thoải mái.
+2. Dạy nó cách nhận ra: thêm một nhánh vào `_house_has()` (nếu là hình dạng nhà,
+   hỏi `HouseShape`) hoặc thêm cặp vào vòng lặp trong `_scan_wildlife()`.
+
+Rồi thêm `id` mới vào danh sách `want` ở đầu `_scan_houses()` — thiếu bước này
+thì mục mới không bao giờ được quét. Test `_sec_discovery` trong
+`tests/regression.gd` sẽ báo lỗi nếu mục thiếu title/note hoặc trùng id.
+
 ---
 
 ## 10. Khi có lỗi

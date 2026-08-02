@@ -10,6 +10,17 @@ Two editions from one codebase, split by `QualityManager` (autoload):
 > Do NOT enable `scaling_3d` on the web build — on WebGL compatibility it forces
 > an offscreen render target and is SLOWER than native resolution (measured).
 
+## Icons (regenerate only when icon.svg changes)
+```
+godot --headless --path . --script tools/gen_icon.gd   # SVG -> assets/icon/icon_*.png
+python tools/gen_icon.py                               # PNG  -> assets/icon/icon.ico
+```
+Windows executables carry an .ico resource that Godot writes itself, and it takes
+an .ico or nothing — which is why the exe shipped with the generic Godot robot
+until now. The same PNGs feed the Android launcher icon and the four iOS sizes.
+Every size is rasterised from the SVG rather than downscaled from one big PNG:
+the 1 px border on this icon smears when it goes through a resample.
+
 ## Requirements (one-time)
 - Godot **4.7.1 official** binary (the Steam build swallows export error text)
 - Export templates 4.7.1.stable installed (`%APPDATA%/Godot/export_templates/4.7.1.stable/`)
