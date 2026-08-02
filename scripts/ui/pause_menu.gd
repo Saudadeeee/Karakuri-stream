@@ -13,7 +13,6 @@ const STATUS_FADE_TIME: float = 1.6
 
 const MAIN_MENU := "res://scenes/main_menu.tscn"
 @onready var confirm_clear_dialog: ConfirmationDialog = $ConfirmClearDialog
-@onready var confirm_load_dialog: ConfirmationDialog = $ConfirmLoadDialog
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -25,14 +24,17 @@ func _ready() -> void:
 
 	resume_button.pressed.connect(_on_resume_pressed)
 	save_button.pressed.connect(_on_save_pressed)
-	load_button.pressed.connect(confirm_load_dialog.popup_centered)
+	# "Load build" was one save and one button. It is now the way into the three
+	# gardens, which is also where loading lives.
+	load_button.text = "Gardens"
+	load_button.pressed.connect(_toggle_gardens)
 	clear_button.pressed.connect(confirm_clear_dialog.popup_centered)
 	menu_button.pressed.connect(_on_menu_pressed)
 	confirm_clear_dialog.confirmed.connect(_on_clear_confirmed)
-	confirm_load_dialog.confirmed.connect(_on_load_confirmed)
 	volume_slider.value_changed.connect(_on_volume_changed)
 
 	_build_journal()
+	_build_gardens()
 	_load_settings()
 	CuteButton.apply_all(self)
 
@@ -53,9 +55,10 @@ func _pause() -> void:
 	_set_music_muffle(true)
 
 func _resume() -> void:
-	if _journal_panel != null and _journal_panel.visible:
-		_journal_panel.visible = false
-		$Panel.visible = true
+	for panel in [_journal_panel, _gardens_panel]:
+		if panel != null and is_instance_valid(panel) and panel.visible:
+			panel.visible = false
+			$Panel.visible = true
 	visible = false
 	get_tree().paused = false
 	_set_music_muffle(false)
@@ -77,16 +80,6 @@ func _on_save_pressed() -> void:
 		_show_status("Build saved")
 	else:
 		_show_status("Could not save — storage unavailable")
-
-func _on_load_confirmed() -> void:
-	if SaveManager.load_game():
-		_show_status("Build loaded")
-	elif SaveManager.has_save():
-		# The file exists but nothing in it could be rebuilt. The build on
-		# screen is deliberately left untouched.
-		_show_status("Saved build is unreadable — kept what you have")
-	else:
-		_show_status("No saved build yet")
 
 func _on_clear_confirmed() -> void:
 	GridManager.clear_all()
@@ -167,6 +160,162 @@ func _toggle_journal() -> void:
 	close.pressed.connect(_toggle_journal)
 	box.add_child(close)
 	CuteButton.apply_all(_journal_panel)
+
+# ------------------------------------------------------------------ gardens
+## Three separate gardens. One slot meant every new idea cost the last one: the
+## only way to try a different island was to clear the one you had.
+##
+## Switching gardens SAVES the one on screen first. Autosave already keeps it
+## current, but "already saved" is not something a player should have to trust —
+## and the cost of being wrong is an hour of building.
+var _gardens_panel: PanelContainer
+var _confirm_clear_slot: ConfirmationDialog
+var _slot_to_clear: int = -1
+
+func _build_gardens() -> void:
+	_gardens_panel = PanelContainer.new()
+	_gardens_panel.visible = false
+	_gardens_panel.custom_minimum_size = Vector2(520, 0)
+	add_child(_gardens_panel)
+
+	_confirm_clear_slot = ConfirmationDialog.new()
+	_confirm_clear_slot.dialog_text = "Delete this garden? This cannot be undone."
+	_confirm_clear_slot.ok_button_text = "Delete"
+	_confirm_clear_slot.cancel_button_text = "Keep"
+	_confirm_clear_slot.confirmed.connect(_on_clear_slot_confirmed)
+	add_child(_confirm_clear_slot)
+
+func _toggle_gardens() -> void:
+	_gardens_panel.visible = not _gardens_panel.visible
+	$Panel.visible = not _gardens_panel.visible
+	if _gardens_panel.visible:
+		_refresh_gardens()
+
+func _refresh_gardens() -> void:
+	for c in _gardens_panel.get_children():
+		c.queue_free()
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	_gardens_panel.add_child(box)
+
+	var head := Label.new()
+	head.text = "Gardens"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 20)
+	box.add_child(head)
+
+	for i in SaveManager.SLOT_COUNT:
+		box.add_child(_garden_row(i))
+
+	var close := Button.new()
+	close.text = "Close"
+	close.custom_minimum_size = Vector2(0, 38)
+	close.pressed.connect(_toggle_gardens)
+	box.add_child(close)
+	# Centred by hand: this panel's parent is a CanvasLayer, which has no rect of
+	# its own for anchors to resolve against.
+	var place := func() -> void:
+		var vp: Vector2 = _gardens_panel.get_viewport_rect().size
+		_gardens_panel.position = (vp - _gardens_panel.size) * 0.5
+	_gardens_panel.resized.connect(place)
+	CuteButton.apply_all(_gardens_panel)
+	await get_tree().process_frame
+	place.call()
+
+func _garden_row(slot: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var info: Dictionary = SaveManager.slot_info(slot)
+	var active: bool = slot == SaveManager.current_slot
+
+	var label := Label.new()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	label.add_theme_font_size_override("font_size", 13)
+	label.text = "%s Garden %d  %s" % ["*" if active else " ", slot + 1, _slot_summary(info)]
+	if not active:
+		label.modulate.a = 0.75
+	row.add_child(label)
+
+	var save_b := Button.new()
+	save_b.text = "Save"
+	save_b.custom_minimum_size = Vector2(66, 34)
+	save_b.pressed.connect(_on_save_to_slot.bind(slot))
+	row.add_child(save_b)
+
+	if bool(info["exists"]):
+		var open_b := Button.new()
+		open_b.text = "Open"
+		open_b.custom_minimum_size = Vector2(66, 34)
+		open_b.disabled = active
+		open_b.pressed.connect(_on_open_slot.bind(slot))
+		row.add_child(open_b)
+
+		var del_b := Button.new()
+		del_b.text = "Delete"
+		del_b.custom_minimum_size = Vector2(72, 34)
+		del_b.pressed.connect(func() -> void:
+			_slot_to_clear = slot
+			_confirm_clear_slot.popup_centered())
+		row.add_child(del_b)
+	return row
+
+func _slot_summary(info: Dictionary) -> String:
+	if not bool(info["exists"]):
+		return "- empty"
+	var parts: PackedStringArray = ["%d blocks" % int(info["blocks"])]
+	var theme: int = int(info["theme"])
+	if theme >= 0:
+		parts.append(MapThemes.name_of(theme))
+	parts.append(_ago(int(info["saved_at"])))
+	return "- " + " | ".join(parts)
+
+## "just now" is more use than a timestamp when the question is which of three
+## gardens you were last in.
+func _ago(unix: int) -> String:
+	if unix <= 0:
+		return "saved"
+	var secs: int = int(Time.get_unix_time_from_system()) - unix
+	if secs < 90:
+		return "just now"
+	if secs < 3600:
+		return "%d min ago" % (secs / 60)
+	if secs < 86400:
+		return "%d h ago" % (secs / 3600)
+	return "%d days ago" % (secs / 86400)
+
+func _on_save_to_slot(slot: int) -> void:
+	# Saving into a garden makes it the one being played — otherwise the next
+	# autosave would write the same build into the slot you just left.
+	if SaveManager.save_game(slot):
+		SaveManager.set_current_slot(slot)
+		_show_status("Saved to garden %d" % (slot + 1))
+	else:
+		_show_status("Could not save - storage unavailable")
+	_refresh_gardens()
+
+func _on_open_slot(slot: int) -> void:
+	# The garden on screen goes back into ITS slot first. Autosave has almost
+	# certainly done this already; almost is not good enough here.
+	if not GridManager.get_all_cells().is_empty():
+		SaveManager.save_game()
+	SaveManager.set_current_slot(slot)
+	if SaveManager.load_game(slot):
+		_show_status("Opened garden %d" % (slot + 1))
+	else:
+		GridManager.clear_all()
+		_show_status("Garden %d could not be read" % (slot + 1))
+	_refresh_gardens()
+
+func _on_clear_slot_confirmed() -> void:
+	if _slot_to_clear < 0:
+		return
+	SaveManager.clear_slot(_slot_to_clear)
+	if _slot_to_clear == SaveManager.current_slot:
+		GridManager.clear_all()
+	_show_status("Garden %d deleted" % (_slot_to_clear + 1))
+	_slot_to_clear = -1
+	_refresh_gardens()
 
 func _show_status(text: String) -> void:
 	status_label.text = text

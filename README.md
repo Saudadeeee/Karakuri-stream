@@ -91,8 +91,12 @@ would be handing out the recipe, and finding it is the game.
 
 Spring (sakura & petals), Autumn (amber & falling leaves), Snow (hushed
 white), Night (fireflies — percussion sparks light). Same garden, different
-world; ambience and palette retune per map. Progress saves to `user://` — and
-saves itself: on a timer, when the window loses focus, and when you close it.
+world; ambience and palette retune per map.
+
+Three gardens, kept apart: **Esc → Gardens** switches between them, and each one
+remembers how big it is, which map it was built on and when you last touched it.
+The one you are in saves itself — on a timer, when the window loses focus, and
+when you close the game.
 
 ## The sound
 

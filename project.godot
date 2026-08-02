@@ -46,7 +46,6 @@ DiscoveryLog="*res://scripts/autoload/discovery_log.gd"
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

@@ -85,10 +85,3 @@ This cannot be undone unless you saved first."
 ok_button_text = "Clear"
 cancel_button_text = "Cancel"
 
-[node name="ConfirmLoadDialog" type="ConfirmationDialog" parent="."]
-title = "Confirm"
-size = Vector2i(420, 140)
-dialog_text = "Load the saved build?
-Your CURRENT (unsaved) build will be replaced."
-ok_button_text = "Load"
-cancel_button_text = "Cancel"

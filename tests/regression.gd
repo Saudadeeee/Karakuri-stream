@@ -55,6 +55,8 @@ func _ready() -> void:
 	await _sec_save_durability()
 	print("SECTION _sec_discovery")
 	await _sec_discovery()
+	print("SECTION _sec_save_slots")
+	await _sec_save_slots()
 	print("SECTION _sec_batching_and_touch")
 	await _sec_batching_and_touch()
 	print("SECTION _sec_house_audit")
@@ -1370,7 +1372,7 @@ func _sec_save_corruption() -> void:
 	# load_game() falls back to the backup generation, so a leftover backup from
 	# an earlier section would rescue these deliberately-broken files and the
 	# "refuses" checks would pass for the wrong reason.
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.BACKUP_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.backup_path()))
 	var cases: Array = [
 		["not json at all", "garbage text"],
 		['{"nope": 1}', "JSON object instead of an array"],
@@ -1384,7 +1386,7 @@ func _sec_save_corruption() -> void:
 		# Something on screen that must survive a failed load.
 		_b(Vector3i(0, 0, 20), BlockData.Type.WOOD)
 		_b(Vector3i(1, 0, 20), BlockData.Type.BELL)
-		var f := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+		var f := FileAccess.open(SaveManager.slot_path(), FileAccess.WRITE)
 		f.store_string(c[0])
 		f.close()
 		_check(not SaveManager.load_game(), "load refuses: %s" % c[1])
@@ -1395,7 +1397,7 @@ func _sec_save_corruption() -> void:
 	# A file with SOME good entries and some junk loads the good ones and says so.
 	_clear()
 	await get_tree().process_frame
-	var f2 := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	var f2 := FileAccess.open(SaveManager.slot_path(), FileAccess.WRITE)
 	f2.store_string('[{"x":3,"y":0,"z":20,"type":%d,"variant":0},{"bad":true},{"x":4,"y":0,"z":20,"type":999}]'
 		% int(BlockData.Type.WOOD))
 	f2.close()
@@ -1418,14 +1420,14 @@ func _sec_save_corruption() -> void:
 	await get_tree().process_frame
 	_check(GridManager.has_block(Vector3i(0, 0, 20)), "round trip intact")
 	_clear()
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.SAVE_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveManager.slot_path()))
 	await get_tree().process_frame
 
 ## 6b. Losing an hour of building to a window close, a crash mid-write, or an
 ## autosave that fired at the wrong moment are all the same bug wearing
 ## different hats: the file on disk stops matching the garden the player had.
 func _sec_save_durability() -> void:
-	for p in [SaveManager.SAVE_PATH, SaveManager.BACKUP_PATH, SaveManager.TMP_PATH]:
+	for p in [SaveManager.slot_path(), SaveManager.backup_path(), SaveManager.tmp_path()]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 	_clear()
 	await get_tree().process_frame
@@ -1434,8 +1436,8 @@ func _sec_save_durability() -> void:
 	# nothing and confuse the next write.
 	_b(Vector3i(0, 0, 21), BlockData.Type.WOOD)
 	_check(SaveManager.save_game(), "save_game succeeds")
-	_check(not FileAccess.file_exists(SaveManager.TMP_PATH), "no temp file survives a save")
-	_check(FileAccess.file_exists(SaveManager.SAVE_PATH), "save file exists after save")
+	_check(not FileAccess.file_exists(SaveManager.tmp_path()), "no temp file survives a save")
+	_check(FileAccess.file_exists(SaveManager.slot_path()), "save file exists after save")
 
 	# Second save promotes the first to backup, so the previous garden is still
 	# recoverable one generation back.
@@ -1443,11 +1445,11 @@ func _sec_save_durability() -> void:
 	await get_tree().process_frame
 	_b(Vector3i(1, 0, 21), BlockData.Type.BELL)
 	_check(SaveManager.save_game(), "second save succeeds")
-	_check(FileAccess.file_exists(SaveManager.BACKUP_PATH), "previous save is kept as the backup")
+	_check(FileAccess.file_exists(SaveManager.backup_path()), "previous save is kept as the backup")
 
 	# The realistic crash: the newest file is truncated garbage. The backup is
 	# what the player gets, not an error message.
-	var f := FileAccess.open(SaveManager.SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(SaveManager.slot_path(), FileAccess.WRITE)
 	f.store_string('[{"x":0,"y":0,"z":0,"typ')
 	f.close()
 	_clear()
@@ -1474,7 +1476,7 @@ func _sec_save_durability() -> void:
 
 	SaveManager.autosave_armed = false
 	_clear()
-	for p in [SaveManager.SAVE_PATH, SaveManager.BACKUP_PATH]:
+	for p in [SaveManager.slot_path(), SaveManager.backup_path()]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 	await get_tree().process_frame
 
@@ -1529,6 +1531,71 @@ func _sec_discovery() -> void:
 
 	DiscoveryLog._found = before
 	DiscoveryLog._save()
+	await get_tree().process_frame
+
+## 6c2. Three gardens that must not bleed into each other. The failure this
+## guards is the worst one a save system has: opening garden 2 and finding
+## garden 1, or saving over the wrong one.
+func _sec_save_slots() -> void:
+	var prev_slot: int = SaveManager.current_slot
+	for i in SaveManager.SLOT_COUNT:
+		SaveManager.clear_slot(i)
+
+	# A different garden in each slot.
+	for i in SaveManager.SLOT_COUNT:
+		_clear()
+		await get_tree().process_frame
+		for n in range(i + 1):
+			_b(Vector3i(n, 0, 90 + i), BlockData.Type.WOOD)
+		_check(SaveManager.save_game(i), "garden %d saves" % (i + 1))
+
+	# Each slot gives back its OWN build, not the last one written.
+	for i in SaveManager.SLOT_COUNT:
+		_clear()
+		await get_tree().process_frame
+		_check(SaveManager.load_game(i), "garden %d loads" % (i + 1))
+		await get_tree().process_frame
+		_check(GridManager.get_all_cells().size() == i + 1,
+			"garden %d holds its own %d block(s)" % [i + 1, i + 1])
+		_check(GridManager.has_block(Vector3i(0, 0, 90 + i)),
+			"garden %d holds its own cells" % (i + 1))
+
+	# The header a slot describes itself with.
+	var info: Dictionary = SaveManager.slot_info(2)
+	_check(bool(info["exists"]) and int(info["blocks"]) == 3, "slot info counts blocks without loading")
+	_check(int(info["saved_at"]) > 0, "slot info knows when it was saved")
+	_check(int(info["theme"]) == MapThemes.current, "slot info knows which map it was built on")
+	_check(bool(SaveManager.slot_info(1)["exists"]), "a written slot reports as existing")
+
+	# Deleting one garden must not touch the others.
+	SaveManager.clear_slot(1)
+	_check(not SaveManager.has_save(1), "a deleted garden is gone")
+	_check(SaveManager.has_save(0) and SaveManager.has_save(2), "its neighbours are untouched")
+
+	# The active slot is what save_game()/load_game() mean with no argument.
+	SaveManager.set_current_slot(2)
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(), "the active garden is what loads by default")
+	await get_tree().process_frame
+	_check(GridManager.get_all_cells().size() == 3, "and it is the right one")
+
+	# A save written by the pre-slot build still loads (bare array, no header).
+	SaveManager.clear_slot(0)
+	var f := FileAccess.open(SaveManager.slot_path(0), FileAccess.WRITE)
+	f.store_string('[{"x":5,"y":0,"z":95,"type":%d,"variant":0}]' % int(BlockData.Type.WOOD))
+	f.close()
+	_clear()
+	await get_tree().process_frame
+	_check(SaveManager.load_game(0), "a format-1 save still loads")
+	await get_tree().process_frame
+	_check(GridManager.has_block(Vector3i(5, 0, 95)), "and rebuilds its blocks")
+	_check(int(SaveManager.slot_info(0)["blocks"]) == 1, "slot info reads a format-1 file too")
+
+	for i in SaveManager.SLOT_COUNT:
+		SaveManager.clear_slot(i)
+	SaveManager.set_current_slot(prev_slot)
+	_clear()
 	await get_tree().process_frame
 
 ## 6d. Two things that are invisible until they are gone: the town's draw calls,

@@ -11,6 +11,7 @@ extends Node
 ##   settings   open the menu's settings panel before the shot
 ##   journal    open the pause menu's discovery journal before the shot
 ##   credits    open the menu's credits panel before the shot
+##   gardens    open the pause menu's save-slot panel before the shot
 var _crop := Rect2i()
 var want_theme := -1
 var _zoom := -1.0
@@ -22,6 +23,7 @@ var _pitch := -1.0
 var _open_settings := false
 var _open_journal := false
 var _open_credits := false
+var _open_gardens := false
 var _yaw := 999.0
 
 func _ready() -> void:
@@ -43,6 +45,7 @@ func _ready() -> void:
 		elif a == "settings": _open_settings = true
 		elif a == "journal": _open_journal = true
 		elif a == "credits": _open_credits = true
+		elif a == "gardens": _open_gardens = true
 		elif a.begins_with("crop="):
 			var n: PackedStringArray = a.substr(5).split(",")
 			_crop = Rect2i(int(n[0]), int(n[1]), int(n[2]), int(n[3]))
@@ -155,12 +158,12 @@ func _ready() -> void:
 	# at the middle of the screen — a big translucent cube parked over whatever
 	# the shot was meant to show. Photo mode is what the P key uses; use it here
 	# too so a screenshot shows the GARDEN.
-	if _open_journal:
+	if _open_journal or _open_gardens:
 		var pm := s.find_child("PauseMenu", true, false)
 		if pm != null:
 			pm.call("toggle")
-			pm.call("_toggle_journal")
-			for _f in range(10):
+			pm.call("_toggle_journal" if _open_journal else "_toggle_gardens")
+			for _f in range(12):
 				await get_tree().process_frame
 	if _open_settings and s.has_method("_on_settings"):
 		s.call("_on_settings")
