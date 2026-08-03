@@ -73,3 +73,25 @@ ngoài nhiễu. *Bài học đo đạc*: hai lần trước tôi suýt kết lu�
 đo cũ vài tiếng — máy trôi, và có 2 process Godot của chính tôi còn sót chiếm
 GPU khiến suite báo lỗi giả "rebuild is town-wide again" (4.7 s cho 3 frame).
 Dọn process xong là REGRESS ALL OK. **Luôn A/B trong cùng một phiên.**
+
+
+## Thử cỏ — và bỏ (2026-08-04)
+
+Đã thử rải ~520 túm cỏ batched (1 draw call) lên đảo để mặt đất có HÌNH KHỐI chứ
+không chỉ có màu. **Bỏ sau 5 vòng lặp**, vì ở khoảng cách camera chơi mỗi túm
+chỉ vài pixel và luôn đọc thành **rác vụn** chứ không thành cỏ:
+
+- lá phẳng dựng đứng → pháp tuyến NẰM NGANG → không ăn nắng → sợi đen
+- đổi sang chóp 3 mặt → vẫn tối
+- chóp thấp và bè ra (tỷ lệ ~1:1) → vẫn tối
+- đảo chiều cuốn đỉnh (pháp tuyến đang chúc xuống) → vẫn tối
+- hạ tương phản xuống gần đúng màu cỏ → vẫn thành đốm
+
+Kết luận giữ lại cho lần sau: **vật thể vài pixel trên nền sáng thì mọi sắc độ
+tối hơn nền đều đọc thành bẩn**. Muốn có cỏ thì phải là cụm to hơn (như
+`DecorManager` đang làm quanh nước), hoặc dùng shader ghi đè normal cho hướng
+lên, chứ không phải hình học nhỏ dựng đứng.
+
+Neo tối thì giữ: mặt dưới đảo sâu màu hẳn (4 map). Nó chỉ hiện khi camera hạ
+thấp gần đường chân trời — không đổi histogram ở góc nhìn thường, nhưng đó là
+chỗ DUY NHẤT bức tranh pastel này được phép có màu tối thật.
