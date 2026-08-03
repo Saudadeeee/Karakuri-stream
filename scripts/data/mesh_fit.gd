@@ -57,6 +57,13 @@ static func fit_centered(model: Node3D, target: float) -> void:
 ## little grazing-angle light is what tells the eye a surface is made of
 ## something; a lot of it is what makes plastic. 0.88 / 0.16 sits between: no
 ## visible hotspot, just an edge that catches the sun.
+##
+## The property is `metallic_specular`, NOT `specular`. StandardMaterial3D has no
+## `specular` in Godot 4 — assigning it falls through the Godot 3.x compatibility
+## remap, prints "SpatialMaterial remapped parameter not found: specular" with a
+## backtrace for EVERY material the game creates, and sets nothing. So the sheen
+## this constant was added for never existed, and the warning spam was slow
+## enough to show up in a frame-time measurement.
 const SHEEN_ROUGHNESS := 0.88
 const SHEEN_SPECULAR := 0.16
 
@@ -65,7 +72,7 @@ static func flat(col: Color) -> StandardMaterial3D:
 	m.albedo_color = col
 	m.roughness = SHEEN_ROUGHNESS
 	m.metallic = 0.0
-	m.specular = SHEEN_SPECULAR
+	m.metallic_specular = SHEEN_SPECULAR
 	return m
 
 ## Forces every material to the game's matte clay look. glTF import gives
@@ -93,8 +100,11 @@ static func matte(root: Node) -> void:
 		if m is StandardMaterial3D:
 			var sm: StandardMaterial3D = m
 			sm.metallic = 0.0
-			sm.metallic_specular = 0.0
-			sm.roughness = 1.0
+			# Same trace of sheen as `flat` — imported props are most of what is on
+			# screen, and leaving them perfectly diffuse while the procedural ones
+			# catch light is a split the eye notices as "some of it looks fake".
+			sm.metallic_specular = SHEEN_SPECULAR
+			sm.roughness = SHEEN_ROUGHNESS
 
 ## ONE SURFACE PER MESH, colours carried per vertex.
 ##

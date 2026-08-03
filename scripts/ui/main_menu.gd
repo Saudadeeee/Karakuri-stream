@@ -488,8 +488,14 @@ func _language_row() -> HBoxContainer:
 func _retranslate() -> void:
 	for refresh in _settings_widgets:
 		refresh.call()
+	# Set the ENGLISH source text, not tr() of it. Godot auto-translates a
+	# Control's own text on every locale change — but only while that text is
+	# still the source string. Writing the translated string back in baked
+	# Vietnamese into the cards, after which switching to English left the map
+	# names in Vietnamese while every other button changed: half the menu in each
+	# language, which is exactly the "settings buttons are broken" report.
 	for i in _map_cards.size():
-		_map_cards[i].text = tr(MapThemes.name_of(i).split(" ")[-1])
+		_map_cards[i].text = MapThemes.name_of(i).split(" ")[-1]
 
 func _section_label(text: String) -> Label:
 	var l := Label.new()

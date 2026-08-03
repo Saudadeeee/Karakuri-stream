@@ -28,13 +28,13 @@ uniform float grain_period : hint_range(0.1, 2.0) = 0.45;
 uniform float grain_strength : hint_range(0.0, 0.3) = 0.06;
 // Slope darkening: the sides of the island and the lip under the rim take a
 // touch more shade, which is where a real mound holds its dirt.
-uniform float slope_shade : hint_range(0.0, 1.0) = 0.22;
+uniform float slope_shade : hint_range(0.0, 1.0) = 0.16;
 // Radial falloff. Measured on a play frame, half the picture sat inside a
 // SIXTEEN-level band of luminance — the lawn is one value and it is half the
 // screen, which is what a flat picture is. Noise alone only moved that band; it
 // did not widen it. A broad darkening toward the rim does, and it also frames
 // the middle of the island where the player actually builds.
-uniform float edge_darken : hint_range(0.0, 0.6) = 0.26;
+uniform float edge_darken : hint_range(0.0, 0.6) = 0.15;
 uniform float edge_inner : hint_range(0.0, 12.0) = 3.8;
 uniform float edge_outer : hint_range(2.0, 20.0) = 10.0;
 uniform float ground_roughness : hint_range(0.3, 1.0) = 0.92;
@@ -80,9 +80,10 @@ void fragment() {
 	float n = value_noise(v_world.xz / patch_period) - 0.5;
 	float d = value_noise(v_world.xz / grain_period + 31.4) - 0.5;
 	float shade = n * patch_strength + d * grain_strength;
-	// Biased downward: soil is dirty, not shiny, and a field of bright speckles
-	// reads as noise-for-its-own-sake.
-	shade -= patch_strength * 0.3;
+	// No downward bias any more. Every one of these little "just a touch darker"
+	// decisions stacked — ambient, lawn colour, edge falloff, shadow opacity, and
+	// this — and the game came out visibly gloomier than the pastel toy it is
+	// meant to be. Variation should swing BOTH ways around the authored colour.
 
 	// Anything not facing up is a slope; slopes hold shade.
 	float up = clamp(v_normal_world.y, 0.0, 1.0);

@@ -95,3 +95,44 @@ lên, chứ không phải hình học nhỏ dựng đứng.
 Neo tối thì giữ: mặt dưới đảo sâu màu hẳn (4 map). Nó chỉ hiện khi camera hạ
 thấp gần đường chân trời — không đổi histogram ở góc nhìn thường, nhưng đó là
 chỗ DUY NHẤT bức tranh pastel này được phép có màu tối thật.
+
+
+## Sáng lại (2026-08-04, sửa sau phản hồi)
+
+Người chơi thử bản trước và nói: **tối hơn hẳn, không còn tươi sáng**. Đúng. Mỗi
+quyết định "tối thêm một chút" đều hợp lý riêng lẻ, nhưng chúng CỘNG DỒN:
+
+| | trước loạt art | sau (quá tối) | giờ |
+|---|---|---|---|
+| Trung vị | 181 | 160 | **184** |
+| IQR | 16 | 19 | **19** |
+| Tối (<90) | 6.3 % | 7.5 % | 5.9 % |
+
+Trả lại: ambient 72 % → **92 %** giá trị gốc, màu mặt đảo về nguyên bản, bóng đổ
+0.72 → 0.62, `edge_darken` 0.26 → 0.15, `slope_shade` 0.22 → 0.16, và **bỏ hẳn
+độ lệch tối** trong nhiễu nền (giờ dao động hai chiều quanh màu gốc).
+
+Giữ lại: bóng tiếp đất, nhiễu nền, ống tre nhiều sắc, sóng nước. Kết quả là độ
+sáng bằng — hơi hơn — bản gốc mà **vẫn giữ được dải giãn**. Bài học: đo trung vị
+CÙNG với IQR. Chỉ nhìn IQR thì "tối đi" cũng được tính là "khá hơn".
+
+## `tools/uitest.gd` — bấm thử mọi nút
+
+UI dựng hoàn toàn bằng code nên không soi được file scene để tìm dây nối hỏng, và
+một nút gạt lỗi chỉ lộ ra khi có người bấm. Script này bấm mọi `Button` trong
+menu (hai lần, để thấy nút gạt có thật sự đổi trạng thái không) rồi in ra nhãn
+trước/sau:
+
+```
+godot --path . --rendering-driver opengl3 --resolution 1280x720 tools/uitest.tscn
+```
+
+Nó tìm ra đúng hai lỗi thật:
+- `MeshFit.flat()` gán `m.specular` — **StandardMaterial3D ở Godot 4 KHÔNG có
+  thuộc tính đó**. Nó rơi vào lớp tương thích Godot 3.x, in cảnh báo kèm
+  backtrace cho MỖI material game tạo ra, và không set gì cả. Tên đúng là
+  `metallic_specular`. Nghĩa là "sheen" thêm hôm trước chưa từng tồn tại.
+- `_retranslate()` ghi chữ ĐÃ DỊCH vào thẻ bản đồ. Godot tự dịch `text` của
+  Control mỗi lần đổi ngôn ngữ, nhưng chỉ khi đó vẫn là chuỗi GỐC. Ghi đè bản
+  tiếng Việt vào rồi chuyển sang English là nửa menu mỗi thứ tiếng — đúng cái
+  "nút trong setting bị lỗi" mà người chơi thấy.
