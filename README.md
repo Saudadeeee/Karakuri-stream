@@ -136,5 +136,8 @@ tools/           dev harnesses: perf probe, screenshot rig, font generator
 tests/           regression suite
 ```
 
-All third-party assets are CC0; the font is OFL — details in
+Playable in English and Tiếng Việt (**Settings → Language**; a Vietnamese system
+opens in Vietnamese).
+
+All third-party assets are CC0; the fonts are OFL — details in
 [CREDITS.md](CREDITS.md). Version: 1.0.0.

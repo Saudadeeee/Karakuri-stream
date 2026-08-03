@@ -2,6 +2,7 @@
 
 [ext_resource type="FontFile" path="res://assets/fonts/pixel/karakuri_pop.fnt" id="1_jfcai"]
 [ext_resource type="FontVariation" path="res://assets/fonts/fredoka_chunky.tres" id="2_g4phv"]
+[ext_resource type="FontFile" uid="uid://b5vl7vqtjyb42" path="res://assets/fonts/Nunito.ttf" id="3_nunito"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jfcai"]
 content_margin_left = 22.0
@@ -227,7 +228,11 @@ shadow_size = 10
 shadow_offset = Vector2(0, 5)
 
 [sub_resource type="FontVariation" id="FontVariation_5viiu"]
-fallbacks = Array[Font]([ExtResource("2_g4phv")])
+; Vietnamese: the pixel face and Fredoka both stop at Latin-1, so Nunito (OFL)
+; goes last in the chain and draws only the glyphs neither of them has. Listed
+; HERE and not inside fredoka_chunky.tres because Godot walks THIS array, not
+; the fallbacks of a fallback.
+fallbacks = Array[Font]([ExtResource("2_g4phv"), ExtResource("3_nunito")])
 base_font = ExtResource("1_jfcai")
 
 [resource]

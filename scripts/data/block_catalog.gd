@@ -55,7 +55,7 @@ const ALL: Array[Dictionary] = [
 	 "hint": "Drum — beaten by streams or a gear next to it"},
 	{"type": BlockData.Type.CHIME, "hotbar": true, "key": KEY_0,
 	 "scene": preload("res://scenes/blocks/chime_block.tscn"),
-	 "hint": "Each colour is a note — line them up = a melody"},
+	 "hint": "Each colour is a note, shorter tube = higher — line them up = a melody"},
 	{"type": BlockData.Type.MUSIC_BOX, "hotbar": true, "key": KEY_MINUS,
 	 "scene": preload("res://scenes/blocks/music_box_block.tscn"),
 	 "hint": "Put beside a SPINNING gear → plays a tune"},

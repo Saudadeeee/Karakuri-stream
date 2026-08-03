@@ -138,7 +138,7 @@ func _toggle_journal() -> void:
 	_journal_panel.add_child(box)
 
 	var head := Label.new()
-	head.text = "Journal  %d / %d" % [DiscoveryLog.count_found(), DiscoveryLog.ENTRIES.size()]
+	head.text = tr("Journal  %d / %d") % [DiscoveryLog.count_found(), DiscoveryLog.ENTRIES.size()]
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 20)
 	box.add_child(head)
@@ -148,7 +148,7 @@ func _toggle_journal() -> void:
 		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_theme_font_size_override("font_size", 13)
 		if DiscoveryLog.has(String(e["id"])):
-			row.text = "%s — %s" % [e["title"], e["note"]]
+			row.text = "%s — %s" % [tr(str(e["title"])), tr(str(e["note"]))]
 		else:
 			row.text = "? ? ?"
 			row.modulate.a = 0.35
@@ -232,7 +232,7 @@ func _garden_row(slot: int) -> HBoxContainer:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.add_theme_font_size_override("font_size", 13)
-	label.text = "%s Garden %d  %s" % ["*" if active else " ", slot + 1, _slot_summary(info)]
+	label.text = "%s %s  %s" % ["*" if active else " ", tr("Garden %d") % (slot + 1), _slot_summary(info)]
 	if not active:
 		label.modulate.a = 0.75
 	row.add_child(label)
@@ -262,11 +262,11 @@ func _garden_row(slot: int) -> HBoxContainer:
 
 func _slot_summary(info: Dictionary) -> String:
 	if not bool(info["exists"]):
-		return "- empty"
-	var parts: PackedStringArray = ["%d blocks" % int(info["blocks"])]
+		return tr("- empty")
+	var parts: PackedStringArray = [tr("%d blocks") % int(info["blocks"])]
 	var theme: int = int(info["theme"])
 	if theme >= 0:
-		parts.append(MapThemes.name_of(theme))
+		parts.append(tr(MapThemes.name_of(theme)))
 	parts.append(_ago(int(info["saved_at"])))
 	return "- " + " | ".join(parts)
 
@@ -274,22 +274,22 @@ func _slot_summary(info: Dictionary) -> String:
 ## gardens you were last in.
 func _ago(unix: int) -> String:
 	if unix <= 0:
-		return "saved"
+		return tr("saved")
 	var secs: int = int(Time.get_unix_time_from_system()) - unix
 	if secs < 90:
-		return "just now"
+		return tr("just now")
 	if secs < 3600:
-		return "%d min ago" % (secs / 60)
+		return tr("%d min ago") % (secs / 60)
 	if secs < 86400:
-		return "%d h ago" % (secs / 3600)
-	return "%d days ago" % (secs / 86400)
+		return tr("%d h ago") % (secs / 3600)
+	return tr("%d days ago") % (secs / 86400)
 
 func _on_save_to_slot(slot: int) -> void:
 	# Saving into a garden makes it the one being played — otherwise the next
 	# autosave would write the same build into the slot you just left.
 	if SaveManager.save_game(slot):
 		SaveManager.set_current_slot(slot)
-		_show_status("Saved to garden %d" % (slot + 1))
+		_show_status(tr("Saved to garden %d") % (slot + 1))
 	else:
 		_show_status("Could not save - storage unavailable")
 	_refresh_gardens()
@@ -301,10 +301,10 @@ func _on_open_slot(slot: int) -> void:
 		SaveManager.save_game()
 	SaveManager.set_current_slot(slot)
 	if SaveManager.load_game(slot):
-		_show_status("Opened garden %d" % (slot + 1))
+		_show_status(tr("Opened garden %d") % (slot + 1))
 	else:
 		GridManager.clear_all()
-		_show_status("Garden %d could not be read" % (slot + 1))
+		_show_status(tr("Garden %d could not be read") % (slot + 1))
 	_refresh_gardens()
 
 func _on_clear_slot_confirmed() -> void:
@@ -313,7 +313,7 @@ func _on_clear_slot_confirmed() -> void:
 	SaveManager.clear_slot(_slot_to_clear)
 	if _slot_to_clear == SaveManager.current_slot:
 		GridManager.clear_all()
-	_show_status("Garden %d deleted" % (_slot_to_clear + 1))
+	_show_status(tr("Garden %d deleted") % (_slot_to_clear + 1))
 	_slot_to_clear = -1
 	_refresh_gardens()
 

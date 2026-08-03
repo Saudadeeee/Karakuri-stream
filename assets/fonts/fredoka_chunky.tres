@@ -1,8 +1,15 @@
-[gd_resource type="FontVariation" format=3]
+[gd_resource type="FontVariation" load_steps=3 format=3]
 
 [ext_resource type="FontFile" uid="uid://c8cxqywpp5kes" path="res://assets/fonts/Fredoka.ttf" id="1_65mqa"]
 
+[ext_resource type="FontFile" uid="uid://b5vl7vqtjyb42" path="res://assets/fonts/Nunito.ttf" id="2_nunito"]
+
 [resource]
+# Vietnamese. The pixel face and Fredoka both stop at Latin-1, so every word
+# with a Vietnamese diacritic came out as tofu boxes the moment the game was
+# translated. Nunito (OFL, credited) carries the whole set and only ever draws
+# the characters the other two do not have.
+fallbacks = Array[Font]([ExtResource("2_nunito")])
 base_font = ExtResource("1_65mqa")
 variation_opentype = {
 2003265652: 600

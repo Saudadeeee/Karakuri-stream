@@ -215,6 +215,27 @@ một thứ đổi-theo-toà-nhà vào đó là bắt cả thị trấn dựng l
 
 ---
 
+## 8b. Sửa chữ / thêm ngôn ngữ
+
+Chữ tiếng Anh trong code CHÍNH LÀ KHOÁ dịch. Muốn sửa bản tiếng Việt: mở
+`scripts/autoload/i18n.gd`, sửa vế phải trong `VI`. Muốn sửa chữ tiếng Anh: sửa
+tại chỗ trong code **và** sửa khoá tương ứng trong `VI` cho khớp — lệch một ký
+tự là chuỗi đó rơi về tiếng Anh.
+
+Thêm ngôn ngữ: thêm một `const XX` giống `VI`, thêm mã vào `LOCALES` và tên vào
+`LOCALE_NAMES`, đăng ký thêm một `Translation` trong `_ready()`.
+
+Chuỗi GHÉP lúc chạy (`"Đã lưu vào vườn %d"`) không tự dịch được — phải `tr()`
+chuỗi định dạng TRƯỚC rồi mới `%`. Trong game chỉ có ~15 chỗ như vậy, đều đã
+đánh dấu bằng `tr(` tại chỗ gọi.
+
+**Chữ có dấu ra ô vuông?** Font pixel và Fredoka chỉ có tới Latin-1. `Nunito.ttf`
+nằm CUỐI mảng `fallbacks` trong `ui/karakuri_theme.tres` để vẽ những ký tự hai
+font kia không có. Phải để ở mảng đó — Godot không đi tiếp vào fallback của
+fallback.
+
+---
+
 ## 9b. Thêm một mục vào Sổ khám phá (Journal)
 
 Sổ nằm ở `scripts/autoload/discovery_log.gd`. Thêm 1 mục = 2 chỗ:

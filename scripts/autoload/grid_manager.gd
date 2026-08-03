@@ -40,6 +40,12 @@ func set_block(cell: Vector3i, block: BlockData) -> void:
 	_index(cell, block.type)
 	version += 1
 	block_placed.emit(cell)
+	# Flatten the block's model to one surface per mesh once it has finished
+	# setting itself up. Deferred because variants, tints and the procedural
+	# shapes all land during this same frame, and baking reads the colours that
+	# are actually in effect — see MeshFit.bake.
+	if is_instance_valid(block.node):
+		MeshFit.bake.call_deferred(block.node)
 
 func remove_block(cell: Vector3i) -> void:
 	if not _blocks.has(cell):

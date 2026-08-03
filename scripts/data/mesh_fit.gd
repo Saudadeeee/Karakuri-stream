@@ -87,11 +87,134 @@ static func matte(root: Node) -> void:
 			sm.metallic_specular = 0.0
 			sm.roughness = 1.0
 
+## ONE SURFACE PER MESH, colours carried per vertex.
+##
+## The imported props come out of glTF with a surface (and a material) per
+## colour: 3-4 per block. Every one of those is a draw call — and then again for
+## the shadow pass, and again per cascade, which is why a garden of 800 blocks
+## was measured at 13,498 draw calls and 61 fps. Nothing about them differs
+## except albedo, so they merge into one vertex-coloured surface exactly the way
+## house cells do (see MeshBatch.build_merged).
+##
+## Surfaces that carry more than a colour — a texture, emission, transparency —
+## are left alone with their own material. There are almost none, and guessing
+## wrong there is visible.
+##
+## Baked meshes are CACHED by their source mesh and the exact colours baked into
+## them, so every instance of the same prop in the same variant shares one
+## ArrayMesh instead of building its own.
+##
+## Must run AFTER `tint`/`recolor_foliage`: baking flattens away the per-surface
+## materials those work through. `tint` refuses to touch a baked mesh rather than
+## silently doing nothing.
+static var _bake_cache: Dictionary = {}
+static var _bake_mat: StandardMaterial3D
+
+const BAKED_META := "mesh_fit_baked"
+
+static func baked_material() -> StandardMaterial3D:
+	if _bake_mat == null:
+		_bake_mat = flat(Color.WHITE)
+		_bake_mat.vertex_color_use_as_albedo = true
+	return _bake_mat
+
+static func bake(root: Node) -> void:
+	for node in root.get_children():
+		bake(node)
+	if not (root is MeshInstance3D):
+		return
+	var mi: MeshInstance3D = root
+	if mi.mesh == null or mi.has_meta(BAKED_META):
+		return
+	var count: int = mi.mesh.get_surface_count()
+	if count < 2:
+		return
+
+	# Key on the source mesh plus the colours actually in effect, so two instances
+	# of the same prop in different variants do not share a baked mesh.
+	var key: String = str(mi.mesh.get_rid().get_id())
+	var plain: Array = []      # surfaces that can merge: [arrays, albedo]
+	var keep: Array = []       # surfaces that cannot: [arrays, material]
+	for i in count:
+		var m: Material = mi.get_active_material(i)
+		var arrays: Array = mi.mesh.surface_get_arrays(i)
+		if m is StandardMaterial3D and _is_plain(m as StandardMaterial3D):
+			var col: Color = (m as StandardMaterial3D).albedo_color
+			plain.append([arrays, col])
+			key += "|%s" % col.to_html()
+		else:
+			keep.append([arrays, m])
+			key += "|x%d" % i
+	if plain.size() < 2:
+		return
+
+	var mesh: ArrayMesh = _bake_cache.get(key)
+	if mesh == null:
+		mesh = ArrayMesh.new()
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var cols := PackedColorArray()
+		var idx := PackedInt32Array()
+		for entry in plain:
+			var arrays: Array = entry[0]
+			var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			# INDICES MATTER. An imported surface is an index buffer over a shared
+			# vertex list, so concatenating the vertex arrays alone and calling the
+			# result a triangle list turns every prop into a fan of shards — which
+			# is exactly what it did before this loop kept them.
+			var base: int = verts.size()
+			var src: Variant = arrays[Mesh.ARRAY_INDEX]
+			if src is PackedInt32Array and not (src as PackedInt32Array).is_empty():
+				for i in (src as PackedInt32Array):
+					idx.append(base + i)
+			else:
+				for i in v.size():
+					idx.append(base + i)
+			verts.append_array(v)
+			var n: Variant = arrays[Mesh.ARRAY_NORMAL]
+			if n is PackedVector3Array and (n as PackedVector3Array).size() == v.size():
+				norms.append_array(n)
+			else:
+				# A surface with no normals would desync the arrays; give it
+				# flat-up normals rather than dropping the whole merge.
+				for _i in v.size():
+					norms.append(Vector3.UP)
+			for _i in v.size():
+				cols.append(entry[1])
+		var merged: Array = []
+		merged.resize(Mesh.ARRAY_MAX)
+		merged[Mesh.ARRAY_VERTEX] = verts
+		merged[Mesh.ARRAY_NORMAL] = norms
+		merged[Mesh.ARRAY_COLOR] = cols
+		merged[Mesh.ARRAY_INDEX] = idx
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)
+		mesh.surface_set_material(0, baked_material())
+		for entry in keep:
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, entry[0])
+			mesh.surface_set_material(mesh.get_surface_count() - 1, entry[1] as Material)
+		_bake_cache[key] = mesh
+
+	# Overrides were per-surface on the OLD surface list; they mean nothing now.
+	for i in count:
+		mi.set_surface_override_material(i, null)
+	mi.mesh = mesh
+	mi.set_meta(BAKED_META, true)
+
+## Only a colour, nothing else. Anything with a texture, emission or blending is
+## carrying information a vertex colour cannot.
+static func _is_plain(m: StandardMaterial3D) -> bool:
+	return m.albedo_texture == null and not m.emission_enabled 		and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED 		and m.next_pass == null
+
 ## Recolours the surfaces whose current albedo is close to `from` — used to
 ## retint one part of a multi-material model (e.g. the jelly body) to a variant
 ## colour while leaving the face (eyes/blush) untouched.
 static func tint(root: Node, from: Color, to: Color, threshold: float = 0.18) -> void:
 	if root == null:
+		return
+	if root is MeshInstance3D and (root as MeshInstance3D).has_meta(BAKED_META):
+		# Loud on purpose: after bake() there are no per-surface materials left to
+		# retint, so this would quietly produce the wrong colour forever.
+		push_warning("MeshFit.tint on an already-baked mesh — bake must come last")
 		return
 	for node in root.get_children():
 		tint(node, from, to, threshold)

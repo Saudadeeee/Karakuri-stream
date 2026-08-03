@@ -1627,6 +1627,39 @@ func _sec_batching_and_touch() -> void:
 	var mixed: ArrayMesh = batch.build_merged(shared, split)
 	_check(mixed.get_surface_count() == 2, "a special colour keeps a surface of its own")
 
+	# Baking an imported prop down to one surface. The bug this pins shipped for
+	# exactly one screenshot: surfaces come out of glTF as an INDEX BUFFER over a
+	# shared vertex list, and concatenating the vertex arrays without the indices
+	# turns every model in the game into a fan of shards.
+	var src := ArrayMesh.new()
+	var tri_a := PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP])
+	var tri_b := PackedVector3Array([Vector3.ZERO, Vector3.BACK, Vector3.UP])
+	for pair in [[tri_a, Color.RED], [tri_b, Color.BLUE]]:
+		var a: Array = []
+		a.resize(Mesh.ARRAY_MAX)
+		a[Mesh.ARRAY_VERTEX] = pair[0]
+		a[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP])
+		a[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+		src.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+		src.surface_set_material(src.get_surface_count() - 1, MeshFit.flat(pair[1]))
+	var holder := MeshInstance3D.new()
+	holder.mesh = src
+	game.add_child(holder)
+	MeshFit.bake(holder)
+	_check(holder.mesh.get_surface_count() == 1, "two prop surfaces bake into one")
+	var baked: Array = holder.mesh.surface_get_arrays(0)
+	_check((baked[Mesh.ARRAY_INDEX] as PackedInt32Array).size() == 6,
+		"the baked mesh keeps both triangles")
+	_check((baked[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() == 6,
+		"and every vertex of both surfaces")
+	var baked_cols: PackedColorArray = baked[Mesh.ARRAY_COLOR]
+	_check(baked_cols.size() == 6 and baked_cols[0].is_equal_approx(Color.RED)
+		and baked_cols[5].is_equal_approx(Color.BLUE), "each surface keeps its own colour")
+	_check(holder.has_meta(MeshFit.BAKED_META), "a baked mesh is marked, so bake is idempotent")
+	MeshFit.bake(holder)
+	_check(holder.mesh.get_surface_count() == 1, "baking twice changes nothing")
+	holder.queue_free()
+
 	# Touch: erase mode is the only delete a phone has, and it must start OFF or
 	# the first tap of a new game destroys something.
 	var pc: Node = game.find_child("PlacementController", true, false)

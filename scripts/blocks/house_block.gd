@@ -18,8 +18,7 @@ const WALL_T := 0.07          # plaster thickness
 ## single-cell top the roof became a hat that swallowed the storey under it —
 ## a two-storey house looked like a ground floor wearing a lid. 0.48 lets the
 ## pitch read while leaving the upper walls visible.
-const ROOF_H := 0.48
-const ROOF_OVER := 0.11       # eaves overhang past the wall
+## Roof dimensions live in HouseRoof now — the half of the cell that draws them.
 
 ## Townscaper's towns read as towns because the buildings are unmistakably
 ## DIFFERENT COLOURS — a red one, a blue one, a yellow one — not eight shades of
@@ -310,30 +309,31 @@ func refresh_shape() -> bool:
 	# Building both gave a normal pitched house with a spike stuck through it.
 	var spire: bool = HouseShape.has_spire(grid_cell)
 	var terrace: bool = HouseShape.is_terrace(grid_cell)
+	var paint := _paint()
 	if ctx["roof"] and not spire and not terrace:
-		_build_roof(ctx)
+		HouseRoof.roof(_batch, grid_cell, paint, ctx)
 	elif terrace:
-		_build_terrace(ctx, trim_col)
+		HouseRoof.terrace(_batch, grid_cell, paint, ctx, trim_col)
 	# No chimney under another house's floor — a terrace bearing stilts has a
 	# building overhead, and the stack pokes straight into its floorboards.
 	if ctx["chimney"] and not (terrace and HouseShape.bears_stilts(grid_cell)):
-		_build_chimney(trim_col)
+		HouseRoof.chimney(_batch, grid_cell, paint, _visual, trim_col)
 	# Only a real building earns a roof garden, and only where its roof is flat
 	# enough on top to stand a pot on — a narrow ridge would just float them.
 	if HouseShape.has_roof_garden(grid_cell):
-		_build_roof_garden(trim_col)
+		HouseRoof.roof_garden(_batch, grid_cell, paint, trim_col)
 	var dormer: Vector3i = HouseShape.dormer_side(grid_cell)
 	if dormer != Vector3i.ZERO:
-		_build_dormer(dormer, wall_col, trim_col)
+		HouseRoof.dormer(_batch, grid_cell, paint, dormer, wall_col, trim_col)
 	# --- the surprises: geometry the player never asked for, earned by a shape ---
 	if spire:
-		_build_spire(trim_col)
+		HouseRoof.spire(_batch, grid_cell, paint, trim_col)
 	var court: Vector3i = HouseShape.courtyard_dir(grid_cell)
 	if court != Vector3i.ZERO:
-		_build_courtyard(court, trim_col)
+		HouseRoof.courtyard(_batch, grid_cell, paint, court, trim_col)
 	var bunt: Vector3i = HouseShape.bunting_dir(grid_cell)
 	if bunt != Vector3i.ZERO:
-		_build_bunting(bunt)
+		HouseRoof.bunting(_batch, grid_cell, paint, bunt)
 
 	# Everything above went into ONE mesh, grouped by colour: four or five draw
 	# calls per cell instead of one per plank.
@@ -677,224 +677,25 @@ func _build_storey_band(ctx: Dictionary, trim_col: Color) -> void:
 ##
 ## Emitted as a solid slab (top surface, underside, fascia around the rim) because
 ## an overhanging single surface is see-through from below.
-const ROOF_STEP: Array[float] = [0.0, ROOF_H, ROOF_H * 1.5]   # mirror HouseShape.ROOF_RISE   # keep in step with HouseShape.ROOF_RISE
-const ROOF_THICK := 0.07
-
-func _build_roof(_ctx: Dictionary) -> void:
-	var col: Color = _tint(_palette["roof"])
-	var top: Array = _roof_samples(0.0)
-	_emit_roof_surface(top, col, false)
-	# Underside, reversed so it faces down, plus a rim so the eaves have an edge.
-	var under: Array = _roof_samples(-ROOF_THICK)
-	_emit_roof_surface(under, _dark(), true)
-	_emit_roof_rim(top, under, _dark())
-	if MapThemes.current == SNOW_THEME:
-		# Snow rides ON the roof, inset so the tile edge still shows at the eaves —
-		# a fully coated roof turns the whole village into white blobs.
-		_emit_roof_surface(_roof_samples(0.035, 0.13), SNOW, false)
-
-## The 3x3 sample grid for this cell, as world-local positions.
-## `lift` raises the whole sheet; `inset` pulls the outer ring inward (used for
-## the snow layer). Outer samples push OUT by the eaves overhang, but only on
-## sides where the roof actually ends — pushing out into a neighbour would make
-## the two cells' eaves intersect and z-fight down the whole terrace.
-func _roof_samples(lift: float, inset: float = 0.0) -> Array:
-	var pts: Array = []
-	for iz in 3:
-		var row: Array = []
-		for ix in 3:
-			var a: int = ix - 1
-			var b: int = iz - 1
-			var x: float = a * 0.5
-			var z: float = b * 0.5
-			if a != 0 and not HouseShape.is_roof_cell(grid_cell + Vector3i(a, 0, 0)):
-				x = a * (0.5 + ROOF_OVER - inset)
-			if b != 0 and not HouseShape.is_roof_cell(grid_cell + Vector3i(0, 0, b)):
-				z = b * (0.5 + ROOF_OVER - inset)
-			var level: int = HouseShape.roof_level(grid_cell.x * 2 + a, grid_cell.z * 2 + b, grid_cell.y)
-			row.append(Vector3(x, 0.5 + ROOF_STEP[level] + lift, z))
-		pts.append(row)
-	return pts
-
-func _emit_roof_surface(p: Array, col: Color, flip: bool) -> void:
-	for iz in 2:
-		for ix in 2:
-			var a: Vector3 = p[iz][ix]
-			var b: Vector3 = p[iz][ix + 1]
-			var c: Vector3 = p[iz + 1][ix + 1]
-			var d: Vector3 = p[iz + 1][ix]
-			if flip:
-				_batch.quad(d, c, b, a, col)
-			else:
-				_batch.quad(a, b, c, d, col)
-
-## Fascia band closing the gap between the top sheet and its underside, but only
-## along edges where the roof really stops — an interior edge is shared with the
-## neighbour's slab and capping it would bury a wall inside the roof.
-func _emit_roof_rim(top: Array, under: Array, col: Color) -> void:
-	var edges := [
-		[Vector3i(0, 0, -1), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]],
-		[Vector3i(0, 0, 1), [Vector2i(2, 2), Vector2i(1, 2), Vector2i(0, 2)]],
-		[Vector3i(-1, 0, 0), [Vector2i(0, 2), Vector2i(0, 1), Vector2i(0, 0)]],
-		[Vector3i(1, 0, 0), [Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 2)]],
-	]
-	for e in edges:
-		if HouseShape.is_roof_cell(grid_cell + (e[0] as Vector3i)):
-			continue
-		var idx: Array = e[1]
-		for i in idx.size() - 1:
-			var m: Vector2i = idx[i]
-			var n: Vector2i = idx[i + 1]
-			_batch.quad(top[m.y][m.x], top[n.y][n.x], under[n.y][n.x], under[m.y][m.x], col)
-
-## Pots and a little tree on the flat of a big roof. This is the payoff for
-## building UP and WIDE rather than sprawling — the reward has to be visible from
-## the normal play camera, so it sits on the highest surface the building has.
-func _build_roof_garden(trim_col: Color) -> void:
-	var top: float = 0.5 + ROOF_STEP[HouseShape.ROOF_LEVELS] + 0.02
-	var leaf: Color = _tint(FOLIAGE)
-	for i in 3:
-		var a: float = HouseShape.building_roll(grid_cell, 31 + i) * TAU
-		var at := Vector3(cos(a) * 0.22, top, sin(a) * 0.22)
-		_batch.box(Vector3(0.15, 0.12, 0.15), at + Vector3(0, 0.06, 0), trim_col)
-		_batch.box(Vector3(0.11, 0.16, 0.11), at + Vector3(0, 0.19, 0), leaf)
-		if i == 0:
-			_batch.box(Vector3(0.05, 0.2, 0.05), at + Vector3(0, 0.3, 0), _dark())
-			_batch.box(Vector3(0.26, 0.2, 0.26), at + Vector3(0, 0.44, 0), leaf)
-
-## A small gabled window pushing out of a roof slope.
-##
-## In a dense town the roofs are the largest unbroken surfaces on screen and they
-## currently say nothing — a dormer is the cheapest thing that makes a roofline
-## look inhabited rather than like a lid. Sits at the eaves end of the slope it
-## faces, so it reads as breaking through the roof rather than floating on it.
-func _build_dormer(side: Vector3i, wall_col: Color, trim_col: Color) -> void:
-	var out := Vector3(float(side.x), 0.0, float(side.z))
-	var at: Vector3 = out * 0.28 + Vector3(0, 0.5 + ROOF_H * 0.36, 0)
-	# Box body, then a little roof over it, then the glass.
-	_batch.box(Vector3(0.30, 0.28, 0.30) + out.abs() * 0.06, at, wall_col)
-	_batch.box(Vector3(0.38, 0.07, 0.38) + out.abs() * 0.06,
-		at + Vector3(0, 0.17, 0), _tint(_palette["roof"]))
-	_batch.box(_slab(out, 0.18, 0.16), at + out * 0.17 + Vector3(0, -0.01, 0), _glass_col())
-	_batch.box(_slab(out, 0.22, 0.04), at + out * 0.18 + Vector3(0, -0.11, 0), trim_col)
-
-## A flat, railed roof terrace: paving, a low balustrade on every open edge, and
-## a couple of pots. Built where a taller neighbour stands over this roof, so a
-## stepped town grows usable ledges instead of a staircase of pitched roofs.
-func _build_terrace(ctx: Dictionary, trim_col: Color) -> void:
-	var deck: Color = _tint(Color("b3a68e"))
-	_batch.box(Vector3(1.04, 0.1, 1.04), Vector3(0, 0.5, 0), deck)
-	for side in ctx["open_sides"]:
-		var out := Vector3(float(side.x), 0.0, float(side.z))
-		# Balustrade: a capped LOW wall, only on edges that face out.
-		#
-		# This used _face_size, which puts its `span` argument into BOTH the
-		# vertical and the horizontal axis — so "1.04 wide, 0.09 thick" came out
-		# as a 1.04-TALL full-height panel. A terrace therefore rendered as a ring
-		# of roofless walls standing around an empty cell, which is exactly what
-		# got reported: no block there, walls anyway, and placing a block into it
-		# "fixed" it because the cell then stopped being a terrace at all.
-		# _slab is the helper for a low, wide, thin panel on a face.
-		_batch.box(_slab(out, 1.04, 0.18), out * 0.46 + Vector3(0, 0.63, 0), trim_col)
-		_batch.box(_slab(out, 1.04, 0.06) + out.abs() * 0.05, out * 0.46 + Vector3(0, 0.73, 0), deck)
-	var leaf: Color = _tint(FOLIAGE)
-	for i in 2:
-		var a: float = HouseShape.building_roll(grid_cell, 41 + i) * TAU
-		var at := Vector3(cos(a) * 0.28, 0.6, sin(a) * 0.28)
-		_batch.box(Vector3(0.16, 0.14, 0.16), at, trim_col)
-		_batch.box(Vector3(0.13, 0.2, 0.13), at + Vector3(0, 0.16, 0), leaf)
-
-## A tall thin tower stops being a house and becomes a landmark: a tapered spire
-## with a weathervane on top. Visible from anywhere on the island, which is the
-## whole point of rewarding someone for building UP.
-func _build_spire(trim_col: Color) -> void:
-	var roof: Color = _tint(_palette["roof"])
-	# The spire IS the roof now, so it starts at the wall head and carries a proper
-	# eaves course — a bare needle on a flat top read as a spike stuck through a
-	# house rather than as the top of a tower.
-	_batch.box(Vector3(1.16, 0.1, 1.16), Vector3(0, 0.54, 0), roof)
-	var base: float = 0.59
-	var steps := 6
-	for i in steps:
-		var t: float = float(i) / float(steps)
-		var w: float = lerpf(0.92, 0.14, t)
-		_batch.box(Vector3(w, 0.3, w), Vector3(0, base + 0.15 + t * 1.5, 0), roof)
-	var top: float = base + 1.72
-	_batch.box(Vector3(0.05, 0.28, 0.05), Vector3(0, top, 0), trim_col)
-	# Weathervane: a little arrow across the mast, turned by the cell hash so no
-	# two towers in a town point the same way.
-	var ang: float = HouseShape.building_roll(grid_cell, 97) * TAU
-	_batch.box(Vector3(0.34, 0.04, 0.05), Vector3(0, top + 0.16, 0), trim_col,
-		Basis(Vector3(0, 1, 0), ang))
-
-## Ring an empty cell with houses and the hole becomes a planted courtyard.
-## Built INTO the neighbouring empty cell, by whichever surrounding cell owns it,
-## so it appears exactly once however many houses touch it.
-func _build_courtyard(dir: Vector3i, trim_col: Color) -> void:
-	var at := Vector3(float(dir.x), 0.0, float(dir.z))
-	var paving: Color = _tint(Color("b3a68e"))
-	_batch.box(Vector3(0.92, 0.12, 0.92), at + Vector3(0, -0.46, 0), paving)
-	# A small tree in the middle, and a bench against one side.
-	var leaf: Color = _tint(FOLIAGE)
-	_batch.box(Vector3(0.09, 0.34, 0.09), at + Vector3(0, -0.23, 0), trim_col)
-	_batch.box(Vector3(0.44, 0.3, 0.44), at + Vector3(0, 0.02, 0), leaf)
-	_batch.box(Vector3(0.3, 0.24, 0.3), at + Vector3(0, 0.24, 0), leaf)
-	_batch.box(Vector3(0.34, 0.05, 0.13), at + Vector3(-0.28, -0.3, 0.26), trim_col)
-
-## A line of little flags strung across a one-cell gap between two rooftops at
-## the same height. Only the NEAR cell of the pair draws it, so the line appears
-## once rather than twice in the same place.
-func _build_bunting(dir: Vector3i) -> void:
-	var along := Vector3(float(dir.x), 0.0, float(dir.z))
-	var top: float = 0.5 + HouseShape.roof_top_height(grid_cell) + 0.16
-	var cord: Color = _tint(Color("6b5a45"))
-	var flags: Array[Color] = [_tint(ACCENT), _tint(Color("f0b53c")), _tint(Color("bcd4dd"))]
-	var span := 2.0
-	for i in 7:
-		var t: float = (float(i) + 0.5) / 7.0
-		# Sag: the cord dips in the middle the way a real line does.
-		var sag: float = sin(t * PI) * 0.16
-		var at: Vector3 = along * (t * span) + Vector3(0, top - sag, 0)
-		_batch.box(along * 0.3 + Vector3(0.03, 0.03, 0.03), at, cord)
-		_batch.box(Vector3(0.07, 0.13, 0.07), at + Vector3(0, -0.09, 0), flags[i % flags.size()])
-
-func _build_chimney(trim_col: Color) -> void:
-	var at := Vector3(0.26, 0.5 + ROOF_H * 0.55, 0.26)
-	_batch.box(Vector3(0.18, 0.46, 0.18), at, trim_col)
-	_batch.box(Vector3(0.24, 0.06, 0.24), at + Vector3(0, 0.25, 0), _dark())
-	_add_smoke(at + Vector3(0, 0.3, 0))
-
-## Slow chimney smoke. Amount goes through QualityManager so the web LITE build
-## halves it — a street of houses is the one thing here that can multiply
-## particle systems, so this must scale with the profile like everything else.
-func _add_smoke(at: Vector3) -> void:
-	var p := GPUParticles3D.new()
-	p.amount = QualityManager.particles(10)
-	p.lifetime = 3.4
-	p.position = at
-	p.draw_order = GPUParticles3D.DRAW_ORDER_LIFETIME
-	var pm := ParticleProcessMaterial.new()
-	pm.direction = Vector3(0.25, 1, 0.1)
-	pm.spread = 12.0
-	pm.initial_velocity_min = 0.18
-	pm.initial_velocity_max = 0.34
-	pm.gravity = Vector3(0.05, 0.12, 0.0)      # drifts up and leans on the breeze
-	pm.scale_min = 0.5
-	pm.scale_max = 1.5
-	pm.color = Color(0.93, 0.92, 0.9, 0.5)
-	p.process_material = pm
-	var q := QuadMesh.new()
-	q.size = Vector2(0.16, 0.16)
-	var qm := StandardMaterial3D.new()
-	qm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	qm.albedo_color = Color(0.95, 0.94, 0.92, 0.42)
-	qm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	q.material = qm
-	p.draw_pass_1 = q
-	_visual.add_child(p)
 
 # ------------------------------------------------------------------ helpers
+## Every colour the roof half needs, already pushed through the map theme's
+## tint — so nothing over there has to know a theme exists.
+func _paint() -> Dictionary:
+	return {
+		"roof": _tint(_palette["roof"]),
+		"dark": _dark(),
+		"leaf": _tint(FOLIAGE),
+		"glass": _glass_col(),
+		"deck": _tint(Color("b3a68e")),
+		"cord": _tint(Color("6b5a45")),
+		"accent": _tint(ACCENT),
+		"flag_gold": _tint(Color("f0b53c")),
+		"flag_sky": _tint(Color("bcd4dd")),
+		"snow": SNOW,
+		"snowy": MapThemes.current == SNOW_THEME,
+	}
+
 ## One shared dark shade for door panel, ridge cap and chimney cap. They used to
 ## be three separate `darkened()` values, which the batcher can only read as
 ## three different colours — i.e. three extra draw calls per house for a

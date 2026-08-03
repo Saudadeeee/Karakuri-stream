@@ -13,7 +13,7 @@ const TEXT := Color("4a3f35")
 const SALMON := Color("e07a5f")
 
 var _cam_rig: Node3D
-var _settings_panel: Panel
+var _settings_panel: PanelContainer
 var _env: Environment
 var _sun: DirectionalLight3D
 var _map_cards: Array[Button] = []
@@ -388,24 +388,34 @@ func _menu_button(text: String, cb: Callable) -> Button:
 
 # ------------------------------------------------------------ settings panel
 func _build_settings_panel(root: Control) -> void:
-	_settings_panel = Panel.new()
-	var tall: bool = not OS.has_feature("web")
-	var panel_size := Vector2(380, 512 if tall else 382)
-	_settings_panel.custom_minimum_size = panel_size
-	_settings_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_settings_panel.position = -panel_size * 0.5
+	# A PanelContainer that GROWS TO ITS CONTENT, not a Panel with a hardcoded
+	# height. Vietnamese lines are taller than the English ones they replaced —
+	# diacritics come from the fallback face — and the fixed 512 px card pushed
+	# Fullscreen, the F11 hint and the Close button off its own bottom edge.
+	_settings_panel = PanelContainer.new()
+	_settings_panel.custom_minimum_size = Vector2(380, 0)
 	_settings_panel.visible = false
 	root.add_child(_settings_panel)
+	var centre := func() -> void:
+		var vp: Vector2 = _settings_panel.get_viewport_rect().size
+		_settings_panel.position = (vp - _settings_panel.size) * 0.5
+	_settings_panel.resized.connect(centre)
+	get_viewport().size_changed.connect(centre)
+
+	var margin := MarginContainer.new()
+	for side in ["left", "right"]:
+		margin.add_theme_constant_override("margin_" + side, 24)
+	for side in ["top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 22)
+	_settings_panel.add_child(margin)
 
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.add_theme_constant_override("separation", 10)
-	box.offset_left = 24; box.offset_top = 22
-	box.offset_right = -24; box.offset_bottom = -22
-	_settings_panel.add_child(box)
+	margin.add_child(box)
 
 	var head := Label.new()
 	head.text = "Settings"
+	head.set_meta("i18n_head", true)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 24)
 	box.add_child(head)
@@ -417,6 +427,11 @@ func _build_settings_panel(root: Control) -> void:
 	box.add_child(_toggle_row("Mute away",
 		func() -> bool: return AudioManager.duck_when_unfocused(),
 		func(on: bool) -> void: AudioManager.set_duck_when_unfocused(on)))
+
+	# Language sits with Sound rather than in a menu of its own: two languages do
+	# not need a screen, and a player who cannot read the UI needs to find this
+	# without reading much.
+	box.add_child(_language_row())
 
 	box.add_child(_section_label("Screen"))
 	# A browser tab cannot resize itself and has no vsync switch of its own, so
@@ -436,15 +451,45 @@ func _build_settings_panel(root: Control) -> void:
 	f11.modulate = Color(TEXT.r, TEXT.g, TEXT.b, 0.6)
 	box.add_child(f11)
 
-	var gap := Control.new()
-	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(gap)
-
 	var close := Button.new()
 	close.text = "Close"
 	close.custom_minimum_size = Vector2(0, 44)
 	close.pressed.connect(func(): _settings_panel.visible = false)
 	box.add_child(close)
+
+## The button shows the language it will switch TO, in that language — the one
+## label in the game that must never be translated, because it is the thing a
+## player who cannot read the current language is looking for.
+func _language_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var l := Label.new()
+	l.text = "Language"
+	l.custom_minimum_size = Vector2(96, 0)
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(96, 36)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	b.text = I18n.locale_name(I18n.current_locale())
+	b.pressed.connect(func() -> void:
+		I18n.set_locale(I18n.next_locale())
+		b.text = I18n.locale_name(I18n.current_locale())
+		_retranslate())
+	row.add_child(b)
+	_settings_widgets.append(func() -> void:
+		b.text = I18n.locale_name(I18n.current_locale()))
+	return row
+
+## Godot retranslates a Control's own `text` when the locale changes, but the map
+## cards are rebuilt from data and the settings toggles read their state through
+## callbacks, so the panel refreshes itself.
+func _retranslate() -> void:
+	for refresh in _settings_widgets:
+		refresh.call()
+	for i in _map_cards.size():
+		_map_cards[i].text = tr(MapThemes.name_of(i).split(" ")[-1])
 
 func _section_label(text: String) -> Label:
 	var l := Label.new()

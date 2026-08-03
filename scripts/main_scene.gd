@@ -94,20 +94,28 @@ func _maybe_show_controls() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
 	box.add_child(title)
+	# One key per LINE, not one key for the whole card: a translator should not
+	# have to keep six lines of layout intact to change one of them, and a missing
+	# translation falls back line by line instead of dropping the lot.
+	var touch: bool = preload("res://scripts/ui/touch_controls.gd").should_show()
+	var lines: Array[String] = [
+		"Tap — place a block        Erase button — delete mode" if touch
+			else "Left click — place a block        Right click — remove",
+		"One finger — orbit camera      Two fingers — pinch zoom" if touch
+			else "Middle drag — orbit camera      Scroll — zoom",
+		"Tap a hotbar icon again — change its style / tempo" if touch
+			else "Click a hotbar icon again — change its style / tempo",
+		"Q — houses. Line them up and they become one building.",
+		"Build a village and animals move in. Birds play your bells.",
+		"Undo button — take back the last block" if touch
+			else "Ctrl+Z undo · H hide UI · U move the sun · P screenshot · F11 fullscreen",
+	]
+	var shown: PackedStringArray = []
+	for l in lines:
+		shown.append(tr(l))
 	var body := Label.new()
-	body.text = "Left click — place a block        Right click — remove\n" \
-		+ "Middle drag — orbit camera      Scroll — zoom\n" \
-		+ "Click a hotbar icon again — change its style / tempo\n" \
-		+ "Q — houses. Line them up and they become one building.\n" \
-		+ "Build a village and animals move in. Birds play your bells.\n" \
-		+ "Ctrl+Z undo · H hide UI · U move the sun · P screenshot · F11 fullscreen"
-	if preload("res://scripts/ui/touch_controls.gd").should_show():
-		body.text = "Tap — place a block        Erase button — delete mode
-" 			+ "One finger — orbit camera      Two fingers — pinch zoom
-" 			+ "Tap a hotbar icon again — change its style / tempo
-" 			+ "Q — houses. Line them up and they become one building.
-" 			+ "Build a village and animals move in. Birds play your bells.
-" 			+ "Undo button — take back the last block"
+	body.text = "
+".join(shown)
 	body.add_theme_font_size_override("font_size", 15)
 	box.add_child(body)
 	var ok := Button.new()
@@ -161,12 +169,12 @@ func _drain_discoveries() -> void:
 	box.add_theme_constant_override("separation", 4)
 	panel.add_child(box)
 	var head := Label.new()
-	head.text = "The town made %s" % String(e["title"]).to_lower()
+	head.text = tr("The town made %s") % tr(String(e["title"])).to_lower()
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 18)
 	box.add_child(head)
 	var note := Label.new()
-	note.text = String(e["note"])
+	note.text = tr(String(e["note"]))
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 13)

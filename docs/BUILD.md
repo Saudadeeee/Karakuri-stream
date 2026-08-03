@@ -177,3 +177,33 @@ Touch controls (one-finger orbit, two-finger pinch zoom, tap to place) already w
 ```
 godot --path . tests/regression.tscn     # expect "REGRESS ALL OK", 0 errors
 ```
+
+### The web build needs a browser to be tested
+Everything else can be checked headless with Godot itself. The web target
+cannot: its failure mode is "the page loads and then nothing happens", which
+only shows up in a real browser running real WASM.
+```
+cd export/web && python -m http.server 8099 &
+node tools/webtest.mjs                   # expect "BOOT OK in Ns"
+```
+Drives Chromium from the Playwright cache over CDP and waits for the Godot shell
+to hand over to the engine, then screenshots it and reports any console error.
+Nothing to `npm install`. Last measured: **BOOT OK in 6.2 s** on software
+rendering (SwiftShader), no console errors.
+
+## Press kit
+```
+godot --path . --rendering-driver opengl3 --resolution 960x540       tools/record.tscn -- seconds=5 fps=20 zoom=6.5 pitch=30 out=promo
+ffmpeg -y -framerate 20 -i "%USERPROFILE%/AppData/Roaming/Godot/app_userdata/KARAKURI STREAM/record/promo_%04d.png"       -vf "fps=20,scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse"       -loop 0 export/press/karakuri-stream.gif
+```
+A screenshot cannot sell this game — water falling, the thing it lands on
+playing a note and a bird ringing a bell are all motion. `tools/record.gd` drops
+a working karakuri on the island, orbits it slowly and writes one PNG per frame
+on a TIMER (capturing every rendered frame would produce slow motion, since the
+game runs far faster than any GIF).
+
+| File | For |
+|---|---|
+| `export/press/karakuri-stream.gif` 3.5 MB, 640 px | store page |
+| `export/press/karakuri-stream-cover.gif` 1.3 MB, 480 px | itch.io cover (there is a size cap) |
+| `export/press/karakuri-stream.mp4` 0.7 MB | anywhere video is allowed |

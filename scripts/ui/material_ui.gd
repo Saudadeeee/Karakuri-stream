@@ -44,6 +44,7 @@ var _faded: bool = false
 ## Seconds of full opacity still owed to a keyboard selection.
 var _reveal_left: float = 0.0
 const COG_BEZEL := preload("res://scripts/ui/cog_bezel.gd")
+const TOUCH_CONTROLS := preload("res://scripts/ui/touch_controls.gd")
 var _bezel_by_type: Dictionary = {}
 var _hint_panel: PanelContainer
 var _hint_label: Label
@@ -63,7 +64,6 @@ func _ready() -> void:
 		button.pressed.connect(placement_controller.select_material.bind(type))
 
 	placement_controller.material_changed.connect(_on_material_changed)
-	_on_material_changed(BlockData.Type.WOOD)
 
 	# Hover hint card (name + what the block does), themed like everything else.
 	_hint_panel = PanelContainer.new()
@@ -76,6 +76,11 @@ func _ready() -> void:
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.add_theme_font_size_override("font_size", 14)
 	vb.add_child(_hint_label)
+
+	# Last, and deferred: the starting selection wants to show its hint card on a
+	# touch device, and that needs both the card to exist and the buttons to have
+	# been laid out so the card knows where to sit.
+	_on_material_changed.call_deferred(BlockData.Type.WOOD)
 
 func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
@@ -236,6 +241,11 @@ func _process(delta: float) -> void:
 				bz.rot += delta * 0.7
 				bz.queue_redraw()
 
+	if _hint_left > 0.0:
+		_hint_left = maxf(_hint_left - delta, 0.0)
+		if _hint_left == 0.0 and _hovered_type == -1 and _hint_panel != null:
+			_hint_panel.visible = false
+
 	var mouse_x: float = get_viewport().get_mouse_position().x
 	var lit: bool = mouse_x <= REVEAL_ZONE or _reveal_left > 0.0
 	_reveal_left = maxf(_reveal_left - delta, 0.0)
@@ -246,6 +256,26 @@ func _process(delta: float) -> void:
 	if faded != _faded:
 		_faded = faded
 		_refresh_viewport_modes()
+
+## Touch has no hover, so the hint card — the only place the game says what a
+## block DOES — never appeared on a phone at all. Selecting one shows it for a
+## few seconds instead, which is the same moment a mouse player would be reading
+## it and needs no gesture of its own.
+const TOUCH_HINT_TIME: float = 3.5
+var _hint_left: float = 0.0
+
+func _show_hint(type: int) -> void:
+	if _hint_panel == null:
+		return
+	var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
+	_hint_label.text = "%s
+%s" % [tr(vname), tr(BlockCatalog.hint(type))]
+	var btn: Button = _buttons.get(type)
+	if btn == null:
+		return
+	_hint_panel.position = Vector2(16.0 + float(COLUMNS * (ICON_SIZE + ICON_GAP)) + 14.0,
+		btn.global_position.y)
+	_hint_panel.visible = true
 
 func _on_icon_hover(type: int, entered: bool) -> void:
 	_hovered_type = type if entered else -1
@@ -276,6 +306,9 @@ func _on_material_changed(type: BlockData.Type, variant: int = 0) -> void:
 	# has the pointer in the reveal zone; this is for the keyboard, where the
 	# only feedback used to be a change inside a 45%-faded panel.
 	_reveal_left = KEY_REVEAL_TIME
+	if TOUCH_CONTROLS.should_show():
+		_show_hint(type)
+		_hint_left = TOUCH_HINT_TIME
 	for button_type in _buttons:
 		_buttons[button_type].set_pressed_no_signal(button_type == type)
 	_selected_type = type

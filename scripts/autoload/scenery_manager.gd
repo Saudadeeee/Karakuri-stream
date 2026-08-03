@@ -211,6 +211,7 @@ func _place_ring_model(scene: PackedScene, ang: float, radius: float, height: fl
 			_tint_all(holder, tint)
 	else:
 		MeshFit.recolor_foliage(holder, t["foliage"])
+		MeshFit.bake(holder)   # last: bake flattens the materials recolor_foliage works through
 		# Register the on-island prop's cell so a block placed here shatters it.
 		_prop_cells[GridManager.world_to_cell(root.position)] = {"root": root, "kind": kind}
 

@@ -1,7 +1,7 @@
 # Credits & third-party licences
 
 Every third-party asset shipped in this game is **CC0 (public domain)** except
-the font, which is **SIL OFL 1.1**. Licences were checked against the source
+the two fonts, which are **SIL OFL 1.1**. Licences were checked against the source
 pages, not assumed from filenames. Freesound filenames keep their original
 sound ID and author handle, so any claim below can be re-checked at
 `freesound.org/s/<id>/`.
@@ -42,6 +42,12 @@ regenerated from source:
 | `rain_loop.ogg` — quiet rain layer | [Rain (loopable)](https://opengameart.org/content/rain-loopable) | Ylmir | CC0 |
 
 ## Fonts
+
+**Nunito** (OFL 1.1, The Nunito Project Authors) is bundled as the FALLBACK
+face. The pixel font and Fredoka both stop at Latin-1, so every Vietnamese word
+with a diacritic drew as an empty box; Nunito carries the full Vietnamese set
+and is only ever asked for the characters the other two do not have.
+
 
 - **Fredoka** by [Hafontia](https://github.com/hafontia/Fredoka-One), via
   [Google Fonts](https://fonts.google.com/specimen/Fredoka) — SIL OFL 1.1.

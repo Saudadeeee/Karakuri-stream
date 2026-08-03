@@ -29,19 +29,33 @@ func _ready() -> void:
 	add_child(_swing)
 	_tube_model = TUBE.instantiate()
 	_swing.add_child(_tube_model)
-	MeshFit.fit_bottom(_tube_model, 0.55, -0.55)   # top (cord) at the pivot
-	# The authored tube is tall and thin; fatten it sideways so the chime pipe
-	# reads clearly at gameplay distance (uniform fit keeps it too skinny).
-	_tube_model.scale *= Vector3(1.7, 1.0, 1.7)
+	_shape_tube()
 	MeshFit.matte(_tube_model)
 	if not _pending_variant.is_empty():
 		apply_variant(_pending_variant)
+
+## Tube length per note. A chime's note was told ONLY by its colour, which is
+## unreadable to a colour-blind player — and this is not decoration, it is the
+## melody. Real chimes are pitched by length, so the higher the note the shorter
+## the tube: the row now reads as a descending staircase whether or not the
+## colours land.
+const TUBE_LENGTHS: Array[float] = [0.62, 0.575, 0.53, 0.48, 0.43]   # C D E G A
+
+func _shape_tube() -> void:
+	var length: float = TUBE_LENGTHS[_note % TUBE_LENGTHS.size()]
+	# floor_y = -length puts the CORD END at the pivot whatever the length, so
+	# every tube still hangs from the hook instead of floating under it.
+	MeshFit.fit_bottom(_tube_model, length, -length)
+	# The authored tube is tall and thin; fatten it sideways so the chime pipe
+	# reads clearly at gameplay distance (a uniform fit keeps it too skinny).
+	_tube_model.scale *= Vector3(1.7, 1.0, 1.7)
 
 func apply_variant(v: Dictionary) -> void:
 	_note = int(v.get("note", 0))
 	if _tube_model == null:
 		_pending_variant = v   # icons/ghost call before _ready — applied there
 		return
+	_shape_tube()
 	MeshFit.tint(_tube_model, TUBE_BASE, Color(v.get("color", "#9BD4CE")))
 
 ## Stream impact tick → this chime's own note + a pendulum swing.
