@@ -1,1 +1,35 @@
 1. Phân tích Phong cách chung (The Art Style)Hình khối (Geometry): "Chunky & Beveled" (Dày dặn và Vát góc). Không bao giờ có góc nhọn hoắt 90 độ. Mọi cạnh đều phải được vát (bevel) nhẹ để bắt sáng mượt mà. Số lượng đa giác (polygon) cực thấp (Low-poly) nhưng nhìn không bị gồ ghề (phải bật Smooth Shading).Chất liệu (Material): "Clay & Matte" (Đất sét và Nhám mờ). Không bóng loáng, không phản chiếu kim loại phức tạp. Vật liệu giống như những món đồ chơi bằng gỗ được sơn màu nhám, tạo cảm giác an toàn và dễ chịu.Màu sắc (Color Palette): Pastel / Wabi-Sabi. Bảng màu tĩnh, độ bão hòa (saturation) thấp.Gỗ mộc (Nâu cát ấm): #D4A373Trúc tươi (Xanh lá pastel): #8CB369Nước thạch (Xanh lục lam): #48CAE4Đá/Chuông xỉn màu (Xám ấm): #BDBDBDDây lạt/Điểm nhấn (Đỏ chu sa): #E07A5FTỉ lệ (Scale): Dạng lưới (Grid-based). Mọi vật thể đều phải nằm vừa vặn trong một khối lập phương $2 \times 2 \times 2$ mét để hệ thống tự động bắt dính (snap) chuẩn xác.2. MASTER PROMPT (Dành cho Claude / Blender Agent)Hãy copy toàn bộ khung dưới đây và dán vào phần Custom Instructions (hoặc gửi làm tin nhắn đầu tiên) cho Claude mỗi khi bạn muốn nhờ viết code sinh file .glb.[BẮT ĐẦU MASTER PROMPT]"You are an Expert 3D Technical Artist Agent. Your task is to write Python scripts for Blender (bpy) to generate 3D assets for a web-based Godot game named 'Karakuri Stream'.CRITICAL STYLE CONSTRAINTS (DO NOT DEVIATE):Aesthetic: 'Townscaper' meets Japanese miniature diorama. Cozy, digital toy vibe.Geometry: Ultra low-poly but soft. You MUST apply a Bevel modifier to every sharp edge (Width: 0.05m, Segments: 2). Apply 'Shade Auto Smooth' so the faces look flat but edges catch light smoothly like clay/painted wood.Proportions: Chunky, stylized, and slightly thick (not realistically thin). All base objects must fit perfectly within a $2 \times 2 \times 2$ meter grid logic.Materials: Use ONLY unlit/diffuse flat colors (no complex textures, no metallic, roughness = 1.0). Assign materials using these strict Hex colors depending on the material requested:Wood: #D4A373Bamboo: #8CB369Jelly Water: #48CAE4Stone/Iron: #BDBDBDAccent String: #E07A5FExport: The script must automatically clear the default scene, generate the requested object, apply all modifiers, and export it as a binary .glb file optimized for Godot 4.Acknowledge these rules. I will now give you the name of the object to create."[KẾT THÚC MASTER PROMPT]
+
+## Chống cảm giác "nhựa" (2026-08-04)
+
+Ba thứ cộng lại làm cả game đọc thành đồ nhựa, và không cái nào là màu sắc:
+
+1. **Không có bóng tiếp đất.** Renderer `gl_compatibility` KHÔNG có SSAO — không
+   có screen-space gì cả — nên chỗ vật chạm đất chẳng có gì: không tối lại,
+   không khe, chỉ hai mảng màu phẳng gặp nhau. Bóng đổ của mặt trời không thay
+   được: nó lệch sang một bên, biến mất khi vật đứng trong bóng khác, và không
+   nói gì về việc CHẠM. → `scripts/autoload/contact_shadow.gd`: một mesh duy
+   nhất cho cả đảo, dựng lại theo throttle như các manager khác, mỗi vệt là một
+   quạt 8 cạnh viền trong suốt. Cả vườn = **1 draw call trong suốt**.
+   *Bẫy đã dính*: `cell_to_world()` trả về TÂM ô ở `y + 0.5`; lấy `cell.y - 0.5`
+   là chôn mọi vệt xuống dưới đảo nửa đơn vị, chỉ vài vệt ở chỗ đất trũng mới ló ra.
+2. **Mặt đất là MỘT màu phẳng.** Đảo là bề mặt lớn nhất màn hình — hơn nửa khung
+   hình — và chỉ có đúng một giá trị RGB. Một mảng màu đồng nhất to như thế mới
+   là thứ đọc thành nhựa, trước cả thiết lập vật liệu. → `shaders/ground.gdshader`:
+   nhiễu value 2 quãng trong không gian thế giới, chu kỳ tính bằng ĐƠN VỊ Ô
+   (2.4 và 0.45) chứ không phải một hệ số chia mơ hồ, lệch về phía tối vì đất thì
+   bẩn chứ không bóng. Hash cố tình KHÔNG dùng `fract(sin(dot()))` — 8 lần `sin`
+   mỗi pixel trên bề mặt lớn nhất là thứ target compatibility chịu không nổi.
+3. **Không có chút bóng sáng nào.** `roughness 1.0` + specular 0 là bề mặt
+   khuếch tán hoàn hảo: định nghĩa vật lý của phấn, định nghĩa thị giác của
+   vinyl — và nó nằm trên MỌI prop. `MeshFit.SHEEN_ROUGHNESS 0.88` /
+   `SHEEN_SPECULAR 0.16` là ranh giới: không có đốm sáng, chỉ có cạnh bắt nắng.
+
+Cộng thêm: bóng đổ mặt trời từ `opacity 0.55 / blur 3.2` (nhạt và nhoè đến mức
+không vật nào có mặt tối) sang **0.72 / 2.2** — một khối không có mặt tối thì đọc
+thành hình dán.
+
+**Chi phí đo được** (A/B có kiểm soát, `git stash` rồi đo 3 lần mỗi bên, 800 khối):
+không thay đổi trong sai số — 15.1/14.8/15.4 ms có art pass so với 15.4/17.4/16.0 ms
+khi stash đi. Lần đo đầu tưởng tụt 87→66 fps là do **máy trôi** giữa các phiên,
+không phải do code; đó là lý do phải A/B chứ đừng so với số đo cách đó vài giờ.

@@ -49,14 +49,23 @@ static func fit_centered(model: Node3D, target: float) -> void:
 ## counterpart to `matte()` (which flattens materials that came in with a model).
 ## Clock movement, tea doll, pinwheel, pipes, decor and island rocks each carried
 ## a byte-identical private copy of this; one shared factory instead, so the look
-## can only drift in one place. Deliberately does NOT touch `metallic_specular`:
-## roughness 1.0 already kills the highlight on these flat-shaded props, and the
-## six originals left it at default — keeping it that way means no visual change.
+## can only drift in one place.
+##
+## Roughness 1.0 with no specular is a PERFECTLY diffuse surface: physically the
+## definition of chalk, visually the definition of vinyl — and it was on every
+## prop in the game, which is most of why the whole thing read as plastic. A
+## little grazing-angle light is what tells the eye a surface is made of
+## something; a lot of it is what makes plastic. 0.88 / 0.16 sits between: no
+## visible hotspot, just an edge that catches the sun.
+const SHEEN_ROUGHNESS := 0.88
+const SHEEN_SPECULAR := 0.16
+
 static func flat(col: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
-	m.roughness = 1.0
+	m.roughness = SHEEN_ROUGHNESS
 	m.metallic = 0.0
+	m.specular = SHEEN_SPECULAR
 	return m
 
 ## Forces every material to the game's matte clay look. glTF import gives

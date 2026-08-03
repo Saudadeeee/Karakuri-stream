@@ -1,5 +1,7 @@
 extends Node
 
+const GROUND_SHADER: Shader = preload("res://shaders/ground.gdshader")
+
 ## The sculpted floating island — replaces the old poker-chip cylinder pair in
 ## BOTH the menu backdrop and the game scene (this is an autoload, so one mesh
 ## serves wherever the camera is). Noise-rimmed edge, gently domed top, an
@@ -143,9 +145,11 @@ func _island_mesh(top_col: Color, base_col: Color, rng: RandomNumberGenerator, r
 	st.generate_normals()
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.roughness = 0.95
+	# The island keeps its ring colours (they carry the theme) but goes through
+	# the ground shader, which breaks the top up with world-space noise and gives
+	# it a trace of sheen. See shaders/ground.gdshader for why.
+	var m := ShaderMaterial.new()
+	m.shader = GROUND_SHADER
 	mi.material_override = m
 	return mi
 

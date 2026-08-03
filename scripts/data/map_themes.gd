@@ -128,8 +128,11 @@ static func apply_environment(env: Environment, sun: DirectionalLight3D) -> void
 		# full opacity their shadows land on the lawn as hard black ellipses that
 		# read as dirt rather than shade. Soft and partial keeps the depth cue
 		# without punching holes in a pastel picture.
-		sun.shadow_opacity = 0.55
-		sun.shadow_blur = 3.2
+		# 0.55/3.2 was so pale and so soft that no object had a dark side, and a
+		# form with no dark side reads as a flat sticker. Deeper and tighter gives
+		# the blocks a shaded face without turning a pastel picture harsh.
+		sun.shadow_opacity = 0.72
+		sun.shadow_blur = 2.2
 		# Blending the cascade splits costs an extra pass over the overlap region.
 		# Measured on a 24-house village: 353 draw calls without shadows, 1254
 		# with them and blended splits. Worth it on desktop, not on a phone.
