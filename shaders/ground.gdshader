@@ -23,12 +23,20 @@ render_mode diffuse_lambert, specular_schlick_ggx;
 // which made the "detail" octave four times COARSER than the base one and turned
 // the lawn into two giant blobs.
 uniform float patch_period : hint_range(0.5, 8.0) = 2.4;
-uniform float patch_strength : hint_range(0.0, 0.4) = 0.10;
+uniform float patch_strength : hint_range(0.0, 0.4) = 0.17;
 uniform float grain_period : hint_range(0.1, 2.0) = 0.45;
 uniform float grain_strength : hint_range(0.0, 0.3) = 0.06;
 // Slope darkening: the sides of the island and the lip under the rim take a
 // touch more shade, which is where a real mound holds its dirt.
 uniform float slope_shade : hint_range(0.0, 1.0) = 0.22;
+// Radial falloff. Measured on a play frame, half the picture sat inside a
+// SIXTEEN-level band of luminance — the lawn is one value and it is half the
+// screen, which is what a flat picture is. Noise alone only moved that band; it
+// did not widen it. A broad darkening toward the rim does, and it also frames
+// the middle of the island where the player actually builds.
+uniform float edge_darken : hint_range(0.0, 0.6) = 0.26;
+uniform float edge_inner : hint_range(0.0, 12.0) = 3.8;
+uniform float edge_outer : hint_range(2.0, 20.0) = 10.0;
 uniform float ground_roughness : hint_range(0.3, 1.0) = 0.92;
 uniform float ground_specular : hint_range(0.0, 0.5) = 0.14;
 
@@ -79,6 +87,9 @@ void fragment() {
 	// Anything not facing up is a slope; slopes hold shade.
 	float up = clamp(v_normal_world.y, 0.0, 1.0);
 	shade -= (1.0 - up) * slope_shade * 0.5;
+
+	float r = length(v_world.xz);
+	shade -= smoothstep(edge_inner, edge_outer, r) * edge_darken;
 
 	ALBEDO = clamp(base * (1.0 + shade), vec3(0.0), vec3(1.0));
 	ROUGHNESS = ground_roughness;

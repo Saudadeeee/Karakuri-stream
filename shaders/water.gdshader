@@ -24,10 +24,15 @@ uniform vec4 deep_color : source_color = vec4(0.18, 0.62, 0.76, 1.0);
 uniform vec4 foam_color : source_color = vec4(0.95, 0.91, 0.85, 0.98);
 uniform float wave_speed : hint_range(0.0, 3.0) = 0.9;
 uniform float wave_scale : hint_range(0.0, 20.0) = 5.0;
-uniform float wave_height : hint_range(0.0, 0.12) = 0.025;
+// A still pond seen from the play camera is mostly its TOP face, and at
+// 0.025 that face barely moved — the pond read as a slab of blue jelly. The
+// waves are what say "liquid" from above.
+uniform float wave_height : hint_range(0.0, 0.12) = 0.042;
 uniform float fresnel_power : hint_range(0.5, 6.0) = 3.2;
-uniform float foam_amount : hint_range(0.0, 1.0) = 0.08;
-uniform float caustic_strength : hint_range(0.0, 1.0) = 0.18;
+// Foam gathers on the silhouette, which is the only cue this renderer can give
+// for "the water ends here" — there is no depth buffer read to find a shoreline.
+uniform float foam_amount : hint_range(0.0, 1.0) = 0.14;
+uniform float caustic_strength : hint_range(0.0, 1.0) = 0.26;
 uniform float sparkle_strength : hint_range(0.0, 2.0) = 0.35;
 // Fake sky reflection: at grazing angles the surface mixes toward the sky's
 // warm horizon colour (matches the ProceduralSky), reading as a reflective

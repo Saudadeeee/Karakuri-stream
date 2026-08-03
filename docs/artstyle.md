@@ -33,3 +33,43 @@ thành hình dán.
 không thay đổi trong sai số — 15.1/14.8/15.4 ms có art pass so với 15.4/17.4/16.0 ms
 khi stash đi. Lần đo đầu tưởng tụt 87→66 fps là do **máy trôi** giữa các phiên,
 không phải do code; đó là lý do phải A/B chứ đừng so với số đo cách đó vài giờ.
+
+
+## Giãn dải sáng-tối (2026-08-04, đợt 2)
+
+Đo histogram độ sáng một khung hình chơi thật (bỏ thanh hotbar):
+
+| | trước | sau |
+|---|---|---|
+| Trung vị | 181 | **160** |
+| Bách phân vị 25 → 75 | 170 → 186 | 149 → 168 |
+| **IQR (độ giãn nửa giữa)** | **16** | **19** |
+| Tỷ lệ tối (<90) | 6.3 % | 7.6 % |
+
+Nửa khung hình từng nằm gọn trong **16 mức sáng** — đó chính là định nghĩa của
+một bức phẳng. Bãi cỏ là thủ phạm: nó chiếm quá nửa màn hình ở đúng một giá trị.
+Ba việc:
+
+1. **Ambient −28 % mọi map.** Ánh sáng môi trường lấp đầy mọi bóng; bớt nó đi là
+   cách duy nhất để một khối có mặt tối.
+2. **Nền đảo sâu màu hơn ~12 %** — nó là cái cao nguyên trong histogram.
+3. **Tối dần ra vành đảo** (`edge_darken` trong `ground.gdshader`). Chỉ thêm
+   nhiễu KHÔNG giãn được dải: đo lại thấy IQR vẫn 13, chỉ dịch xuống. Phải có
+   một biến thiên diện rộng mới giãn được — và nó cũng đóng khung chỗ người chơi
+   đang xây.
+
+Ống tre: mỗi ô và mỗi nhánh lấy một sắc xanh riêng (hash theo ô nên reload không
+đổi). Trước đó mọi ống trong vườn đúng một màu phẳng suốt chiều dài — mà ống là
+thứ nhiều nhất trên một hòn đảo hoàn chỉnh. Chi phí bằng 0: `MeshFit.bake` gộp
+mọi màu phẳng vào một surface màu-theo-vertex.
+
+Nước: `wave_height` 0.025 → 0.042 và `foam_amount` 0.08 → 0.14. Ao tĩnh nhìn từ
+camera chơi chủ yếu là MẶT TRÊN, mà ở 0.025 mặt đó gần như không động — đọc
+thành một tấm thạch xanh.
+
+**Chi phí đo được** (A/B `git stash`, máy đã dọn sạch process sót):
+LITE 24 khối 4.66/4.74 ms → **5.07 ms** (+0.35 ms). 800 khối: không khác biệt
+ngoài nhiễu. *Bài học đo đạc*: hai lần trước tôi suýt kết luận sai vì so với số
+đo cũ vài tiếng — máy trôi, và có 2 process Godot của chính tôi còn sót chiếm
+GPU khiến suite báo lỗi giả "rebuild is town-wide again" (4.7 s cho 3 frame).
+Dọn process xong là REGRESS ALL OK. **Luôn A/B trong cùng một phiên.**

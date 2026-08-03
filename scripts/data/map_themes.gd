@@ -19,8 +19,8 @@ const THEMES: Array = [
 		"name": "Spring",
 		"sky_top": Color(0.42, 0.72, 0.71), "sky_horizon": Color(0.92, 0.78, 0.79),
 		"fog_color": Color(0.9, 0.82, 0.85), "fog_density": 0.006,
-		"sun_color": Color(1.0, 0.98, 0.92), "sun_energy": 0.9, "ambient_energy": 0.28,
-		"island_top": Color(0.55, 0.58, 0.44), "island_base": Color(0.4, 0.3, 0.22),
+		"sun_color": Color(1.0, 0.98, 0.92), "sun_energy": 0.9, "ambient_energy": 0.20,
+		"island_top": Color(0.47, 0.50, 0.37), "island_base": Color(0.4, 0.3, 0.22),
 		"mountain_tint": Color(1, 1, 1),
 		"foliage": Color(),  # keep authored greens
 		"feature": "sakura",
@@ -38,8 +38,8 @@ const THEMES: Array = [
 		# sky instead of blending into it.
 		"sky_top": Color(0.46, 0.44, 0.56), "sky_horizon": Color(0.97, 0.80, 0.55),
 		"fog_color": Color(0.93, 0.79, 0.62), "fog_density": 0.008,
-		"sun_color": Color(1.0, 0.85, 0.65), "sun_energy": 1.0, "ambient_energy": 0.25,
-		"island_top": Color(0.46, 0.38, 0.24), "island_base": Color(0.30, 0.21, 0.15),
+		"sun_color": Color(1.0, 0.85, 0.65), "sun_energy": 1.0, "ambient_energy": 0.18,
+		"island_top": Color(0.40, 0.33, 0.21), "island_base": Color(0.30, 0.21, 0.15),
 		"mountain_tint": Color(0.88, 0.84, 0.86),
 		"foliage": Color(0.85, 0.45, 0.18),  # maple orange
 		"feature": "maple",
@@ -56,8 +56,8 @@ const THEMES: Array = [
 		# go deep evergreen, the rock turns blue-grey and the zenith deepens.
 		"sky_top": Color(0.40, 0.55, 0.74), "sky_horizon": Color(0.88, 0.92, 0.96),
 		"fog_color": Color(0.88, 0.92, 0.96), "fog_density": 0.011,
-		"sun_color": Color(0.92, 0.96, 1.0), "sun_energy": 0.8, "ambient_energy": 0.34,
-		"island_top": Color(0.85, 0.89, 0.93), "island_base": Color(0.44, 0.49, 0.57),
+		"sun_color": Color(0.92, 0.96, 1.0), "sun_energy": 0.8, "ambient_energy": 0.24,
+		"island_top": Color(0.78, 0.83, 0.88), "island_base": Color(0.44, 0.49, 0.57),
 		"mountain_tint": Color(0.80, 0.86, 0.94),
 		"foliage": Color(0.30, 0.44, 0.42),  # evergreen under snow, not frosted white
 		"feature": "pine",
@@ -70,8 +70,8 @@ const THEMES: Array = [
 		"name": "Night",
 		"sky_top": Color(0.10, 0.12, 0.28), "sky_horizon": Color(0.30, 0.24, 0.42),
 		"fog_color": Color(0.22, 0.20, 0.36), "fog_density": 0.010,
-		"sun_color": Color(0.72, 0.78, 1.0), "sun_energy": 0.35, "ambient_energy": 0.19,
-		"island_top": Color(0.30, 0.36, 0.32), "island_base": Color(0.20, 0.17, 0.15),
+		"sun_color": Color(0.72, 0.78, 1.0), "sun_energy": 0.35, "ambient_energy": 0.14,
+		"island_top": Color(0.26, 0.32, 0.28), "island_base": Color(0.20, 0.17, 0.15),
 		"mountain_tint": Color(0.55, 0.58, 0.75),
 		"foliage": Color(0.16, 0.30, 0.28),  # moonlit teal-green
 		"feature": "pine",

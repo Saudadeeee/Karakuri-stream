@@ -36,7 +36,7 @@ func refresh_shape() -> void:
 	var dirs: Array = PipeRouting.connections(grid_cell)
 	if dirs.is_empty():
 		dirs = [Vector3i(0, 1, 0), Vector3i(0, -1, 0)]  # lone pipe = vertical tube
-	_visual = build_visual(dirs, _open, _alternator)
+	_visual = build_visual(dirs, _open, _alternator, grid_cell)
 	add_child(_visual)
 
 ## Shape rules:
@@ -47,9 +47,23 @@ func refresh_shape() -> void:
 ## OPEN (variant) horizontal arms become U-channel troughs (floor + two walls,
 ## open top) so the routed water stream is visibly flowing through. Static so the
 ## placement ghost can reuse it.
-static func build_visual(dirs: Array, open: bool = false, alternator: bool = false) -> Node3D:
+## A bamboo culm is not one colour. Every pipe in the garden was the exact same
+## flat green over its whole length, which is most of why a run of them read as
+## extruded plastic rather than as cut stalks — and there are more pipes on a
+## finished island than anything else.
+##
+## The shade is hashed from the CELL, so it is stable across a reload and a run
+## of pipes is a row of slightly different stalks rather than a gradient. Cost is
+## zero: MeshFit.bake folds every plain colour into one vertex-coloured surface,
+## so a hundred different greens are still one draw call.
+static func _culm(cell: Vector3i, salt: int) -> Color:
+	var h: float = HouseShape.jitter(cell, salt)          # -1 .. 1, deterministic
+	return BAMBOO.lightened(h * 0.055).lerp(Color("#A8C07A"), maxf(h, 0.0) * 0.18)
+
+static func build_visual(dirs: Array, open: bool = false, alternator: bool = false,
+		cell: Vector3i = Vector3i.ZERO) -> Node3D:
 	var root := Node3D.new()
-	var mat := MeshFit.flat(BAMBOO)
+	var mat := MeshFit.flat(_culm(cell, 17))
 	var accent := MeshFit.flat(ACCENT)
 
 	var straight: bool = dirs.size() == 2 and dirs[0] == -Vector3i(dirs[1])
@@ -71,11 +85,14 @@ static func build_visual(dirs: Array, open: bool = false, alternator: bool = fal
 		root.add_child(_box(Vector3(0.34, 0.30, 0.34), Vector3(0.0, -0.04, 0.0), accent if alternator else mat))
 	else:
 		root.add_child(_sphere(HUB_R, mat))
-	for d in dirs:
+	for i in dirs.size():
+		var d: Vector3i = dirs[i]
+		# One shade per arm: a junction is several stalks meeting, not one moulding.
+		var arm := MeshFit.flat(_culm(cell, 23 + i * 7))
 		if open and d.y == 0:
-			_add_trough(root, d, mat, 0.52, 0.28)
+			_add_trough(root, d, arm, 0.52, 0.28)
 		else:
-			_add_tube(root, Vector3(d.x, d.y, d.z), mat, accent)
+			_add_tube(root, Vector3(d.x, d.y, d.z), arm, accent)
 	return root
 
 ## One tube passing straight through the cell along `axis` (no hub).
