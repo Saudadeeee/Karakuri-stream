@@ -62,6 +62,9 @@ func _ready() -> void:
 		grid.add_child(button)
 		_buttons[type] = button
 		button.pressed.connect(placement_controller.select_material.bind(type))
+		# Quiet on hover: this is a dense grid of icons and the mouse crosses
+		# several of them on the way to any one. They still click on press.
+		CuteButton.wire(button, true)
 
 	placement_controller.material_changed.connect(_on_material_changed)
 
@@ -80,7 +83,7 @@ func _ready() -> void:
 	# Last, and deferred: the starting selection wants to show its hint card on a
 	# touch device, and that needs both the card to exist and the buttons to have
 	# been laid out so the card knows where to sit.
-	_on_material_changed.call_deferred(BlockData.Type.WOOD)
+	_on_material_changed.call_deferred(BlockData.Type.WOOD, BlockVariants.default_variant(BlockData.Type.WOOD))
 
 func _build_icon_button(type: BlockData.Type) -> Button:
 	var button := Button.new()
@@ -144,7 +147,7 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	var pivot := Node3D.new()
 	viewport.add_child(pivot)
 
-	_add_icon_visual(pivot, type, 0)
+	_add_icon_visual(pivot, type, BlockVariants.default_variant(type))
 	_pivots.append(pivot)
 	_pivot_by_type[type] = pivot
 
@@ -267,7 +270,7 @@ var _hint_left: float = 0.0
 func _show_hint(type: int) -> void:
 	if _hint_panel == null:
 		return
-	var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
+	var vname: String = str(BlockVariants.get_variant(type, BlockVariants.default_variant(type)).get("name", ""))
 	_hint_label.text = "%s
 %s" % [tr(vname), tr(BlockCatalog.hint(type))]
 	var btn: Button = _buttons.get(type)
@@ -282,7 +285,7 @@ func _on_icon_hover(type: int, entered: bool) -> void:
 	_refresh_viewport_modes()
 	# Hint card floats next to the hovered icon.
 	if entered and _hint_panel != null:
-		var vname: String = str(BlockVariants.get_variant(type, 0).get("name", ""))
+		var vname: String = str(BlockVariants.get_variant(type, BlockVariants.default_variant(type)).get("name", ""))
 		_hint_label.text = "%s\n%s" % [vname, BlockCatalog.hint(type)]
 		var btn: Button = _buttons[type]
 		# Clear of the whole grid, not the hovered button's column.

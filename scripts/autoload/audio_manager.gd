@@ -37,8 +37,10 @@ const DEDUPE_MS: int = 35
 func _ready() -> void:
 	_water_flow.loop = true
 	_gear_creak.loop = true
-	# One tree-wide hook gives every Button the UI pop (hover + press).
-	get_tree().node_added.connect(_on_node_added)
+	# NOTE: the UI pop is wired in CuteButton, not here. A tree-wide node_added
+	# hook used to connect every Button as well, so each button had TWO paths into
+	# play_ui_pop and only the 35 ms dedupe hid it — and the blunt hook could not
+	# know that a grid of small icons should hover quietly.
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
 		player.bus = "SFX"
@@ -95,11 +97,6 @@ func _set_duck(on: bool) -> void:
 	var db: float = AudioServer.get_bus_volume_db(idx)
 	AudioServer.set_bus_volume_db(idx, db + (UNFOCUSED_DUCK_DB if on else -UNFOCUSED_DUCK_DB))
 
-func _on_node_added(n: Node) -> void:
-	if n is Button:
-		n.mouse_entered.connect(play_ui_pop.bind(true))
-		n.button_down.connect(play_ui_pop.bind(false))
-
 func _can_start(kind: String) -> bool:
 	var now: int = Time.get_ticks_msec()
 	if now - int(_last_start.get(kind, -1000)) < DEDUPE_MS:
@@ -147,9 +144,9 @@ func play_drum(global_pos: Vector3) -> void:
 
 ## Shishi-odoshi tipping back: the classic double knock — "cộc… cốc!".
 func play_shishi_knock(global_pos: Vector3) -> void:
-	play_wood_pitch(global_pos, 1.45, 0.0)
+	play_wood_pitch(global_pos, 1.45, -0.5)
 	get_tree().create_timer(0.16).timeout.connect(
-		play_wood_pitch.bind(global_pos, 0.85, 1.0))
+		play_wood_pitch.bind(global_pos, 0.85, 0.5))
 
 ## Music-box tine, pitched to the pentatonic degree. The sample is already the
 ## high root — no octave shift.
@@ -158,7 +155,7 @@ func play_music_box_note(global_pos: Vector3, note_index: int) -> void:
 	player.global_position = global_pos
 	player.stream = TINE
 	player.pitch_scale = PENTATONIC_RATIOS[note_index % PENTATONIC_RATIOS.size()]
-	player.volume_db = -7.0
+	player.volume_db = -5.5
 	player.play()
 
 ## A soft, springy "boing" for the jelly block — on placement and whenever a
@@ -168,7 +165,7 @@ func play_jelly_bounce(global_pos: Vector3) -> void:
 	player.global_position = global_pos
 	player.stream = JELLY_BOUNCE
 	player.pitch_scale = randf_range(0.88, 1.18)
-	player.volume_db = randf_range(-5.0, -1.5)
+	player.volume_db = randf_range(-11.0, -7.5)
 	player.play()
 
 ## Watery "bloop" for placing a water block.
@@ -179,13 +176,13 @@ func play_water_plop(global_pos: Vector3) -> void:
 	player.global_position = global_pos
 	player.stream = PLOP
 	player.pitch_scale = randf_range(0.9, 1.12)
-	player.volume_db = randf_range(-4.0, -2.0)
+	player.volume_db = randf_range(-17.5, -15.5)
 	player.play()
 
 ## Soft splash: stream on open water, koi re-entry, water landing on ground.
 ## `deep` pitches it down into a low plop — for sounds that repeat on the beat
 ## forever, where any brightness turns abrasive.
-func play_splash(global_pos: Vector3, vol_db: float = -6.0, deep: bool = false) -> void:
+func play_splash(global_pos: Vector3, vol_db: float = -8.0, deep: bool = false) -> void:
 	if not _can_start("splash"):
 		return
 	var player: AudioStreamPlayer3D = _get_free_player()
@@ -203,7 +200,7 @@ func play_flutter(global_pos: Vector3) -> void:
 	player.global_position = global_pos
 	player.stream = FLUTTER
 	player.pitch_scale = randf_range(0.95, 1.2)
-	player.volume_db = randf_range(-9.0, -6.0)
+	player.volume_db = randf_range(-10.0, -7.0)
 	player.play()
 
 ## UI pop, non-positional (a 3D player would pan/fade with the camera).
@@ -215,7 +212,7 @@ func play_ui_pop(up: bool = false) -> void:
 	player.bus = "SFX"
 	player.stream = UI_POP
 	player.pitch_scale = (1.3 if up else 1.0) * randf_range(0.985, 1.015)
-	player.volume_db = -18.5 if up else -10.0
+	player.volume_db = -31.5 if up else -23.0
 	add_child(player)
 	player.finished.connect(player.queue_free)
 	player.play()
@@ -226,7 +223,7 @@ func play_chime(global_pos: Vector3, note_index: int = -1, pitch_mul: float = 1.
 	player.global_position = global_pos
 	player.stream = CHIME
 	player.pitch_scale = PENTATONIC_RATIOS[index] * pitch_mul * randf_range(0.99, 1.01)
-	player.volume_db = randf_range(-4.0, -1.0)
+	player.volume_db = randf_range(-1.5, 1.5)
 	player.play()
 
 ## A soft, non-positional pentatonic note for the generative ambient music
@@ -253,7 +250,7 @@ func make_water_loop_player() -> AudioStreamPlayer3D:
 	player.bus = "SFX"
 	player.stream = _water_flow
 	player.pitch_scale = randf_range(0.95, 1.05)
-	player.volume_db = -8.0
+	player.volume_db = -13.0
 	player.unit_size = 6.0
 	player.max_distance = 0.0
 	return player
@@ -267,7 +264,7 @@ func make_gear_loop_player() -> AudioStreamPlayer3D:
 	# Slower + quieter than the raw rattle so it reads as a gentle wooden creak,
 	# not a noisy sprocket. Pitch jitter keeps several gears from phasing.
 	player.pitch_scale = randf_range(0.62, 0.82)
-	player.volume_db = -19.0
+	player.volume_db = -25.0
 	player.unit_size = 4.0
 	player.max_distance = 0.0
 	return player

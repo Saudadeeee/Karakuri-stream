@@ -45,11 +45,15 @@ static func wire(b: Button, quiet_hover: bool = false) -> void:
 
 ## Wire every Button under `root`. Menus build their UI in code, so this is the
 ## one call each of them needs rather than remembering it per button.
-static func apply_all(root: Node) -> void:
+## `quiet_hover` propagates to every button under `root`. The hotbar is a grid of
+## seventeen 48 px icons: sweeping the mouse across it fired a pop per icon, which
+## is the single loudest thing a player does by accident. The flag existed from
+## the start and nothing ever passed it.
+static func apply_all(root: Node, quiet_hover: bool = false) -> void:
 	if root is Button:
-		wire(root)
+		wire(root, quiet_hover)
 	for c in root.get_children():
-		apply_all(c)
+		apply_all(c, quiet_hover)
 
 static func _recenter(b: Button) -> void:
 	b.pivot_offset = b.size * 0.5

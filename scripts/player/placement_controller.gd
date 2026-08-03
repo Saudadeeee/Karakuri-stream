@@ -107,7 +107,7 @@ func select_material(type: BlockData.Type) -> void:
 		_current_variant = (_current_variant + 1) % BlockVariants.count(type)
 	else:
 		_current_type = type
-		_current_variant = 0
+		_current_variant = BlockVariants.default_variant(type)
 	material_changed.emit(type, _current_variant)
 
 ## When true a tap/left click DELETES instead of placing. Touch-only in practice;

@@ -9,6 +9,22 @@ extends RefCounted
 ##   open  : bool → pipe with an open top so the water is visible flowing through
 ## The chosen variant index lives in BlockData.state["variant"] and is saved.
 
+## Which variant a block is placed as when you first select it. The ORDER of the
+## variant list is part of the SAVE FORMAT — `variant` is stored as its index —
+## so making Dirt the default could not be done by moving it to the front without
+## changing what every existing save looks like. This is the same choice with
+## none of that damage; cycling still runs Dirt -> Moss -> Stone -> Wood -> Dirt.
+##
+## The building block is earth first: it is what the island is made of, moss and
+## stone are its other faces, and naming the whole thing after one of the four
+## read as a mistake.
+const DEFAULTS: Dictionary = {
+	BlockData.Type.WOOD: 1,   # Dirt
+}
+
+static func default_variant(type: int) -> int:
+	return int(DEFAULTS.get(type, 0))
+
 const V: Dictionary = {
 	BlockData.Type.WOOD: [
 		{"name": "Wood", "color": "#D4A373"},

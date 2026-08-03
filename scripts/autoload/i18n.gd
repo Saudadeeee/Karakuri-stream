@@ -21,13 +21,47 @@ const SETTINGS_PATH: String = "user://settings.cfg"
 const LOCALES: Array[String] = ["en", "vi"]
 const LOCALE_NAMES: Dictionary = {"en": "English", "vi": "Tiếng Việt"}
 
+## The pixel face has 83 glyphs and no lowercase — a lowercase letter draws as a
+## capital, which is where the game's ALL-CAPS look comes from. Vietnamese
+## diacritics are not in it either, so they fell through to Nunito, which DOES
+## have lowercase: every accented word came out half capitals and half lowercase,
+## in two different letterforms, on two different baselines. That is not a
+## fallback working, it is a font failing in public.
+##
+## So Vietnamese gets ONE face for everything. The pixel look is this game's
+## identity and it is a real loss, but a face that can only render half the
+## alphabet is a bigger one.
+const PIXEL_FONT: FontFile = preload("res://assets/fonts/pixel/karakuri_pop.fnt")
+const FREDOKA: FontVariation = preload("res://assets/fonts/fredoka_chunky.tres")
+const LATIN_FONT: FontFile = preload("res://assets/fonts/Nunito.ttf")
+const THEME_PATH := "res://ui/karakuri_theme.tres"
+
 func _ready() -> void:
 	var t := Translation.new()
 	t.locale = "vi"
 	for key in VI:
 		t.add_message(key, VI[key])
 	TranslationServer.add_translation(t)
-	TranslationServer.set_locale(saved_locale())
+	var code: String = saved_locale()
+	TranslationServer.set_locale(code)
+	_apply_font(code)
+
+## Swap the theme's default font to match the language. Runtime only — the .tres
+## on disk is never written, so the pixel face stays the authored default.
+func _apply_font(code: String) -> void:
+	var theme: Theme = load(THEME_PATH)
+	if theme == null:
+		return
+	var f := FontVariation.new()
+	if code == "vi":
+		f.base_font = LATIN_FONT
+		# Nunito is a lighter face than the chunky pixel one it replaces; the
+		# heavier weight keeps the UI reading as the same game.
+		f.variation_opentype = {2003265652: 700}   # 'wght'
+	else:
+		f.base_font = PIXEL_FONT
+		f.fallbacks = [FREDOKA, LATIN_FONT]
+	theme.default_font = f
 
 func saved_locale() -> String:
 	var cfg := ConfigFile.new()
@@ -45,6 +79,7 @@ func set_locale(code: String) -> void:
 	if not (code in LOCALES):
 		return
 	TranslationServer.set_locale(code)
+	_apply_font(code)
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS_PATH)
 	cfg.set_value("ui", "locale", code)
@@ -194,8 +229,8 @@ const VI: Dictionary = {
 	"? ? ?": "? ? ?",
 
 	# ----------------------------------------------------------- block hints
-	"Building block — click again for Wood/Dirt/Moss/Stone":
-		"Khối xây dựng — bấm lại để đổi Gỗ/Đất/Rêu/Đá",
+	"Earth — the building block. Click again for Moss/Stone/Wood":
+		"Đất — khối xây dựng. Bấm lại để đổi Rêu/Đá/Gỗ",
 	"House — stack and line them up, they merge into one building":
 		"Nhà — xếp chồng và xếp hàng, chúng gộp thành một toà",
 	"Still pond — powers any gear touching it":

@@ -25,7 +25,7 @@ extends RefCounted
 const ALL: Array[Dictionary] = [
 	{"type": BlockData.Type.WOOD, "hotbar": true, "key": KEY_1,
 	 "scene": preload("res://scenes/blocks/wood_block.tscn"),
-	 "hint": "Building block — click again for Wood/Dirt/Moss/Stone"},
+	 "hint": "Earth — the building block. Click again for Moss/Stone/Wood"},
 	{"type": BlockData.Type.HOUSE, "hotbar": true, "key": KEY_Q,
 	 "scene": preload("res://scenes/blocks/house_block.tscn"),
 	 "hint": "House — stack and line them up, they merge into one building"},
