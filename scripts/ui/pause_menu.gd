@@ -215,15 +215,9 @@ func _refresh_gardens() -> void:
 	close.custom_minimum_size = Vector2(0, 38)
 	close.pressed.connect(_toggle_gardens)
 	box.add_child(close)
-	# Centred by hand: this panel's parent is a CanvasLayer, which has no rect of
-	# its own for anchors to resolve against.
-	var place := func() -> void:
-		var vp: Vector2 = _gardens_panel.get_viewport_rect().size
-		_gardens_panel.position = (vp - _gardens_panel.size) * 0.5
-	_gardens_panel.resized.connect(place)
 	CuteButton.apply_all(_gardens_panel)
 	await get_tree().process_frame
-	place.call()
+	UiPlace.centre(_gardens_panel)
 
 func _garden_row(slot: int) -> HBoxContainer:
 	var row := HBoxContainer.new()

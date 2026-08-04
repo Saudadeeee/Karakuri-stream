@@ -80,11 +80,7 @@ func _maybe_show_controls() -> void:
 	# fixed 1280x720 logical units. ($UI is a CanvasLayer, which has no rect of its
 	# own, so anchor-relative offsets here are a trap: they read as raw positions
 	# the moment anything re-lays the card out.)
-	var place := func() -> void:
-		var vp: Vector2 = panel.get_viewport_rect().size
-		panel.position = Vector2((vp.x - panel.size.x) * 0.5, vp.y - panel.size.y - 28.0)
-	panel.resized.connect(place)
-	get_viewport().size_changed.connect(place)
+
 	$UI.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -134,7 +130,7 @@ func _maybe_show_controls() -> void:
 	# anchor, entirely off the bottom of the screen. Place it once by hand after
 	# the first layout, then let the signal handle any later reflow.
 	await get_tree().process_frame
-	place.call()
+	UiPlace.bottom(panel, 28.0)
 
 # ------------------------------------------------------- discovery cards
 ## One card at a time, bottom centre, gone in a few seconds. It says what the
@@ -159,12 +155,7 @@ func _drain_discoveries() -> void:
 	panel.custom_minimum_size = Vector2(380, 0)
 	panel.modulate.a = 0.0
 	$UI.add_child(panel)
-	# Same placement rule as the controls card, and for the same reason.
-	var place := func() -> void:
-		var vp: Vector2 = panel.get_viewport_rect().size
-		panel.position = Vector2((vp.x - panel.size.x) * 0.5, vp.y - panel.size.y - 96.0)
-	panel.resized.connect(place)
-	get_viewport().size_changed.connect(place)
+
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	panel.add_child(box)
@@ -182,7 +173,7 @@ func _drain_discoveries() -> void:
 	box.add_child(note)
 
 	await get_tree().process_frame
-	place.call()
+	UiPlace.bottom(panel, 96.0)
 
 	var tw := create_tween()
 	tw.tween_property(panel, "modulate:a", 1.0, 0.35)

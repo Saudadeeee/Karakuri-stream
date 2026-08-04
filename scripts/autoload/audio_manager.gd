@@ -226,25 +226,6 @@ func play_chime(global_pos: Vector3, note_index: int = -1, pitch_mul: float = 1.
 	player.volume_db = randf_range(-1.5, 1.5)
 	player.play()
 
-## A soft, non-positional pentatonic note for the generative ambient music
-## (AmbientMusic). Spans two octaves for a gentle wandering melody.
-func play_ambient_note() -> void:
-	# A soft low root note, sometimes with a gentle harmony a pentatonic step up —
-	# warmer and more musical than a single ping.
-	_ambient_one(PENTATONIC_RATIOS.pick_random() * (0.5 if randf() < 0.7 else 0.25), randf_range(-12.0, -8.0))
-	if randf() < 0.4:
-		_ambient_one(PENTATONIC_RATIOS.pick_random() * 1.0, randf_range(-17.0, -13.0))
-
-func _ambient_one(pitch: float, vol: float) -> void:
-	var player := AudioStreamPlayer.new()
-	player.bus = "Music"
-	player.stream = CHIME
-	player.pitch_scale = pitch * randf_range(0.99, 1.01)
-	player.volume_db = vol
-	add_child(player)
-	player.finished.connect(player.queue_free)
-	player.play()
-
 func make_water_loop_player() -> AudioStreamPlayer3D:
 	var player := AudioStreamPlayer3D.new()
 	player.bus = "SFX"

@@ -87,22 +87,12 @@ static func _rim_profile(teeth: int, r_out: float, r_in: float) -> PackedVector2
 		pts.append(Vector2(cos(a0 + step * 0.7), sin(a0 + step * 0.7)) * r_out)   # tip fall
 	return pts
 
-static func _v(p: Vector2, z: float, _side: float) -> Vector3:
-	return Vector3(p.x, p.y, z)
-
-static func _v3(p: Vector2, z: float) -> Vector3:
-	return Vector3(p.x, p.y, z)
-
 static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, side: float, col: Color) -> void:
 	# Wind so the +Z face points outward on each side.
 	if side > 0.0:
 		_vc(st, col, a); _vc(st, col, b); _vc(st, col, c)
 	else:
 		_vc(st, col, a); _vc(st, col, c); _vc(st, col, b)
-
-static func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, _n, col: Color) -> void:
-	_vc(st, col, a); _vc(st, col, b); _vc(st, col, c)
-	_vc(st, col, a); _vc(st, col, c); _vc(st, col, d)
 
 static func _vc(st: SurfaceTool, col: Color, v: Vector3) -> void:
 	st.set_color(col)

@@ -400,11 +400,6 @@ func _build_settings_panel(root: Control) -> void:
 	_settings_panel.custom_minimum_size = Vector2(380, 0)
 	_settings_panel.visible = false
 	root.add_child(_settings_panel)
-	var centre := func() -> void:
-		var vp: Vector2 = _settings_panel.get_viewport_rect().size
-		_settings_panel.position = (vp - _settings_panel.size) * 0.5
-	_settings_panel.resized.connect(centre)
-	get_viewport().size_changed.connect(centre)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right"]:
@@ -460,6 +455,7 @@ func _build_settings_panel(root: Control) -> void:
 	close.custom_minimum_size = Vector2(0, 44)
 	close.pressed.connect(func(): _settings_panel.visible = false)
 	box.add_child(close)
+	UiPlace.centre(_settings_panel)
 
 ## The button shows the language it will switch TO, in that language — the one
 ## label in the game that must never be translated, because it is the thing a
@@ -622,11 +618,6 @@ func _on_credits() -> void:
 	_credits_panel.size = size
 	var ui: Control = _settings_panel.get_parent()
 	ui.add_child(_credits_panel)
-	var place := func() -> void:
-		var vp: Vector2 = _credits_panel.get_viewport_rect().size
-		_credits_panel.position = (vp - _credits_panel.size) * 0.5
-	_credits_panel.resized.connect(place)
-	get_viewport().size_changed.connect(place)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
@@ -653,7 +644,7 @@ func _on_credits() -> void:
 	close.pressed.connect(func() -> void: _credits_panel.visible = false)
 	box.add_child(close)
 	CuteButton.apply_all(_credits_panel)
-	place.call()
+	UiPlace.centre(_credits_panel)
 
 ## Markdown stripped down to something a Label can show: the tables in
 ## CREDITS.md are for reading on GitHub, and pipes and hashes on screen just look

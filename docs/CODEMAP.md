@@ -164,7 +164,6 @@ Lý do KHÔNG thu hẹp phạm vi: chặn 1 hướng chảy phải khiến nư�
 | 9 | `GearManager` | `autoload/gear_manager.gd` | **Hệ truyền động**: mỗi frame dựng đồ thị liên thông Gear (6 hướng); 1 component quay nếu CÓ gear là driver. `_is_driver` = gear bị **STREAM rơi trúng** (`StreamManager._driven_gears`) HOẶC kề khối Nước tĩnh. Chiều quay = parity `(x+y+z)` → gear kề nhau tự quay NGƯỢC chiều (lưới bipartite). Răng ĂN KHỚP: gear parity lẻ lệch pha `HALF_TOOTH=TAU/20` (răng khớp vào khe, không đụng răng-răng), set 1 lần qua `_phased`. Xoay bằng `mesh_instance.rotate_y` — vì gear_block đã orient ROOT theo trục đặt (xem dưới), trục local-Y của mesh = trục đặt, nên quay quanh đúng trục. Bụi lấp lánh + gõ Chuông kề bên mỗi vòng. |
 | 10b | `UndoManager` | `autoload/undo_manager.gd` | Undo/redo đặt-xóa khối (stack 200). Placement record place/remove (type+variant+axis); Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z); undo remove RESTORE đủ (đường recreate như SaveManager). |
 | 10 | `SaveManager` | `autoload/save_manager.gd` | **Cũng sở hữu AUTOSAVE.** Ghi NGUYÊN TỬ: ra `save_data.json.tmp` → copy bản cũ sang `save_data.bak.json` → rename đè. Crash giữa lúc ghi không còn phá save, và `load_game()` tự lùi về bản `.bak` nếu bản mới hỏng. Autosave chạy khi: hết 45s (timer), mất focus cửa sổ (`NOTIFICATION_APPLICATION_FOCUS_OUT`), và **bấm nút X đóng cửa sổ** (`set_auto_accept_quit(false)` + `NOTIFICATION_WM_CLOSE_REQUEST`) — trước đó đóng game = mất trắng công trình. Hai chốt chặn: `autosave_armed` (chỉ bật khi scene game đang chạy, `main_scene` bật / `_exit_tree` + `pause_menu._on_menu_pressed` tắt) và từ chối ghi khi lưới RỖNG — thiếu một trong hai là ghi đè save thật bằng vườn trống. `save_game()`/`load_game()`/`has_save()`. KHÔNG `_ready()` nghe signal, và KHÔNG bắn signal — 3 hàm gọi từ `pause_menu.gd`, nó tự hiện toast. (`signal saved`/`signal loaded` đã XOÁ: emit nhưng không ai connect. Cần thì thêm lại kèm listener thật.) Lưu thêm `axis` cho Gear + `ports` cho Pipe/Pipe_bend (`{x,y,z,type,axis?,ports?}`; save cũ thiếu → mặc định). Xem mục Save/Load. |
-| 11 | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Thuần trang trí — lá phong cam rơi lơ lửng lúc khởi động, cast_shadow OFF. |
 | 12 | `SceneryManager` | `autoload/scenery_manager.gd` | `rebuild()` rải prop quanh rìa THEO MAP THEME (`MapThemes`): thông/bụi/lau/đá/đèn/bonsai + slot "feature" (sakura/maple/pine tuyết); lá recolor `MeshFit.recolor_foliage`; ring 8 núi backdrop nhận `mountain_tint`; lantern GLB nằm ngang → heuristic AABB dựng đứng (xoay ở CON, fit qua wrapper). Gọi lại khi menu đổi theme. Thuần backdrop. |
 | 12b | `AmbientLeaves` | `autoload/ambient_leaves.gd` | Hạt drift THEO THEME (`rebuild()`): cánh sakura hồng / lá phong cam / bông tuyết / đom đóm vàng (bay LÊN + emissive ăn bloom). |
 | 13 | `WildlifeManager` | `autoload/wildlife_manager.gd` | **Động vật đọc thế giới**, không chỉ đi lang thang. Mỗi loài bị GATE bởi thứ người chơi XÂY, và làm ngược lại điều gì đó — liên kết 2 chiều đó mới là trọng tâm, thiếu nó chỉ là trang trí biết nhúc nhích. **Chim**: cần ≥1 NHÀ; đậu trên mái, và khi đậu trúng BELL/CHIME/DRUM thì **GÕ THẬT** (gọi `ring()`/`hit()`) → vườn có thêm 1 nhạc công bạn không lập trình; đặt khối gần → bay tán loạn (`scatter_near`). **Mèo**: cần ≥2 nhà; đi trên mặt trên, **không bao giờ bước xuống nước** (nước không nằm trong `_walkable`, nên nó không thể "quyết định" bơi); đêm thì ra ngồi cạnh đèn đá; `look_near()` cho nó quay đầu nhìn chỗ vừa click. **Vịt**: cần hồ ≥3 ô nước hở; bơi vòng, rúc đầu kiếm ăn → `_spawn_splash`. **Hươu**: CHỈ ra khi máy IM LẶNG >12s, biến mất ngay khi có dòng chảy → tắt máy mới thấy được. Quét lưới 1 lần, dirty-flag + throttle 0.4s (như `VoxelSurfaceManager`); sĩ số **tăng DẦN theo quy mô** (`BIRDS/CATS/DUCKS = [ngưỡng đầu, mỗi bao nhiêu thêm 1, trần]`) chứ KHÔNG bật nhị phân — 1 nhà = 1 chim, 20 nhà = tối đa 5 con; trần còn **giảm nửa trên web LITE**.
@@ -354,3 +353,20 @@ Vì không có CI/test framework, mọi thay đổi lớn trong phiên làm vi�
 - Export Web/Desktop, Hiệu năng lưới lớn, Save/Load công trình — cả 3 ĐÃ làm (xem PHẦN 12/13/14 `plan.md`). Chưa deploy lên host thật (itch.io/GitHub Pages), chưa có icon riêng cho bản Windows export.
 - 1 slot save duy nhất (`user://save_data.json`, đè lên mỗi lần Lưu) — không có multi-slot/named-save. Đủ dùng cho sandbox toy 1 công trình tại 1 thời điểm; nếu cần nhiều slot sau này, đổi tên file theo slot index là đủ, không cần đổi format.
 - `WaterFlowManager` vẫn quét toàn bộ khối Nước mỗi lần đổi 1 khối bất kỳ (có chủ đích, không phải sót tối ưu — xem mục 3(b) "Pattern kiến trúc"). Nếu 1 build có hàng chục nghìn khối Nước, đây sẽ là điểm nghẽn tiếp theo cần đo lại.
+
+## Dọn dẹp — quy ước còn nợ (2026-08-04)
+
+- **`tests/regression.gd` 1758 dòng, vượt quy tắc 800.** CỐ Ý giữ nguyên. Nó là
+  lưới an toàn của cả dự án; tách nó nghĩa là chuyển ~28 section đang dùng chung
+  `_b`/`_check`/`game` sang script khác, và một section rơi rớt trong lúc chuyển
+  sẽ không ai biết — chính xác là thứ file này tồn tại để ngăn. Chia nhỏ khi nào
+  có lý do khác ngoài số dòng.
+- **`scripts/ui/ui_place.gd`** gom việc đặt panel. Panel trong game đều treo dưới
+  `CanvasLayer` — thứ KHÔNG có rect riêng — nên offset theo anchor bị đọc thành
+  toạ độ thô ngay khi có gì đó layout lại. Cái bẫy đó đã ăn mất một thẻ hướng dẫn
+  (biến hẳn khỏi màn hình) và một panel Cài đặt (đẩy nút Đóng ra ngoài), và cùng
+  ba dòng ấy đã bị copy vào **sáu** chỗ. Giờ một chỗ.
+- **Lọc `assets/icon/*` khỏi pck: ĐÃ THỬ, KHÔNG ĂN THUA.** Godot ship texture ĐÃ
+  IMPORT (`.godot/imported/*.ctex`), mà `exclude_filter` chỉ khớp đường dẫn
+  NGUỒN. Đo thật: có lọc 6.003.440 byte, không lọc 6.002.624 — lọc còn *to hơn*
+  816 byte. Đừng thử lại.

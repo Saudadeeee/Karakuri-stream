@@ -132,7 +132,8 @@ scripts/
   ui/            hotbar, menus, theme
 shaders/         wood / water / stream / cloud-sea
 assets/          sounds, fonts (incl. the Aseprite-drawn pixel font), models
-tools/           dev harnesses: perf probe, screenshot rig, font generator
+tools/           dev harnesses — see tools/README.md (build, screenshot,
+                 frame-time, audio-mix, web-boot and button probes)
 tests/           regression suite
 ```
 

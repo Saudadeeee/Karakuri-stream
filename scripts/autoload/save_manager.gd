@@ -148,14 +148,6 @@ func autosave() -> void:
 func has_save(slot: int = -1) -> bool:
 	return FileAccess.file_exists(slot_path(slot)) or FileAccess.file_exists(backup_path(slot))
 
-## Is there anything at all to continue? Used by the menu to decide whether this
-## is a first run.
-func has_any_save() -> bool:
-	for i in SLOT_COUNT:
-		if has_save(i):
-			return true
-	return false
-
 ## False when the file could not be written — the caller must not tell the
 ## player their build is safe when it isn't.
 func save_game(slot: int = -1) -> bool:
