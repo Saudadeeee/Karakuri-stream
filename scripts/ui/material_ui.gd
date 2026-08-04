@@ -11,6 +11,10 @@ const WATER_SHADER: Shader = preload("res://shaders/water.gdshader")
 
 const COLUMNS: int = 2
 const ICON_SIZE: int = 48
+## Icons render at this multiple of their on-screen size and are scaled down.
+## 2 covers a 1080p window on a 720p canvas with room to spare; 3 was no longer
+## distinguishable in a side-by-side crop.
+const SUPERSAMPLE: int = 2
 const ICON_GAP: int = 6
 const REVEAL_ZONE: float = 240.0  # px from left edge where UI is fully shown
 ## The strip used to fade to 0.18, which on a wide screen meant the palette was
@@ -50,6 +54,11 @@ var _hint_panel: PanelContainer
 var _hint_label: Label
 
 func _ready() -> void:
+	# The key glyphs are a BITMAP font. With the canvas scaled to the window it
+	# gets sampled, and linear sampling of a pixel font is exactly the mush the
+	# toolbar was showing. Children inherit this.
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
 	var grid := GridContainer.new()
 	grid.columns = COLUMNS
 	grid.add_theme_constant_override("h_separation", ICON_GAP)
@@ -96,11 +105,21 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	button.add_child(bezel)
 	_bezel_by_type[type] = bezel
 
-	var sub_container := SubViewportContainer.new()
-	sub_container.stretch = true
-	sub_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sub_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	button.add_child(sub_container)
+	# The icon is DOWNSAMPLED, not upscaled. A SubViewportContainer with stretch
+	# forces the viewport to the container's LOGICAL size — 48x48 — and the whole
+	# UI is then scaled to the real window (720p canvas on a 1080p screen is
+	# x1.5), so every icon was a 48px render blown up to 72px. Rendering at
+	# SUPERSAMPLE x and letting a TextureRect scale it down is sharp at any
+	# window size, and costs one 96x96 viewport per icon that renders ONCE.
+	var art := TextureRect.new()
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.set_anchors_preset(Control.PRESET_FULL_RECT)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_SCALE
+	# Linear on purpose: this one is a downscale, and the nearest filter the rest
+	# of the strip uses for its pixel font would alias it badly.
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	button.add_child(art)
 
 	# Perf: 7 live 3D viewports re-rendering every frame is the single biggest
 	# constant GPU cost (each is its own world + 2 lights) — brutal on the
@@ -108,11 +127,15 @@ func _build_icon_button(type: BlockData.Type) -> Button:
 	# the selected / hovered icon spins (see _refresh_viewport_modes), so the
 	# animation stays exactly where the player is looking.
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(ICON_SIZE, ICON_SIZE)
+	viewport.size = Vector2i(ICON_SIZE, ICON_SIZE) * SUPERSAMPLE
 	viewport.transparent_bg = true
 	viewport.own_world_3d = true
+	# The models are all hard edges at four pixels wide; without MSAA every one
+	# of them is a staircase.
+	viewport.msaa_3d = Viewport.MSAA_4X
 	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	sub_container.add_child(viewport)
+	button.add_child(viewport)
+	art.texture = viewport.get_texture()
 	_viewport_by_type[type] = viewport
 	button.mouse_entered.connect(_on_icon_hover.bind(type, true))
 	button.mouse_exited.connect(_on_icon_hover.bind(type, false))

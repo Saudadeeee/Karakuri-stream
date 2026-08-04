@@ -15,6 +15,9 @@ const MAIN_MENU := "res://scenes/main_menu.tscn"
 @onready var confirm_clear_dialog: ConfirmationDialog = $ConfirmClearDialog
 
 func _ready() -> void:
+	# The UI font is a BITMAP face and the canvas is scaled to the window, so
+	# linear sampling turns every label into mush. Children inherit this.
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
 	# Seamless continue: "Về menu chính" auto-saves, so entering the game

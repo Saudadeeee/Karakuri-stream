@@ -246,6 +246,10 @@ func _build_ui() -> void:
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The UI font is a BITMAP face and the canvas is scaled to the window (a 720p
+	# canvas on a 1080p screen is x1.5), so linear sampling turns every label into
+	# mush. Children inherit this.
+	root.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	layer.add_child(root)
 
 	var col := VBoxContainer.new()

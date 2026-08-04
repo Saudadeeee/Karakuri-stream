@@ -27,8 +27,21 @@ func _draw() -> void:
 		var rr: float = r_out if seg == 1 else (r_out if seg == 2 else r_in)
 		var a: float = rot + TAU * float(i) / float(n)
 		pts.append(c + Vector2(cos(a), sin(a)) * rr)
-	draw_colored_polygon(pts, WOOD)
+	# ANTIALIASED. draw_colored_polygon and draw_circle default to aliased, and a
+	# cog is nothing but diagonal edges — thirty of them per icon, seventeen icons
+	# — so every tooth came out as a visible staircase. This is the single
+	# biggest reason the toolbar read as "low quality".
+	draw_colored_polygon(pts, WOOD, PackedVector2Array(), null)
+	draw_polyline(_closed(pts), WOOD, 1.0, true)   # AA skirt along the same edge
 	# rim highlight ring
-	draw_arc(c, r_in * 0.9, 0.0, TAU, 20, SALMON if selected else RIM, 2.0, true)
+	draw_arc(c, r_in * 0.9, 0.0, TAU, 48, SALMON if selected else RIM, 2.0, true)
 	# hub
-	draw_circle(c, r_in * 0.34, RIM if selected else WOOD.lightened(0.1))
+	draw_circle(c, r_in * 0.34, RIM if selected else WOOD.lightened(0.1), true, -1.0, true)
+
+## The polygon closed back to its first point, so the anti-aliased outline runs
+## all the way round instead of leaving one hard tooth.
+func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array(pts)
+	if out.size() > 0:
+		out.append(out[0])
+	return out

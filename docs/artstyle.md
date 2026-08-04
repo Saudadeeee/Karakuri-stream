@@ -136,3 +136,32 @@ Nó tìm ra đúng hai lỗi thật:
   Control mỗi lần đổi ngôn ngữ, nhưng chỉ khi đó vẫn là chuỗi GỐC. Ghi đè bản
   tiếng Việt vào rồi chuyển sang English là nửa menu mỗi thứ tiếng — đúng cái
   "nút trong setting bị lỗi" mà người chơi thấy.
+
+
+## Thanh công cụ bị mờ — ba nguyên nhân riêng biệt (2026-08-04)
+
+Đo bằng `tools/uiprobe.gd` (in kích thước thật của cửa sổ, canvas và từng
+SubViewport) rồi cắt đúng pixel gốc để nhìn:
+
+```
+WINDOW size=(1920,1080)  content_scale_size=(1280,720)   → mọi thứ 2D bị phóng 1.5x
+ICON subviewport=(48,48) container=(48,48) msaa=0
+```
+
+1. **Icon render 48×48 rồi phóng lên 72px.** `SubViewportContainer` bật
+   `stretch` ép viewport bằng kích thước LOGIC của container, mà canvas lại được
+   scale theo cửa sổ. Giờ render ở **2× rồi thu nhỏ** (`SUPERSAMPLE`), hiển thị
+   qua `TextureRect` với filter LINEAR — sắc ở mọi cỡ cửa sổ, và vẫn chỉ render
+   MỘT lần như cũ.
+2. **`msaa_3d = 0`.** Model trong icon rộng đúng vài pixel, không khử răng cưa
+   thì cạnh nào cũng thành bậc thang. → `MSAA_4X`.
+3. **`draw_colored_polygon` / `draw_circle` mặc định KHÔNG khử răng cưa.** Bánh
+   răng nền chỉ toàn cạnh chéo — 30 cạnh mỗi icon, 17 icon. Đây là lý do lớn
+   nhất khiến thanh công cụ trông "rẻ tiền".
+4. **Font là BITMAP, canvas scale 1.5× → lọc tuyến tính = nhoè.** Đặt
+   `texture_filter = NEAREST` trên gốc UI (hotbar, menu, pause). `TextureRect`
+   của icon phải đặt lại LINEAR vì nó đang THU NHỎ.
+
+Bài học: `content_scale_size` khác kích thước cửa sổ nghĩa là **mọi texture cố
+định kích thước trong UI đều đang bị phóng**. Vector và TTF thì không sao; ảnh,
+SubViewport và font bitmap thì có.
